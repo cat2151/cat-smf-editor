@@ -1,0 +1,4 @@
+# User settings only. The app never writes back to this file.
+# Window position and client size in logical pixels: x, y, width, height.
+# Applied at startup; moving/resizing the window does not change these values.
+window = [0, 0, 1800, 900]

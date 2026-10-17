@@ -1,0 +1,18 @@
+{
+  "dependencies": [
+    {
+      "repository": "atsushieno/uapmd",
+      "ref": "refs/heads/main",
+      "path": "uapmd",
+      "verified_sha": "a4a96938eb31ddcb70209d62caf0dcc6ea9d3abe"
+    },
+    {
+      "repository": "cat2151/cat-plugin-player",
+      "ref": "refs/heads/main",
+      "path": "cat-plugin-player"
+    }
+  ],
+  "build_script": "scripts/release.ps1",
+  "package_files": ["LICENSE"],
+  "runtime_notice": "最新版 Microsoft Visual C++ v14 x64 再頒布可能パッケージが必要（https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist/）。未設定trackの演奏にはSurge XT CLAP、保存済み設定には対応pluginと外部sampleが必要。音色・effect編集には別途cat-plugin-playerが必要。host DLLはeditor自身のexeに同梱。"
+}

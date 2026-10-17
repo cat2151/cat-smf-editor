@@ -1,0 +1,2 @@
+# Shared modules have one canonical formatting style in the player crate.
+style_edition = "2021"

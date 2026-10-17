@@ -1,0 +1,29 @@
+# 0001: Surge XTによる選択行の試聴
+
+音源数と固定Init Sawの制限は、[0002: track別音源と最小パッチブラウザ](0002-track-patches.md)によって置き換えられた。以下は初期実装時の決定を記録する。
+
+現在のhostと設定契約は[0003: 共通hostとplayer選択](0003-shared-host-player-selection.md)を参照する。以下のSurge専用hostは現在の実装では使わない。
+
+## 背景
+
+note行へのカーソル移動またはクリック時、鍵盤に表示する音をSurge XTのInit Sawで鳴らす。発音時間はSMFのdurationに従い、テンポ変更をまたぐ場合も実時間へ変換する。
+
+## 決定
+
+行ごとに独立した音源や可変の再生stateを置かず、選択行の和音を一つの試聴state machineで管理する。表示行は元イベントまたは空拍を参照し、元SMFを変更しない。音源の状態は「待機 → 選択和音の発音 → 各音の終了 → 待機」。別の行を選択したら前の和音を止めて置き換える。ファイル・トラック変更と空行選択も停止として扱う。
+
+各音のdurationをテンポマップに沿ってサンプル数へ変換し、audio callbackでサンプル位置を指定してNote Offを送る。同時刻の異なる音は個別に終了する。同じpitchは表示鍵盤と同じく一つにまとめ、最大velocityと最長durationを使う。Note Offのない音は次の選択まで保持する。Note Off後の音源のrelease envelopeは自然に減衰させる。
+
+Surge専用のパス探索とInit Saw選択は試聴層に限定する。CommonProgramFiles配下のCLAP bundleとProgramData配下のfactory presetを読み取り、CLAP preset-load拡張で読み込む。任意のpreset選択、プラグインのインストール、ユーザー設定の保存は行わない。SMFのprogram/CCは試聴へ送らず、固定Init Sawでpitch、velocity、durationを確認する。
+
+既存のSMF用native shimに最小限のCLAPホストを追加し、既に依存しているCLAPヘッダーを使用する。cpalが既定デバイスへ出力する。Surgeのメイン出力と補助出力の全バスへバッファを提供し、試聴にはメインのステレオ出力を使用する。音源生成・破棄とmain-thread callbackはUI thread、発音処理は単一audio callbackで実行し、stream停止後に音源を破棄する。最新の選択と読み取り専用の演奏シーケンスへの参照をmailboxで渡し、audio threadではロック待ちとイベント配列の割当てを避ける。
+
+範囲演奏とevent単音・同一tick和音も同じ音源を使う。UI threadでテンポマップを一度構築し、Note On時刻とdurationを実時間へ変換する。audio callbackは次のNote Onまたは範囲末尾でバッファを分割する。演奏開始は全pitchを置き換え、途中のNote Onは該当pitchだけを置き換えて他pitchを再発音させない。同pitchの再発音では前の音をchokeする。範囲末尾では残る音にNote Offを送り、release envelopeを自然に減衰させる。event単音・同一tick和音のduration不明音は次の選択まで保持する。SMFのchannel、program、CC、pedalは引き続き再現対象に含めない。
+
+演奏オーバーレイは方法選択直後に閉じ、最後の方法のみをアプリ起動中に保持する。Spaceは保存した方法を現在位置・現在trackに適用する。小節全体、track全体、現在MBTから末尾、現在beat先頭から末尾、現在event単音、同一tickのNote On全音を選択できる。`pa`は全trackを先頭から、`pc`は現在trackの現在小節先頭からtrack末尾まで演奏する。全track演奏は各trackの音を実時間へ変換してから開始時刻順に併合し、最も遅いtrack末尾で終了する。Format 2は各track固有のテンポでtick 0から同時に演奏する。音源は引き続き一つのInit Sawで、同pitchの同時発音は最大velocityと最長durationへまとめる。Escで選択を取り消しても最後の方法は変えない。
+
+## 制限と検証
+
+Surge XT未導入、Init Saw欠損、audio device異常時は画面へエラーを表示する。出力はf32/i16/u16に対応し、音量は試聴用に減衰させる。音源エラー後の再試行はアプリ再起動で行う。
+
+演奏範囲、単音と和音の違い、オーバーレイ終了とSpace再実行、audioフレーム境界、テンポ変更、Format 2、SMPTE drop-frame、空拍を挟むカーソル移動、仮想スクロールを自動テストする。installed Surgeを使う明示実行テストでInit Sawの非ゼロ出力とduration経過後の減衰を確認する。既定audio deviceへの出力、和音、次の選択への切り替えと停止も実機テストする。

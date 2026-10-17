@@ -1,0 +1,202 @@
+# Generic Rust + sibling UAPMD release engine. No application/repository names here.
+# Can be moved unchanged to a shared repository; checkout always uses the caller.
+name: UAPMD Windows release
+on:
+  workflow_call:
+    inputs:
+      config:
+        type: string
+        default: .github/release.json
+      publish:
+        type: boolean
+        default: false
+      skip-unchanged:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+# Serialize the whole pipeline so release replacement operations cannot overlap.
+concurrency:
+  group: uapmd-release-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.resolve.outputs.build }}
+      package: ${{ steps.resolve.outputs.package }}
+      version: ${{ steps.resolve.outputs.version }}
+      dependencies: ${{ steps.resolve.outputs.dependencies }}
+      build-script: ${{ steps.resolve.outputs.build-script }}
+      package-files: ${{ steps.resolve.outputs.package-files }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Resolve dependencies and write notes
+        id: resolve
+        env:
+          CONFIG: ${{ inputs.config }}
+          SKIP_UNCHANGED: ${{ inputs.skip-unchanged }}
+          # Bump when changing the shared engine, including after centralization.
+          ENGINE_REVISION: '1'
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: python
+        run: |
+          import json, os, pathlib, re, subprocess, tomllib
+          config = json.loads(pathlib.Path(os.environ['CONFIG']).read_text(encoding='utf-8'))
+          package = tomllib.loads(pathlib.Path('Cargo.toml').read_text(encoding='utf-8'))['package']
+          name, version = package['name'], package['version']
+          if not re.fullmatch(r'[A-Za-z0-9_.-]+', name + version):
+              raise ValueError('Invalid package name/version')
+          dependencies = config['dependencies']
+          paths = {'app'}
+          for dep in dependencies:
+              if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', dep['repository']):
+                  raise ValueError('Invalid dependency repository')
+              if not re.fullmatch(r'[A-Za-z0-9_-]+', dep['path']) or dep['path'] in paths:
+                  raise ValueError('Dependency paths must be unique sibling directory names')
+              paths.add(dep['path'])
+              output = subprocess.check_output(
+                  ['git', 'ls-remote', '--exit-code', 'https://github.com/' + dep['repository'], dep['ref']],
+                  text=True).splitlines()
+              if len(output) != 1:
+                  raise ValueError('Dependency ref must resolve to exactly one commit')
+              dep['sha'] = output[0].split()[0]
+              if not re.fullmatch(r'[0-9a-f]{40}', dep['sha']):
+                  raise ValueError('Invalid dependency commit')
+          marker = '<!-- build-inputs ' + json.dumps(
+              {'app': os.environ['GITHUB_SHA'], 'engine': os.environ['ENGINE_REVISION'],
+               'dependencies': dependencies}, sort_keys=True) + ' -->'
+          tag = 'v' + version
+          release = subprocess.run(['gh', 'api', 'repos/' + os.environ['GH_REPO'] + '/releases/tags/' + tag],
+                                   capture_output=True, text=True)
+          if release.returncode and 'HTTP 404' not in release.stderr:
+              raise RuntimeError(release.stderr)
+          body = (json.loads(release.stdout).get('body') or '') if release.returncode == 0 else ''
+          unchanged = marker in body.splitlines()
+          build = not (os.environ['SKIP_UNCHANGED'] == 'true' and unchanged)
+          notes = [f'{name} v{version} (Windows x64)', '', '## 配布物',
+                   f'- `{name}-{version}-windows-x64.zip`: exe と設定された同梱ファイル',
+                   '- ' + config['runtime_notice'], '', '## この版について',
+                   '- 自動検査（ビルド・プロジェクト固有検査・テスト）を通した版。人による動作確認は別途必要。',
+                   '- schedule は同じ入力の公開版があれば省略。手動起動は常にビルド。',
+                   '', '## ビルドに使った commit', f'- {name}: {os.environ["GITHUB_SHA"]}']
+          for dep in dependencies:
+              notes.append(f'- {dep["repository"]} ({dep["ref"]}): {dep["sha"]}')
+              if dep.get('verified_sha'):
+                  match = '一致' if dep['sha'] == dep['verified_sha'] else '不一致（この上流版の手元確認は未実施）'
+                  notes.append(f'  - 手元の確認基準 {dep["verified_sha"]} と{match}')
+          notes += ['', marker, '']
+          pathlib.Path('notes.md').write_text('\n'.join(notes), encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              values = {'build': str(build).lower(), 'package': name, 'version': version,
+                        'dependencies': json.dumps(dependencies), 'build-script': config['build_script'],
+                        'package-files': json.dumps(config['package_files'])}
+              for key, value in values.items():
+                  if '\n' in value or '\r' in value:
+                      raise ValueError('Output values must be single-line')
+                  out.write(f'{key}={value}\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write(f'Build: {build} (published inputs unchanged: {unchanged})\n\n' + '\n'.join(notes))
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: notes.md
+          if-no-files-found: error
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.build == 'true'
+    runs-on: windows-latest
+    env:
+      DEPENDENCIES: ${{ needs.resolve.outputs.dependencies }}
+      BUILD_SCRIPT: ${{ needs.resolve.outputs.build-script }}
+      PACKAGE_FILES: ${{ needs.resolve.outputs.package-files }}
+      PACKAGE: ${{ needs.resolve.outputs.package }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - run: git config --global core.longpaths true
+      - uses: actions/checkout@v7
+        with:
+          path: app
+          persist-credentials: false
+      - name: Checkout resolved sibling commits
+        shell: python
+        run: |
+          import json, os, subprocess
+          for dep in json.loads(os.environ['DEPENDENCIES']):
+              def git(*args):
+                  subprocess.run(['git', *args], check=True)
+              git('init', dep['path'])
+              git('-C', dep['path'], 'remote', 'add', 'origin', 'https://github.com/' + dep['repository'])
+              git('-C', dep['path'], 'fetch', '--depth=1', 'origin', dep['sha'])
+              git('-C', dep['path'], 'checkout', '--detach', 'FETCH_HEAD')
+      - name: Update Rust and show tool versions
+        run: |
+          rustup update stable --no-self-update
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustup default stable
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustc -vV
+          cargo -V
+          cmake --version
+      - name: Project build and checks
+        working-directory: app
+        run: |
+          & (Join-Path (Get-Location) $env:BUILD_SCRIPT)
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Test
+        working-directory: app
+        run: cargo test --release --locked
+      - name: Package
+        working-directory: app
+        shell: python
+        run: |
+          import json, os, pathlib, zipfile
+          files = [f'target/release/{os.environ["PACKAGE"]}.exe'] + json.loads(os.environ['PACKAGE_FILES'])
+          if len({pathlib.Path(file).name.casefold() for file in files}) != len(files):
+              raise ValueError('Duplicate ZIP filename')
+          pathlib.Path('dist').mkdir(exist_ok=True)
+          archive = f'dist/{os.environ["PACKAGE"]}-{os.environ["VERSION"]}-windows-x64.zip'
+          with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as out:
+              for file in files:
+                  path = pathlib.Path(file)
+                  if path.is_absolute() or '..' in path.parts or not path.is_file():
+                      raise ValueError('Invalid/missing package file: ' + file)
+                  out.write(path, path.name)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-x64
+          path: app/dist/*.zip
+          if-no-files-found: error
+  publish:
+    needs: [resolve, build]
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: v${{ needs.resolve.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Replace release after successful checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GH_REPO/releases/tags/$TAG" > /dev/null 2> error.txt; then
+            gh release delete "$TAG" --cleanup-tag --yes
+          elif ! grep -q 'HTTP 404' error.txt; then
+            cat error.txt >&2; exit 1
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > /dev/null 2> error.txt; then
+            gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$TAG"
+          elif ! grep -q 'HTTP 404' error.txt; then
+            cat error.txt >&2; exit 1
+          fi
+          gh release create "$TAG" dist/*.zip --target "$GITHUB_SHA" --title "$TAG" --notes-file dist/notes.md

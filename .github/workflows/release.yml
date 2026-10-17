@@ -1,0 +1,21 @@
+# Project-specific settings: .github/release.json and scripts/release.ps1.
+name: Release
+on:
+  schedule:
+    - cron: "23 16 * * *" # 01:23 JST
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "GitHub Release を公開する（false はビルドと検査だけ）"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/uapmd-windows-release.yml
+    with:
+      publish: ${{ github.event_name == 'schedule' || inputs.publish == true }}
+      skip-unchanged: ${{ github.event_name == 'schedule' }}
