@@ -10,6 +10,11 @@
       "repository": "cat2151/cat-plugin-player",
       "ref": "refs/heads/main",
       "path": "cat-plugin-player"
+    },
+    {
+      "repository": "cat2151/clap-mml-play-server",
+      "ref": "refs/heads/main",
+      "path": "clap-mml-play-server"
     }
   ],
   "build_script": "scripts/release.ps1",

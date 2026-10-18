@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -38,7 +39,8 @@ def workspace():
 
 
 class ReleaseWorkflowTests(unittest.TestCase):
-    def resolve(self, *, skip=True, body='', missing=False, error=None, sha=SHA, engine='1'):
+    def resolve(self, *, skip=True, body='', missing=False, error=None, sha=SHA, engine='1',
+                dependency_shas=None):
         config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
         Path('release.json').write_text(json.dumps(config), encoding='utf-8')
         # Different app identity catches copied player/editor names in generic code.
@@ -51,7 +53,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
         response = subprocess.CompletedProcess([], 1 if missing or error else 0,
                                                json.dumps({'body': body}),
                                                error or ('HTTP 404' if missing else ''))
-        with patch.dict(os.environ, env), patch('subprocess.check_output', return_value=sha + '\trefs/heads/main\n'), \
+        def remote_sha(command, **kwargs):
+            resolved = (dependency_shas or {}).get(command[-2], sha)
+            return resolved + '\trefs/heads/main\n'
+
+        with patch.dict(os.environ, env), patch('subprocess.check_output', side_effect=remote_sha), \
                 patch('subprocess.run', return_value=response):
             exec(compile(step('resolve', 'Resolve dependencies and write notes'), '<resolve>', 'exec'), {})
         outputs = dict(line.split('=', 1) for line in Path('outputs').read_text(encoding='utf-8').splitlines())
@@ -65,9 +71,22 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertIn('another-app-2.3.4-windows-x64.zip', notes)
             self.assertNotIn('cat-plugin-player-2.3.4-windows-x64.zip', notes)
             dependencies = json.loads(out['dependencies'])
-            self.assertEqual([dep['path'] for dep in dependencies], ['uapmd', 'cat-plugin-player'])
+            self.assertEqual([dep['path'] for dep in dependencies],
+                             ['uapmd', 'cat-plugin-player', 'clap-mml-play-server'])
             self.assertTrue(all(dep['sha'] == SHA for dep in dependencies))
             self.assertIn('cat2151/cat-plugin-player', notes)
+            self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {SHA}', notes)
+
+    def test_cmrt_core_path_is_provided_by_release_checkout(self):
+        manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))
+        dependency = manifest['dependencies']['cmrt-core']
+        self.assertEqual(dependency['path'], '../clap-mml-play-server/core-lib')
+        self.assertIs(dependency['default-features'], False)
+        config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
+        sibling = next(dep for dep in config['dependencies']
+                       if dep['path'] == Path(dependency['path']).parts[1])
+        self.assertEqual(sibling['repository'], 'cat2151/clap-mml-play-server')
+        self.assertEqual(sibling['ref'], 'refs/heads/main')
 
     def test_unchanged_schedule_skips_but_manual_rebuilds(self):
         with workspace():
@@ -91,9 +110,24 @@ class ReleaseWorkflowTests(unittest.TestCase):
                     self.resolve(error=error)
                 self.assertEqual(Path('outputs').read_text(encoding='utf-8'), '')
 
+    def test_only_cmrt_source_change_rebuilds_schedule(self):
+        with workspace():
+            _, body = self.resolve(missing=True)
+            out, notes = self.resolve(body=body, dependency_shas={
+                'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})
+            self.assertEqual(out['build'], 'true')
+            dependencies = json.loads(out['dependencies'])
+            self.assertEqual([dep['sha'] for dep in dependencies], [SHA, SHA, OTHER_SHA])
+            self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {OTHER_SHA}', notes)
+            out, _ = self.resolve(body=notes, dependency_shas={
+                'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})
+            self.assertEqual(out['build'], 'false')
+
     def test_checkout_fetches_resolved_sha_not_moving_branch(self):
         dependencies = [{'repository': 'example/dependency', 'path': 'uapmd', 'sha': OTHER_SHA},
-                        {'repository': 'example/shared-host', 'path': 'cat-plugin-player', 'sha': SHA}]
+                        {'repository': 'example/shared-host', 'path': 'cat-plugin-player', 'sha': SHA},
+                        {'repository': 'cat2151/clap-mml-play-server',
+                         'path': 'clap-mml-play-server', 'sha': OTHER_SHA}]
         with patch.dict(os.environ, {'DEPENDENCIES': json.dumps(dependencies)}), patch('subprocess.run') as run:
             exec(compile(step('build', 'Checkout resolved sibling commits'), '<checkout>', 'exec'), {})
         commands = [call.args[0] for call in run.call_args_list]
@@ -101,6 +135,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn(['git', '-C', 'uapmd', 'checkout', '--detach', 'FETCH_HEAD'], commands)
         self.assertIn(['git', '-C', 'cat-plugin-player', 'fetch', '--depth=1', 'origin', SHA], commands)
         self.assertIn(['git', '-C', 'cat-plugin-player', 'checkout', '--detach', 'FETCH_HEAD'], commands)
+        self.assertIn(['git', '-C', 'clap-mml-play-server', 'fetch', '--depth=1', 'origin', OTHER_SHA], commands)
+        self.assertIn(['git', '-C', 'clap-mml-play-server', 'checkout', '--detach', 'FETCH_HEAD'], commands)
 
     def package(self, files):
         env = {'PACKAGE': 'another-app', 'VERSION': '2.3.4', 'PACKAGE_FILES': json.dumps(files)}

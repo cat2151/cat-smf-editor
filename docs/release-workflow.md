@@ -12,7 +12,8 @@ package名とexe名が一致する、Windows MSVC向けの単一バイナリア�
 リポジトリ依存の設定は `.github/release.json` に集約する。
 
 - `dependencies`: 公開GitHubリポジトリ、解決するref、兄弟checkoutのディレクトリ名。
-  各refを一度だけSHAに解決し、ビルドとnotesで同じSHAを使う。editorにはUAPMDとcat-plugin-playerの共有ソースが必要。playerをbuildするためのMML siblingはeditorに不要。
+  各refを一度だけSHAに解決し、ビルドとnotesで同じSHAを使う。editorにはUAPMD、cat-plugin-playerの共有ソース、clap-mml-play-server内の`core-lib`（`cmrt-core`）が必要。
+  `cmrt-core`はpath identity用に`default-features = false`で参照し、MMLアプリ本体やhost機能はビルドしない。
 - `verified_sha`: 任意の、手元で確認した依存版の基準。上流mainを固定する値ではない。
   一致は依存版の一致を意味し、配布するexeの手動確認済みを意味しない。
 - `build_script`: アプリrootから呼ぶPowerShellスクリプト。ビルドと固有の検査を担当する。
@@ -25,7 +26,7 @@ adapterは二度目のconfigureを追加せず、実行後に環境変数の元�
 既存cacheでは共有driverのstampと既存generator/platformを使用する。
 UAPMD付属patchの二重適用を避けるため、単にReleaseビルドを試す目的で既存cacheを再configureしない。
 既存のCMake設定を使い、editorのRust/C++のDLL CRTは変更しない。Release exeとそのbuildの埋込みhost DLLへのdebug CRT混入をdumpbinで検査する。
-playerの静的CRT配布方針とMML sibling checkoutはeditorへ適用しない。editorのDLLはeditor自身のtargetで生成し、exeに埋め込む。
+playerの静的CRT配布方針はeditorへ適用しない。clap-mml-play-serverのcheckoutは`cmrt-core`のソース取得用で、MMLアプリ本体のビルド用ではない。editorのDLLはeditor自身のtargetで生成し、exeに埋め込む。
 ZIPにはexeとLICENSEを含め、最新版の
 [VC++ v14 x64ランタイム](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist/)
 と未設定track用のSurge XT CLAPは別途必要。保存した設定を鳴らすpluginと外部sample、編集画面用のcat-plugin-playerも別途導入する。
@@ -87,8 +88,8 @@ UAPMDの補修、plugin固有処理、音声エンジンまで今回の共通wor
 
 検証用にPyYAMLが必要（実際のActions実行では不要）。
 `python -m unittest discover -s scripts -p 'test_release_workflow.py'` で、workflow内のPython処理を
-mockしたGitHub/git応答で検証する。初回公開、入力一致時の省略、依存変更、engine変更、手動再ビルド、
-通信失敗、兄弟checkoutのSHA、ZIPの内容を対象にする。
+mockしたGitHub/git応答で検証する。初回公開、入力一致時の省略、依存変更（`cmrt-core`の取得元だけの変更を含む）、engine変更、手動再ビルド、
+通信失敗、Cargoの`cmrt-core` pathと取得先の整合、兄弟checkoutのSHA、ZIPの内容を対象にする。
 Actions YAMLはactionlint、adapterは実際のローカルReleaseビルドとdumpbinで検証する。
 GitHub runnerの新規checkoutでの完走は別途必要で、既存ローカルcacheでの成功とは区別する。
 
