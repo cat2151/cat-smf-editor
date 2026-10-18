@@ -11,3 +11,5 @@ pub(crate) mod resident;
 pub(crate) mod resident_link;
 pub(crate) mod selection;
 pub(crate) mod state_request;
+
+pub(crate) mod setup;

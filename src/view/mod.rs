@@ -34,6 +34,11 @@ use eframe::egui::{self, Color32, ScrollArea};
 pub const ACTIVE_PANE: Color32 = Color32::from_rgb(0xfd, 0x97, 0x1f);
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    if crate::player::setup::show(app, ctx) {
+        crate::play::transport::advance(app);
+        app.audition.pump();
+        return;
+    }
     show_contents(app, ctx);
     // Outside show_contents: a viewport skipped for one frame closes.
     analysis::show(app, ctx);

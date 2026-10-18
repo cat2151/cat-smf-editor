@@ -1,5 +1,8 @@
+use cat_smf_editor::host as ffi;
 mod app;
 mod cursor;
+#[path = "../../cat-plugin-player/shared/first_instrument_install.rs"]
+mod first_instrument_install;
 mod play;
 mod player;
 mod store;

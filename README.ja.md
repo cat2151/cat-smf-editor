@@ -63,7 +63,7 @@ SMF(Standard MIDI File)を手軽に編集できることを目指している軽
 
 # ローカルでのビルドと実行
 
-editor、`cat-plugin-player`、`uapmd`を同じ親ディレクトリに置きます。editorはplayerの共通hostソースだけを参照し、player用のMML siblingをeditorのビルドには要求しません。playerをビルドする場合はplayer側READMEの依存checkoutも用意してください。
+editor、`cat-plugin-player`、`uapmd`を同じ親ディレクトリに置きます。editorはplayerの共通host・初回導入のソースを参照し、player用のMML siblingをeditorのビルドには要求しません。playerをビルドする場合はplayer側READMEの依存checkoutも用意してください。
 
 ```powershell
 cargo build --release --locked
@@ -72,7 +72,9 @@ cargo build --release --locked
 
 playerを明示指定する場合は `& ./target/release/cat-smf-editor.exe --player 'X:\projects\cat-plugin-player\target\release\cat-plugin-player.exe'` と起動します。環境変数の設定は不要です。
 
-cache missの復元要求とbrowser選択で使うplayerの探索順は`--player <path>`、editorのexeと同じディレクトリ、兄弟repoの`cat-plugin-player/target/release/cat-plugin-player.exe`、`PATH`です。兄弟repoの探索はeditorのexeが`target/debug`または`target/release`にあるときに行い、作業ディレクトリには依存しません。指定したパスが不正なら別の場所へ黙って切り替えません。未発見時は[ダウンロード先](https://github.com/cat2151/cat-plugin-player/releases)を案内します。自動download/installや簡易browserへの切替は行いません。
+cache missの復元要求とbrowser選択で使うplayerの探索順は`--player <path>`、editorのexeと同じディレクトリ、兄弟repoの`cat-plugin-player/target/release/cat-plugin-player.exe`、`PATH`です。兄弟repoの探索はeditorのexeが`target/debug`または`target/release`にあるときに行い、作業ディレクトリには依存しません。指定したパスが不正なら別の場所へ黙って切り替えません。起動時に未発見なら、[配布ZIP](https://github.com/cat2151/cat-plugin-player/releases/download/v0.1.0/cat-plugin-player-0.1.0-windows-x64.zip)を自動取得し、editorのexeと同じディレクトリへ配置します。取得したplayerの連携機能を配置前に確認し、未対応の古い配布版は配置せず更新が必要な旨を表示します。既存のplayerは上書きしません。playerのライセンス同意画面は出さず、著作権表示はWindowsのDesktop（OneDriveなどへの移動先も含む）へ`cat-plugin-player-LICENSE.txt`として保存します。同名で内容の異なるファイルがある場合は、内容を識別するsuffixを付けた別名で保全します。取得・書込に失敗した場合は再試行または手動ダウンロードを選べます。
+
+起動時に音源を検出できなければ、cat-plugin-playerと共通の画面からSurge XTの利用規約を確認し、同意後にwingetでインストールできます。effectだけの場合も対象です。既存の音源があれば案内しません。playerの音源cacheに実在する音源が記録されていれば起動時の走査を省略します。導入後は再スキャンし、通常のMIDI復元・ファイル選択へ進みます。`あとで`／`Esc`で見送れます。案内を閉じても開始済みのインストールは続きます。Tab／Shift+Tabで項目移動、Enter／Spaceでボタンを選べます。失敗の詳細は画面と`error.log`へ出し、wingetがない場合は手動取得先を案内します。player選択のエラー画面の`Setup`からやり直すこともできます。ZIPの配置先には書込権限、Surge XTの導入にはWindowsの権限確認が必要な場合があります。構成は[ADR 0009](docs/adr/0009-first-run-dependencies.md)を参照してください。
 
 各アプリは自分のbuildに対応するhost DLLをexeへ同梱します。editorのDLL展開先は`%LOCALAPPDATA%\cat-smf-editor\cache\native\`です。`cache/`配下は再生成可能なデータだけで、削除後は必要なものを再生成します。設定・前回の操作位置・browser選択を持つ`status.json`、`settings.toml`、履歴、ログ、MIDI保存時の`backup/`はcacheの外へ保持します。editorはインストール済みplayerのDLLを借りません。共通化と保存契約は[ADR 0003](docs/adr/0003-shared-host-player-selection.md)、配布の構成は[release workflow](docs/release-workflow.md)を参照してください。
 

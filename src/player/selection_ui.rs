@@ -12,6 +12,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     if !app.player_selection.open {
         return;
     }
+    let mut setup = false;
     egui::Window::new("Player selection")
         .open(&mut app.player_selection.open)
         .show(ctx, |ui| {
@@ -19,6 +20,12 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 ui.colored_label(egui::Color32::LIGHT_RED, error);
             }
             ui.hyperlink_to("Download cat-plugin-player", DOWNLOAD);
-            ui.label("Executable: --player <path>, beside the editor, sibling repo target/release, or PATH.");
+            setup = ui.button("Setup").clicked();
         });
+    if setup {
+        app.player_selection.open = false;
+        app.player_selection
+            .setup
+            .begin(app.player_selection.executable.clone(), ctx);
+    }
 }

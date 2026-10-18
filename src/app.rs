@@ -90,11 +90,18 @@ impl App {
         app.settings_error = settings_error;
         app.recent.history = crate::store::recent::History::local();
         app.player_selection.executable = player;
-        app.open_initial(mid);
-        if app.config.analysis_open {
-            crate::view::analysis::toggle(&mut app);
+        app.player_selection
+            .setup
+            .begin(app.player_selection.executable.clone(), &cc.egui_ctx);
+        if app.player_selection.setup.is_active() {
+            app.player_selection.setup.initial = Some(mid);
+        } else {
+            app.open_initial(mid);
+            if app.config.analysis_open {
+                crate::view::analysis::toggle(&mut app);
+            }
+            crate::play::playback::start(&mut app, crate::play::playback::Mode::AllTracks);
         }
-        crate::play::playback::start(&mut app, crate::play::playback::Mode::AllTracks);
         app
     }
     pub(crate) fn empty() -> Self {
@@ -224,7 +231,9 @@ impl eframe::App for App {
             ctx.request_repaint_after(std::time::Duration::from_millis(32));
         }
         crate::view::show(self, ctx);
-        crate::view::files::open_dialog(self, ctx, frame);
+        if !self.player_selection.setup.is_active() {
+            crate::view::files::open_dialog(self, ctx, frame);
+        }
         self.save_session();
         self.close(ctx);
         self.log_errors();
@@ -233,7 +242,9 @@ impl eframe::App for App {
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        drop_tab(raw_input);
+        if !self.player_selection.setup.is_active() {
+            drop_tab(raw_input);
+        }
     }
 }
 

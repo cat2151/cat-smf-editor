@@ -13,6 +13,7 @@ pub enum Browser {
 
 #[derive(Default)]
 pub struct State {
+    pub setup: crate::player::setup::Setup,
     pub layer: Option<u64>,
     pub open: bool,
     pub error: Option<String>,

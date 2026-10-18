@@ -18,6 +18,9 @@ cmrt-core = { path = "../clap-mml-play-server/core-lib", default-features = fals
 dirs = "6"
 image = { version = "0.25", default-features = false, features = ["png"] }
 rfd = "0.17"
+ureq = "3"
+tempfile = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [features]
 default = []
