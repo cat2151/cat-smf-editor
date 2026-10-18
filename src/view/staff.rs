@@ -9,6 +9,7 @@ use score::Staff;
 
 mod beam;
 mod glyphs;
+mod mml;
 mod notation;
 mod score;
 mod spacing;
@@ -31,6 +32,8 @@ pub struct State {
     light: bool,
     /// Cursor tick last scrolled into view while stopped.
     revealed: Option<u64>,
+    mml_track: Option<usize>,
+    mml_measure: Option<(u64, u64)>,
 }
 
 struct Palette {
@@ -66,15 +69,25 @@ impl Palette {
     /// Sounding notes blink in their pitch color; others are ink on paper, or a light gray
     /// faintly tinted with their pitch color.
     fn note(&self, light: bool, color: Color32, lit: bool) -> Color32 {
-        match (lit, light) {
-            (true, _) => color,
-            (false, true) => self.ink,
-            (false, false) => {
-                let [r, g, b, _] = color.to_array();
-                let tint = |c: u8| (220.0 * (1.0 - TINT) + f32::from(c) * TINT) as u8;
-                Color32::from_rgb(tint(r), tint(g), tint(b))
-            }
+        if light && !lit {
+            self.ink
+        } else {
+            Self::dark_note(color, lit)
         }
+    }
+
+    fn dark_note(color: Color32, lit: bool) -> Color32 {
+        if lit {
+            color
+        } else {
+            Self::tinted(color)
+        }
+    }
+
+    fn tinted(color: Color32) -> Color32 {
+        let [r, g, b, _] = color.to_array();
+        let tint = |c: u8| (220.0 * (1.0 - TINT) + f32::from(c) * TINT) as u8;
+        Color32::from_rgb(tint(r), tint(g), tint(b))
     }
 }
 
@@ -87,10 +100,13 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let playing = crate::play::transport::tick_for(app, track);
     let mut following = Follow::new(ui.ctx(), app.playback.follow, playing);
     // One list per track, since beams join notes of one track only.
-    let mut voices = vec![score::notes(loaded, track)];
+    let tracks: Vec<_> = (0..loaded.music.tracks.len())
+        .map(|t| score::notes(loaded, t))
+        .collect();
+    let mut voices = vec![tracks[track].as_slice()];
     let mut others: Vec<_> = (0..loaded.music.tracks.len())
         .filter(|&t| t != track)
-        .map(|t| score::notes(loaded, t))
+        .map(|t| tracks[t].as_slice())
         .collect();
     let mut voiced = vec![track];
     // A track without notes shows the other tracks' notes in pitch colors instead of gray.
@@ -132,14 +148,44 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             ui.toggle_value(&mut state.light, "☀");
         });
     });
-    let area = state.viewport.bars(ui, state.repeat_drag.is_none());
+    let ppqn = score::ppqn(loaded);
+    let measure = mml::measure(loaded, track, reference);
+    let beats = mml::beats(loaded, track, measure);
+    let mml = mml::rows(&tracks, measure, ppqn, &beats);
+    let gap = GAP * state.viewport.zoom().y;
+    let steps = tracks.iter().flatten().map(|note| note.spelled.step);
+    let mut staff = Staff::from_steps(steps, gap);
+    let bar = ui.spacing().scroll.allocated_width();
+    let required = |height| {
+        crate::view::timeline_zoom::BAR
+            + crate::view::timeline_minimap::height_with_content(
+                repeat::HEIGHT + COMMENTS + height + gap + bar,
+            )
+    };
+    let core = required(Staff::from_steps(std::iter::empty(), gap).height());
+    let available = (ui.available_height() - ui.spacing().item_spacing.y).max(0.0);
+    let mml_height = mml::height(&mml) + bar;
+    let mml_min = mml::height(&mml[..mml.len().min(1)]) + bar;
+    // Keep the grand staff at its natural height. Ledger-note overflow scrolls
+    // before it takes the room needed by MML; a short window still leaves an MML row.
+    let reserved = mml_height
+        .min((available - core).max(mml_min))
+        .min(available);
+    let staff_height = required(staff.height()).min((available - reserved).max(0.0));
+    let area = ui
+        .allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), staff_height),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| state.viewport.bars(ui, state.repeat_drag.is_none()),
+        )
+        .inner;
     state.viewport.scale_layout(&mut layout);
     let gap = GAP * state.viewport.zoom().y;
-    let ppqn = score::ppqn(loaded);
+    staff.gap = gap;
     let mut onsets: Vec<u64> = voices
         .iter()
         .chain(&others)
-        .flatten()
+        .flat_map(|notes| notes.iter())
         .map(|n| n.tick)
         .collect();
     onsets.sort_unstable();
@@ -177,19 +223,6 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         ),
     );
     let area = area.with_min_x(strip.right());
-    let all = || voices.iter().chain(&others).flatten();
-    let steps = all().map(|n| n.spelled.step);
-    let mut staff = Staff {
-        top: 0.0,
-        high: steps
-            .clone()
-            .max()
-            .unwrap_or(0)
-            .max(notation::TREBLE_TOP + 2)
-            + 3,
-        low: steps.min().unwrap_or(0).min(notation::BASS_BOTTOM - 2) - 3,
-        gap,
-    };
     let mut repeat_action = None;
     let mut clicked = None;
     let mut panel = area;
@@ -266,13 +299,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 let gray = |_: &score::Note| palette.others;
                 voice(&staff, &painter, notes, x, shown, beat, ppqn, gray);
             }
-            // Every note starts lit, then alternates each eighth note while it sounds.
-            let blink = u64::from(ppqn / 2).max(1);
             let color = |note: &score::Note| {
-                let lit = playing.is_some_and(|tick| {
-                    (note.tick..note.end).contains(&tick)
-                        && ((tick - note.tick) / blink).is_multiple_of(2)
-                });
+                let lit = score::lit(note.tick, note.end, playing, ppqn);
                 palette.note(state.light, note.color, lit)
             };
             for notes in &voices {
@@ -299,6 +327,17 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         sharps,
         &palette,
     );
+    mml::show(
+        ui,
+        &mml,
+        track,
+        playing,
+        ppqn,
+        state.mml_track != Some(track),
+        state.mml_measure != measure,
+    );
+    state.mml_track = Some(track);
+    state.mml_measure = measure;
     if let Some(tick) = app.staff.viewport.seek.take() {
         crate::play::transport::timeline::seek(app, app.track, tick);
     }

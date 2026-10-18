@@ -4,6 +4,20 @@ use eframe::egui::{self, Color32};
 
 pub(crate) const COLOR: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
 const INSET: f32 = 8.0;
+const HEIGHT_SHARE: f32 = 0.18;
+const MIN_HEIGHT: f32 = 24.0;
+const MAX_HEIGHT: f32 = 56.0;
+const AFTER: f32 = 4.0;
+
+fn height(area: f32) -> f32 {
+    (area * HEIGHT_SHARE).clamp(MIN_HEIGHT, MAX_HEIGHT)
+}
+
+/// Height of the minimap and `content` below it, without stretching the content.
+pub(crate) fn height_with_content(content: f32) -> f32 {
+    let content = content + AFTER;
+    content + height(content / (1.0 - HEIGHT_SHARE))
+}
 
 #[derive(Default)]
 pub(crate) struct State {
@@ -75,7 +89,7 @@ impl State {
         view: View,
         overlay: impl FnOnce(&egui::Painter, egui::Rect),
     ) -> (egui::Rect, Option<Action>) {
-        let height = (area.height() * 0.18).clamp(24.0, 56.0);
+        let height = height(area.height());
         let rect = egui::Rect::from_min_max(
             area.min + egui::vec2(INSET, 2.0),
             egui::pos2(
@@ -154,7 +168,7 @@ impl State {
             self.drag = None;
         }
         (
-            egui::Rect::from_min_max(egui::pos2(area.left(), rect.bottom() + 4.0), area.max),
+            egui::Rect::from_min_max(egui::pos2(area.left(), rect.bottom() + AFTER), area.max),
             action,
         )
     }

@@ -16,6 +16,14 @@ pub(super) struct Note {
     pub color: Color32,
 }
 
+/// Shared staff/MML pulse: start bright, then alternate each eighth while sounding.
+pub(super) fn lit(start: u64, end: u64, playing: Option<u64>, ppqn: u16) -> bool {
+    let blink = u64::from(ppqn / 2).max(1);
+    playing.is_some_and(|tick| {
+        (start..end).contains(&tick) && ((tick - start) / blink).is_multiple_of(2)
+    })
+}
+
 /// SMPTE division has no quarter note; 480 only sizes the notes.
 pub(super) fn ppqn(loaded: &Loaded) -> u16 {
     let division = loaded.music.division;
@@ -66,6 +74,25 @@ pub(super) struct Staff {
 }
 
 impl Staff {
+    /// Natural vertical extent of the grand staff and the notes it draws.
+    pub fn from_steps(steps: impl Iterator<Item = i32> + Clone, gap: f32) -> Self {
+        Self {
+            top: 0.0,
+            high: steps
+                .clone()
+                .max()
+                .unwrap_or(notation::TREBLE_TOP + 2)
+                .max(notation::TREBLE_TOP + 2)
+                + 3,
+            low: steps
+                .min()
+                .unwrap_or(notation::BASS_BOTTOM - 2)
+                .min(notation::BASS_BOTTOM - 2)
+                - 3,
+            gap,
+        }
+    }
+
     pub fn y(&self, step: i32) -> f32 {
         self.top + (self.high - step) as f32 * self.gap / 2.0
     }
