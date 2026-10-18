@@ -63,7 +63,11 @@ impl Spacing {
 
     /// x of `tick` from the left edge of the score.
     pub fn x(&self, tick: u64) -> f32 {
-        let tick = tick as f64;
+        self.x_at(tick as f64)
+    }
+
+    /// [`Self::x`] of a fractional tick.
+    pub fn x_at(&self, tick: f64) -> f32 {
         let i = self.points.partition_point(|p| p.0 <= tick);
         match (i.checked_sub(1).map(|j| self.points[j]), self.points.get(i)) {
             (Some(a), Some(b)) => a.1 + (b.1 - a.1) * ((tick - a.0) / (b.0 - a.0)) as f32,
@@ -73,12 +77,16 @@ impl Spacing {
 
     /// Inverse of [`Self::x`].
     pub fn tick(&self, x: f32) -> u64 {
+        self.tick_at(x).round().max(0.0) as u64
+    }
+
+    /// Inverse of [`Self::x_at`], negative left of the first tick.
+    pub fn tick_at(&self, x: f32) -> f64 {
         let i = self.points.partition_point(|p| p.1 <= x);
-        let tick = match (i.checked_sub(1).map(|j| self.points[j]), self.points.get(i)) {
+        match (i.checked_sub(1).map(|j| self.points[j]), self.points.get(i)) {
             (Some(a), Some(b)) => a.0 + (b.0 - a.0) * f64::from((x - a.1) / (b.1 - a.1)),
             _ => f64::from((x - self.pad) / self.scale),
-        };
-        tick.round().max(0.0) as u64
+        }
     }
 
     /// The measure and quarter note within it that hold `tick`.
@@ -87,6 +95,32 @@ impl Spacing {
         let i = self.bars.partition_point(|&b| b <= tick);
         let bar = i.checked_sub(1).map_or(0.0, |j| self.bars[j]);
         (i, ((tick - bar) / f64::from(ppqn.max(1))) as u64)
+    }
+}
+
+impl crate::view::timeline_repeat::TickAxis for Spacing {
+    fn x(&self, tick: u64) -> f32 {
+        Spacing::x(self, tick)
+    }
+
+    fn tick(&self, x: f32) -> u64 {
+        Spacing::tick(self, x)
+    }
+}
+
+/// The engraved x and the minimap's linear timeline, which uses `scale` px per tick.
+pub(super) struct Minimap<'a> {
+    pub spacing: &'a Spacing,
+    pub scale: f32,
+}
+
+impl crate::view::timeline_minimap::Axis for Minimap<'_> {
+    fn to_minimap(&self, x: f32) -> f32 {
+        self.spacing.tick_at(x).max(0.0) as f32 * self.scale
+    }
+
+    fn to_content(&self, x: f32) -> f32 {
+        self.spacing.x_at(f64::from(x / self.scale))
     }
 }
 

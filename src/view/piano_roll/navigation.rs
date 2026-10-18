@@ -56,9 +56,11 @@ pub(super) fn adjust_edge(
             Color32::from_rgb(0x66, 0xd9, 0xef).gamma_multiply(0.25),
         );
         if ui.input(|i| i.pointer.secondary_released()) {
-            state
-                .viewport
-                .fit_time_range(left * drag.scale, right * drag.scale, 0.9);
+            state.viewport.fit_time_range(
+                left * drag.scale,
+                right * drag.scale,
+                crate::view::timeline_zoom::FIT,
+            );
             navigated = true;
         }
     }

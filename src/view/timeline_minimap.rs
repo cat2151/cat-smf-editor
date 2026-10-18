@@ -2,7 +2,7 @@
 use super::piano_roll::Layout;
 use eframe::egui::{self, Color32};
 
-const COLOR: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
+pub(crate) const COLOR: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
 const INSET: f32 = 8.0;
 
 #[derive(Default)]
@@ -20,10 +20,50 @@ pub(crate) struct View {
     pub playing: Option<f32>,
 }
 
+/// Maps the scrolled content's x to the minimap's unzoomed timeline x and back.
+pub(crate) trait Axis {
+    fn to_minimap(&self, x: f32) -> f32;
+    fn to_content(&self, x: f32) -> f32;
+}
+
+/// Content that is the timeline stretched by this zoom.
+pub(crate) struct Zoomed(pub f32);
+
+impl Axis for Zoomed {
+    fn to_minimap(&self, x: f32) -> f32 {
+        x / self.0
+    }
+
+    fn to_content(&self, x: f32) -> f32 {
+        x * self.0
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum Action {
     Center(f32),
     Scroll(f32),
+}
+
+/// What an [`Action`] asks the overlay to do, in its content coordinates.
+pub(crate) struct Navigation {
+    pub seek: Option<u64>,
+    pub scroll: f32,
+}
+
+impl Action {
+    pub fn navigate(self, scale: f32, width: f32, axis: &impl Axis) -> Navigation {
+        match self {
+            Action::Center(center) => Navigation {
+                seek: Some((center / scale).round().max(0.0) as u64),
+                scroll: (axis.to_content(center) - width / 2.0).max(0.0),
+            },
+            Action::Scroll(left) => Navigation {
+                seek: None,
+                scroll: axis.to_content(left),
+            },
+        }
+    }
 }
 
 impl State {

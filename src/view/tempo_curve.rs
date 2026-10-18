@@ -1,4 +1,5 @@
 //! `r` on the conductor: the tempo curve and the conductor's tempo events over every track's notes.
+use crate::view::timeline_follow::Follow;
 use crate::{
     app::{App, Loaded},
     view::piano_roll::{draw_beats, layout_of, Layout, PX_PER_QUARTER},
@@ -114,7 +115,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     };
     let tempos = tempo_events(loaded);
     let playing = crate::play::transport::tick_for(app, 0);
-    let mut following = playing.filter(|_| app.playback.follow);
+    let mut following = Follow::new(ctx, app.playback.follow, playing);
     let range = app.playback.repeat;
     let mut repeat_action = None;
     let mut audition_tick = None;
@@ -152,7 +153,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             let area = state.viewport.bars(
                 ui,
                 base_axis,
-                state.drag.is_none() && state.references.axis().is_none(),
+                state.drag.is_none()
+                    && state.repeat_drag.is_none()
+                    && state.references.axis().is_none(),
             );
             let end = references
                 .last()
@@ -166,10 +169,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 viewport::minimap_tempos(&tempos, curve.as_ref(), references),
                 playing,
             );
-            if navigated {
-                app.playback.follow = false;
-                following = None;
-            }
+            following.minimap(&mut app.playback.follow, navigated);
             state.viewport.scale_layout(&mut layout);
             ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
                 // Reserve scrollbar space so it cannot intercept the lowest BPM points.
@@ -181,11 +181,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 );
                 let mut scroll = egui::ScrollArea::horizontal()
                     .id_salt("tempo-curve")
-                    .scroll_bar_rect(scrollbar.shrink2(egui::vec2(16.0, 0.0)))
+                    .scroll_bar_rect(
+                        scrollbar.shrink2(egui::vec2(crate::view::timeline_zoom::BUTTON, 0.0)),
+                    )
                     .auto_shrink([false, false])
                     .drag_to_scroll(false)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible);
-                if let Some(tick) = following {
+                if let Some(tick) = following.tick() {
                     state.viewport.pending_scroll = None;
                     let width = (ui.available_width() - 2.0 * HIT).max(0.0);
                     scroll = scroll.horizontal_scroll_offset(
@@ -212,7 +214,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     repeat_action = repeat::row(
                         ui,
                         row.shrink2(egui::vec2(HIT, 0.0)),
-                        layout.scale,
+                        &layout.scale,
                         range,
                         &mut state.repeat_drag,
                     );

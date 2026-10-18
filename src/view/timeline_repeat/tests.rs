@@ -23,7 +23,7 @@ fn frame(
                 action = row(
                     ui,
                     egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(1000.0, 24.0)),
-                    1.0,
+                    &1.0_f32,
                     range,
                     state,
                 )

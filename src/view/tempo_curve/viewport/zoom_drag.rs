@@ -53,7 +53,7 @@ impl Viewport {
                 .with_clip_rect(ui.clip_rect().intersect(zone))
                 .rect_filled(selected, 0.0, TEMPO.gamma_multiply(0.5));
             if response.drag_stopped_by(primary) && (a - b).abs() > 2.0 {
-                let factor = length * 0.9 / (a - b).abs();
+                let factor = length * timeline_zoom::FIT / (a - b).abs();
                 let center = (a + b) / 2.0;
                 if edge < 2 {
                     self.zoom_time(self.zoom * factor, center);

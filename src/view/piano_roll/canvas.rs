@@ -65,7 +65,9 @@ pub(super) fn show(
             Color32::from_rgb(0x66, 0xd9, 0xef).gamma_multiply(0.25),
         );
         if released && (start - end).abs() > 2.0 {
-            state.viewport.fit_time_range(start, end, 0.9);
+            state
+                .viewport
+                .fit_time_range(start, end, crate::view::timeline_zoom::FIT);
             action.navigated = true;
         }
     }

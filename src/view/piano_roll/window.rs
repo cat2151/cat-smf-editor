@@ -1,4 +1,5 @@
 use super::*;
+use crate::view::timeline_follow::Follow;
 use crate::view::timeline_repeat as repeat;
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
@@ -35,9 +36,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         .map(|&track| layout(loaded, track, tick))
         .collect();
     let playing = crate::play::transport::tick_for(app, app.track);
-    let mut following = playing.filter(|_| {
-        app.playback.follow && !ctx.input(|i| i.pointer.any_down() || i.pointer.any_released())
-    });
+    let mut following = Follow::new(ctx, app.playback.follow, playing);
     let minimap = minimap::Data::read(loaded, app.track);
     minimap.extend_timeline(loaded, app.track, &mut overview);
     for (layout, &track) in layouts.iter_mut().zip(&tracks) {
@@ -70,10 +69,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 state
                     .viewport
                     .minimap(ui, area, &overview, minimap.layers(), playing);
-            if navigated {
-                app.playback.follow = false;
-                following = None;
-            }
+            following.minimap(&mut app.playback.follow, navigated);
             let area = area.with_min_x(area.left() + keyboard::WIDTH);
             ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
                 ui.spacing_mut().scroll.floating = false;
@@ -91,7 +87,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     area.min,
                     area.max - egui::Vec2::splat(ui.spacing().scroll.allocated_width()),
                 )
-                .shrink2(egui::Vec2::splat(viewport::BUTTON));
+                .shrink2(egui::Vec2::splat(crate::view::timeline_zoom::BUTTON));
                 scrollbar.min.y += repeat::HEIGHT;
                 let mut scroll = egui::ScrollArea::both()
                     .id_salt(("piano-roll", tracks.clone()))
@@ -100,7 +96,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     .scroll_bar_rect(scrollbar)
                     .drag_to_scroll(false);
                 let pending = state.viewport.pending.take();
-                if let Some(tick) = following {
+                if let Some(tick) = following.tick() {
                     scroll = scroll.scroll_offset(egui::vec2(
                         (tick as f32 * layouts[0].scale
                             - (area.width() - ui.spacing().scroll.allocated_width()) / 2.0)
@@ -137,7 +133,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     );
                     state.repeat_rect = Some(row.intersect(screen));
                     repeat_action =
-                        repeat::row(ui, row, layouts[0].scale, range, &mut state.repeat_drag);
+                        repeat::row(ui, row, &layouts[0].scale, range, &mut state.repeat_drag);
                     for (slot, (&track, layout)) in tracks.iter().zip(&layouts).enumerate() {
                         let clip = egui::Rect::from_min_size(
                             egui::pos2(

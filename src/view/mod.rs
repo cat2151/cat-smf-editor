@@ -20,8 +20,10 @@ pub(crate) mod tempo_curve;
 #[cfg(test)]
 pub(crate) mod tests;
 pub(crate) mod time_columns;
+mod timeline_follow;
 mod timeline_minimap;
 mod timeline_repeat;
+mod timeline_zoom;
 mod title;
 mod track_map;
 mod track_pane;

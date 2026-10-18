@@ -2,8 +2,25 @@ use eframe::egui::{self, Color32};
 
 pub(crate) const HEIGHT: f32 = 24.0;
 pub(crate) const PLAYHEAD: Color32 = Color32::from_rgb(0xfd, 0x97, 0x1f);
-const RANGE: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
+pub(crate) const RANGE: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
 const RESTART_INTERVAL: f64 = 0.25;
+
+/// Conversion between ticks and x measured from the left edge of the row.
+pub(crate) trait TickAxis {
+    fn x(&self, tick: u64) -> f32;
+    fn tick(&self, x: f32) -> u64;
+}
+
+/// Evenly spaced ticks, in pixels per tick.
+impl TickAxis for f32 {
+    fn x(&self, tick: u64) -> f32 {
+        tick as f32 * self
+    }
+
+    fn tick(&self, x: f32) -> u64 {
+        (x / self).round().max(0.0) as u64
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct State {
@@ -89,7 +106,7 @@ pub(crate) fn apply(app: &mut crate::app::App, action: Action) {
 pub(crate) fn row(
     ui: &mut egui::Ui,
     rect: egui::Rect,
-    scale: f32,
+    axis: &impl TickAxis,
     range: Option<(u64, u64)>,
     drag: &mut State,
 ) -> Option<Action> {
@@ -98,9 +115,7 @@ pub(crate) fn row(
         ui.id().with("timeline-repeat"),
         egui::Sense::click_and_drag(),
     );
-    let tick = |pos: egui::Pos2| {
-        ((pos.x.clamp(rect.left(), rect.right()) - rect.left()) / scale).round() as u64
-    };
+    let tick = |pos: egui::Pos2| axis.tick(pos.x.clamp(rect.left(), rect.right()) - rect.left());
     if response.drag_started_by(egui::PointerButton::Primary) {
         drag.left = ui.input(|i| i.pointer.press_origin()).map(tick);
         drag.right = None;
@@ -135,8 +150,8 @@ pub(crate) fn row(
     ui.painter().rect_filled(rect, 0.0, Color32::from_gray(40));
     if let Some((a, b)) = preview.or(right_preview).or(range) {
         let selected = egui::Rect::from_min_max(
-            egui::pos2(rect.left() + a as f32 * scale, rect.top()),
-            egui::pos2(rect.left() + b as f32 * scale, rect.bottom()),
+            egui::pos2(rect.left() + axis.x(a), rect.top()),
+            egui::pos2(rect.left() + axis.x(b), rect.bottom()),
         );
         ui.painter()
             .rect_filled(selected, 0.0, RANGE.gamma_multiply(0.3));

@@ -1,9 +1,8 @@
 //! Fixed edge bars and independent tempo-axis / timeline zoom.
 use super::*;
+use crate::view::timeline_zoom::{self, BAR};
 
-pub(super) const BAR: f32 = 24.0;
 pub(super) const BAR_COLOR: Color32 = Color32::from_gray(75);
-const FACTOR: f64 = 3.0 / 2.0;
 
 mod edges;
 mod minimap;
@@ -124,7 +123,8 @@ impl Viewport {
     }
 
     pub(super) fn zoom_edge(&mut self, edge: usize, enlarge: bool, base: Axis, anchor: f32) {
-        let factor = if enlarge { FACTOR } else { 1.0 / FACTOR };
+        let click = f64::from(timeline_zoom::CLICK);
+        let factor = if enlarge { click } else { 1.0 / click };
         if edge < 2 {
             self.zoom_time(self.zoom * factor as f32, anchor);
         } else {
@@ -146,9 +146,14 @@ impl Viewport {
     }
 
     fn zoom_time(&mut self, zoom: f32, anchor: f32) {
-        let next = zoom.clamp(f32::MIN_POSITIVE, 4096.0);
-        self.pending_scroll =
-            Some(((self.scroll + anchor) * next / self.zoom - self.width / 2.0).max(0.0));
+        let next = timeline_zoom::clamp(zoom);
+        self.pending_scroll = Some(timeline_zoom::rescroll(
+            self.scroll,
+            anchor,
+            self.zoom,
+            next,
+            self.width,
+        ));
         self.zoom = next;
     }
 
@@ -175,7 +180,7 @@ impl Viewport {
                 self.notes_drag = None;
                 if (a - b).abs() > 2.0 {
                     self.zoom_time(
-                        self.zoom * self.width * 0.9 / (a - b).abs(),
+                        self.zoom * self.width * timeline_zoom::FIT / (a - b).abs(),
                         (a + b) / 2.0 - self.scroll,
                     );
                 }
@@ -205,7 +210,7 @@ impl Viewport {
             ui.spacing_mut().scroll.floating = false;
             let output = egui::ScrollArea::vertical()
                 .id_salt("tempo-bpm-scroll")
-                .scroll_bar_rect(bar.shrink2(egui::vec2(0.0, paging::BUTTON)))
+                .scroll_bar_rect(bar.shrink2(egui::vec2(0.0, timeline_zoom::BUTTON)))
                 .auto_shrink([false, false])
                 .drag_to_scroll(false)
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
@@ -221,8 +226,12 @@ impl Viewport {
                 });
             }
         });
-        if let Some(direction) = paging::buttons(ui, bar, true) {
-            self.apply_wheel(-direction * rect.height() * 0.5, base, Mode::BpmScroll);
+        if let Some(direction) = timeline_zoom::page_buttons(ui, bar, true, "tempo-page") {
+            self.apply_wheel(
+                -direction * rect.height() * timeline_zoom::PAGE,
+                base,
+                Mode::BpmScroll,
+            );
         }
     }
 }

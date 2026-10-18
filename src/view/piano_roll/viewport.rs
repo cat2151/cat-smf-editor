@@ -1,8 +1,7 @@
 //! Fixed zoom zones and independent time / pitch navigation.
 use super::*;
+use crate::view::timeline_zoom::{self, BAR};
 
-const BAR: f32 = 24.0;
-pub(crate) const BUTTON: f32 = 16.0;
 const ACTIVE: Color32 = Color32::from_rgb(0xe6, 0xdb, 0x74);
 
 #[derive(Default)]
@@ -11,7 +10,7 @@ pub(crate) struct Viewport {
     zoom: egui::Vec2,
     pub pending: Option<egui::Vec2>,
     pub(crate) scroll: egui::Vec2,
-    pub(super) panel: Option<egui::Rect>,
+    pub(crate) panel: Option<egui::Rect>,
     pub(super) bars: [Option<egui::Rect>; 2],
     drag: Option<(usize, f32, egui::Rect)>,
     pub(crate) minimap_state: crate::view::timeline_minimap::State,
@@ -39,8 +38,22 @@ impl Viewport {
         tempos: crate::view::timeline_minimap::tempos::Tempos<'_>,
         playing: Option<u64>,
     ) -> (egui::Rect, bool) {
-        use crate::view::timeline_minimap::{Action, View};
-        let zoom = self.zoom().x;
+        let axis = crate::view::timeline_minimap::Zoomed(self.zoom().x);
+        self.minimap_on(ui, area, layout, tempos, playing, &axis)
+    }
+
+    /// [`Self::minimap`] for content whose x maps to the timeline through `axis`.
+    pub fn minimap_on(
+        &mut self,
+        ui: &mut egui::Ui,
+        area: egui::Rect,
+        layout: &Layout,
+        tempos: crate::view::timeline_minimap::tempos::Tempos<'_>,
+        playing: Option<u64>,
+        axis: &impl crate::view::timeline_minimap::Axis,
+    ) -> (egui::Rect, bool) {
+        use crate::view::timeline_minimap::View;
+        let left = axis.to_minimap(self.scroll.x);
         let (area, action) = self.minimap_state.show(
             ui,
             area,
@@ -48,9 +61,9 @@ impl Viewport {
             View {
                 end: layout.size.x,
                 playing: playing.map(|tick| tick as f32 * layout.scale),
-                zoom,
-                scroll: self.scroll.x,
-                width: self.axis_length(0),
+                zoom: 1.0,
+                scroll: left,
+                width: axis.to_minimap(self.scroll.x + self.axis_length(0)) - left,
             },
             |painter, rect| {
                 crate::view::timeline_minimap::tempos::draw(
@@ -61,19 +74,12 @@ impl Viewport {
                 )
             },
         );
-        match action {
-            Some(Action::Center(center)) => {
-                self.seek = Some((center / layout.scale).round().max(0.0) as u64);
-                let mut offset = self.pending.unwrap_or(self.scroll);
-                offset.x = (center * zoom - self.axis_length(0) / 2.0).max(0.0);
-                self.pending = Some(offset);
-            }
-            Some(Action::Scroll(left)) => {
-                let mut offset = self.pending.unwrap_or(self.scroll);
-                offset.x = left * zoom;
-                self.pending = Some(offset);
-            }
-            None => {}
+        if let Some(action) = action {
+            let navigation = action.navigate(layout.scale, self.axis_length(0), axis);
+            self.seek = navigation.seek.or(self.seek);
+            let mut offset = self.pending.unwrap_or(self.scroll);
+            offset.x = navigation.scroll;
+            self.pending = Some(offset);
         }
         (area, action.is_some())
     }
@@ -119,16 +125,19 @@ impl Viewport {
             return;
         }
         let mut zoom = self.zoom();
-        let bounds = if axis == 0 {
-            (f32::MIN_POSITIVE, 4096.0)
+        let next = if axis == 0 {
+            timeline_zoom::clamp(zoom[axis] * factor)
         } else {
-            (1.0 / 64.0, 64.0)
+            (zoom[axis] * factor).clamp(1.0 / 64.0, 64.0)
         };
-        let next = (zoom[axis] * factor).clamp(bounds.0, bounds.1);
         let mut offset = self.pending.unwrap_or(self.scroll);
-        offset[axis] = ((self.scroll[axis] + anchor) * next / zoom[axis]
-            - self.axis_length(axis) / 2.0)
-            .max(0.0);
+        offset[axis] = timeline_zoom::rescroll(
+            self.scroll[axis],
+            anchor,
+            zoom[axis],
+            next,
+            self.axis_length(axis),
+        );
         zoom[axis] = next;
         self.zoom = zoom;
         self.pending = Some(offset);
@@ -206,9 +215,9 @@ impl Viewport {
                 self.zoom_axis(
                     axis,
                     if response.clicked() {
-                        3.0 / 2.0
+                        timeline_zoom::CLICK
                     } else {
-                        2.0 / 3.0
+                        1.0 / timeline_zoom::CLICK
                     },
                     local(pos),
                 );
@@ -232,7 +241,7 @@ impl Viewport {
                 {
                     self.zoom_axis(
                         axis,
-                        panel.size()[axis] * 0.9 / (start - end).abs(),
+                        panel.size()[axis] * timeline_zoom::FIT / (start - end).abs(),
                         (start + end) / 2.0,
                     );
                 }
@@ -261,7 +270,7 @@ impl Viewport {
                 let (axis, zoom) = mode;
                 if zoom {
                     let anchor = self.axis_length(axis) / 2.0;
-                    self.zoom_axis(axis, (delta * 0.01).exp(), anchor);
+                    self.zoom_axis(axis, timeline_zoom::wheel(delta), anchor);
                 } else {
                     let mut offset = self.scroll;
                     offset[axis] = (offset[axis] - delta).max(0.0);
@@ -290,42 +299,12 @@ impl Viewport {
         ];
         for (axis, bar) in bars.into_iter().enumerate() {
             self.bars[axis] = Some(bar);
-            for end in [false, true] {
-                let mut rect = bar;
-                if end {
-                    rect.min[axis] = rect.max[axis] - BUTTON;
-                } else {
-                    rect.max[axis] = rect.min[axis] + BUTTON;
-                }
-                let response = ui.interact(
-                    rect,
-                    ui.id().with(("roll-page", axis, end)),
-                    egui::Sense::click(),
-                );
-                let visuals = ui.style().interact(&response);
-                ui.painter()
-                    .rect_filled(rect.shrink(1.0), 2.0, visuals.bg_fill);
-                let direction = if end { 1.0 } else { -1.0 };
-                let along = if axis == 0 {
-                    egui::vec2(direction, 0.0)
-                } else {
-                    egui::vec2(0.0, direction)
-                };
-                let across = egui::vec2(-along.y, along.x);
-                ui.painter().add(egui::Shape::convex_polygon(
-                    vec![
-                        rect.center() + along * 4.0,
-                        rect.center() - along * 3.0 + across * 3.0,
-                        rect.center() - along * 3.0 - across * 3.0,
-                    ],
-                    visuals.fg_stroke.color,
-                    egui::Stroke::NONE,
-                ));
-                if response.clicked() {
-                    let mut next = offset;
-                    next[axis] = (next[axis] + direction * self.axis_length(axis) * 0.5).max(0.0);
-                    self.pending = Some(next);
-                }
+            if let Some(direction) = timeline_zoom::page_buttons(ui, bar, axis == 1, "roll-page") {
+                let mut next = offset;
+                next[axis] = (next[axis]
+                    + direction * self.axis_length(axis) * timeline_zoom::PAGE)
+                    .max(0.0);
+                self.pending = Some(next);
             }
         }
     }

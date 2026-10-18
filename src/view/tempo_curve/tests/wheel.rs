@@ -204,3 +204,80 @@ fn wheel_over_a_bar_uses_its_operation_then_content_wheel_scrolls_time() {
         assert!(app.tempo_curve.viewport.scroll > scroll);
     }
 }
+
+#[test]
+fn wheel_on_the_time_zoom_bar_zooms_only_while_no_repeat_drag_is_held() {
+    for dragging in [false, true] {
+        // Long enough that a wheel scroll is not clamped at the start.
+        let mut song = music();
+        for track in &mut song.tracks {
+            track.events.last_mut().unwrap().tick = 192_000;
+            cat_smf_editor::edit::refresh_deltas(track).unwrap();
+        }
+        let mut app = app(song);
+        let (ctx, output) = opened_in(&mut app, 0);
+        let bar = squares(&output, super::super::viewport::BAR_COLOR)[0].0;
+        let dot = super::circles(&output, super::TEMPO)[0].0;
+        let row = output
+            .shapes
+            .iter()
+            .find_map(|s| match &s.shape {
+                egui::epaint::Shape::Rect(r)
+                    if r.fill == egui::Color32::from_gray(40)
+                        && (r.rect.height() - 24.0).abs() < 0.01 =>
+                {
+                    Some(r.rect.center().y)
+                }
+                _ => None,
+            })
+            .unwrap();
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let from = egui::pos2(dot.x + 96.0, row);
+        let mut time = 11.0;
+        let mut step = |app: &mut crate::app::App, events| {
+            let output = at(app, &ctx, time, events);
+            time += 0.05;
+            let dots = super::circles(&output, super::TEMPO);
+            dots[1].0.x - dots[0].0.x
+        };
+        if dragging {
+            step(&mut app, vec![egui::Event::PointerMoved(from)]);
+            step(&mut app, vec![button(from, true)]);
+            step(
+                &mut app,
+                vec![egui::Event::PointerMoved(from + egui::vec2(96.0, 0.0))],
+            );
+            assert!(!app.tempo_curve.repeat_drag.is_none());
+        }
+        let before = step(&mut app, vec![]);
+        let scroll = app.tempo_curve.viewport.scroll;
+        step(
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(bar.center()),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -40.0),
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        for _ in 0..10 {
+            step(&mut app, vec![]);
+        }
+        let after = step(&mut app, vec![]);
+        if dragging {
+            assert!((after - before).abs() < 0.01, "span {before} -> {after}");
+            assert_eq!(app.tempo_curve.viewport.scroll, scroll);
+            step(&mut app, vec![button(bar.center(), false)]);
+            step(&mut app, vec![]);
+        } else {
+            assert!((after - before).abs() > 1.0, "span {before} -> {after}");
+        }
+    }
+}

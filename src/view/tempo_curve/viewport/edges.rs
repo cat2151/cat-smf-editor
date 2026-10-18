@@ -53,7 +53,7 @@ impl Viewport {
                 .rect_filled(selected, 0.0, TEMPO.gamma_multiply(0.25));
             if clicked || response.drag_stopped_by(secondary) {
                 self.zoom_time(
-                    self.zoom * self.width * 0.9 / ((right - left) * scale),
+                    self.zoom * self.width * timeline_zoom::FIT / ((right - left) * scale),
                     (left + right) * scale / 2.0 - self.scroll,
                 );
             }

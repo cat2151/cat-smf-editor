@@ -1,7 +1,9 @@
 //! Grand staff of the current track right of the single-column rows, scrolling with time.
 use crate::app::App;
-use crate::view::piano_roll::{self, minimap, viewport::BUTTON};
+use crate::view::piano_roll::{self, minimap};
+use crate::view::timeline_follow::Follow;
 use crate::view::timeline_repeat as repeat;
+use crate::view::timeline_zoom::BUTTON;
 use eframe::egui::{self, Color32};
 use score::Staff;
 
@@ -83,9 +85,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let track = app.track;
     let cursor = crate::play::playback::location(app).0;
     let playing = crate::play::transport::tick_for(app, track);
-    let mut following = playing.filter(|_| {
-        app.playback.follow && !ui.input(|i| i.pointer.any_down() || i.pointer.any_released())
-    });
+    let mut following = Follow::new(ui.ctx(), app.playback.follow, playing);
     // One list per track, since beams join notes of one track only.
     let mut voices = vec![score::notes(loaded, track)];
     let mut others: Vec<_> = (0..loaded.music.tracks.len())
@@ -133,13 +133,6 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         });
     });
     let area = state.viewport.bars(ui, state.repeat_drag.is_none());
-    let (area, navigated) = state
-        .viewport
-        .minimap(ui, area, &overview, tempos.layers(), playing);
-    if navigated {
-        app.playback.follow = false;
-        following = None;
-    }
     state.viewport.scale_layout(&mut layout);
     let gap = GAP * state.viewport.zoom().y;
     let ppqn = score::ppqn(loaded);
@@ -158,7 +151,19 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         layout.scale,
         gap,
     );
-    let left_tick = (state.viewport.scroll.x / layout.scale).max(0.0) as u64;
+    let (area, navigated) = state.viewport.minimap_on(
+        ui,
+        area,
+        &overview,
+        tempos.layers(),
+        playing,
+        &spacing::Minimap {
+            spacing: &spacing,
+            scale: overview.scale,
+        },
+    );
+    following.minimap(&mut app.playback.follow, navigated);
+    let left_tick = spacing.tick(state.viewport.scroll.x.max(0.0));
     let sharps = loaded
         .keys
         .map(track)
@@ -202,7 +207,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             .drag_to_scroll(false);
         let pending = state.viewport.pending.take();
         let center = |tick: u64| (spacing.x(tick) - (area.width() - bar) / 2.0).max(0.0);
-        if let Some(tick) = following {
+        if let Some(tick) = following.tick() {
             scroll = scroll.scroll_offset(egui::vec2(
                 center(tick),
                 pending.unwrap_or(state.viewport.scroll).y,
@@ -230,7 +235,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 egui::pos2(whole.left(), screen.top()),
                 egui::vec2(whole.width(), repeat::HEIGHT),
             );
-            repeat_action = repeat::row(ui, row, layout.scale, range, &mut state.repeat_drag);
+            repeat_action = repeat::row(ui, row, &spacing, range, &mut state.repeat_drag);
             if response.clicked()
                 && let Some(pos) = response.interact_pointer_pos()
             {

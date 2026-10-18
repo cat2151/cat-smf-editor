@@ -76,3 +76,45 @@ fn f_centers_playback_continuously_at_each_zoom_and_off_keeps_scroll() {
         assert!(app.tempo_curve.open);
     }
 }
+
+#[test]
+fn holding_the_pointer_pauses_following_and_release_resumes_it() {
+    let mut song = music();
+    for track in &mut song.tracks {
+        track.events.last_mut().unwrap().tick = 192_000;
+        cat_smf_editor::edit::refresh_deltas(track).unwrap();
+    }
+    let mut app = app(song);
+    app.playback.follow = true;
+    let (ctx, _) = opened_in(&mut app, 0);
+    at(&mut app, &ctx, 11.0, vec![]);
+    playback::start(&mut app, playback::Mode::AllTracks);
+    transport::advance(&mut app);
+    app.audition.set_test_seconds(30.0);
+    at(&mut app, &ctx, 12.0, vec![]);
+    let pos = egui::pos2(400.0, 300.0);
+    let button = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    at(
+        &mut app,
+        &ctx,
+        12.5,
+        vec![egui::Event::PointerMoved(pos), button(true)],
+    );
+    let held = app.tempo_curve.viewport.scroll;
+    app.audition.set_test_seconds(31.0);
+    at(&mut app, &ctx, 13.0, vec![]);
+    assert_eq!(app.tempo_curve.viewport.scroll, held);
+    assert!(app.playback.follow);
+    at(&mut app, &ctx, 13.5, vec![button(false)]);
+    assert_eq!(app.tempo_curve.viewport.scroll, held);
+    assert!(app.playback.follow);
+    let output = at(&mut app, &ctx, 14.0, vec![]);
+    assert!(app.tempo_curve.viewport.scroll > held);
+    let (x, center) = marker(&output);
+    assert!((x - center).abs() < 2.0, "{x} vs {center}");
+}

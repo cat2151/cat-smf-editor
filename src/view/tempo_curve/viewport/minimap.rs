@@ -14,7 +14,7 @@ impl Viewport {
         tempos: overview::Tempos<'_>,
         playing: Option<u64>,
     ) -> (egui::Rect, bool) {
-        use crate::view::timeline_minimap::{Action, View};
+        use crate::view::timeline_minimap::{View, Zoomed};
         let (remaining, action) = self.minimap_state.show(
             ui,
             area,
@@ -29,13 +29,10 @@ impl Viewport {
             |painter, rect| overview::draw(painter, rect, end.max(1.0) / layout.scale, tempos),
         );
         self.minimap_rect = self.minimap_state.rect;
-        match action {
-            Some(Action::Center(center)) => {
-                self.seek = Some((center / layout.scale).round().max(0.0) as u64);
-                self.pending_scroll = Some((center * self.zoom - self.width / 2.0).max(0.0));
-            }
-            Some(Action::Scroll(left)) => self.pending_scroll = Some(left * self.zoom),
-            None => {}
+        if let Some(action) = action {
+            let navigation = action.navigate(layout.scale, self.width, &Zoomed(self.zoom));
+            self.seek = navigation.seek.or(self.seek);
+            self.pending_scroll = Some(navigation.scroll);
         }
         (remaining, action.is_some())
     }

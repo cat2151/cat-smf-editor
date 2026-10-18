@@ -65,9 +65,9 @@ impl Viewport {
                 });
             }
             Mode::TimeZoom => {
-                self.zoom_time(self.zoom * (delta * 0.01).exp(), self.width / 2.0);
+                self.zoom_time(self.zoom * timeline_zoom::wheel(delta), self.width / 2.0);
             }
-            Mode::BpmZoom => self.zoom_bpm(base, (f64::from(delta) * 0.01).exp(), 0.5),
+            Mode::BpmZoom => self.zoom_bpm(base, timeline_zoom::wheel_f64(f64::from(delta)), 0.5),
         }
     }
 }
