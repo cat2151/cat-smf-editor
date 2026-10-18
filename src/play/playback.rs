@@ -195,11 +195,6 @@ fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequence> {
 }
 
 pub fn start(app: &mut App, mode: Mode) {
-    if let Some(loaded) = &app.loaded
-        && let Some(audio) = app.recent.cache.remove(&loaded.original)
-    {
-        app.audition.reuse_prepared(audio);
-    }
     app.playback.repeat = None;
     app.playback.last = mode;
     app.playback.open = false;

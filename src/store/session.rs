@@ -89,7 +89,9 @@ impl App {
     }
 
     pub fn save_session(&mut self) {
-        if let Some(session) = self.session() {
+        if !self.saved.is_untitled()
+            && let Some(session) = self.session()
+        {
             self.config.save(session);
         }
     }

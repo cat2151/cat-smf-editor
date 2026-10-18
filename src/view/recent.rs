@@ -5,13 +5,23 @@ use crate::{
 };
 use eframe::egui::{self, Color32, Key, Modifiers};
 
+mod prefetch;
+pub(crate) use prefetch::update as prefetch;
+
+/// The player is None for test auditions, which open no device.
+struct Preview {
+    _player: Option<crate::play::wav::Player>,
+}
+
 #[derive(Default)]
 pub struct State {
     pub history: History,
     pub open: bool,
     pub cursor: usize,
-    preview: Option<Box<App>>,
-    pub cache: std::collections::HashMap<std::path::PathBuf, crate::play::audition::Audition>,
+    preview: Option<Preview>,
+    /// The file the cursor moved to, sounding once its WAV is rendered.
+    listen: Option<std::path::PathBuf>,
+    prefetch: prefetch::State,
     reveal: bool,
     error: Option<String>,
 }
@@ -111,44 +121,54 @@ fn cells(entry: &Entry, index: usize, now: u64) -> [String; 7] {
     ]
 }
 
-fn park_preview(app: &mut App) {
-    if let Some(mut preview) = app.recent.preview.take()
-        && let Some(loaded) = &preview.loaded
-        && let Some(audio) = preview.audition.take_prepared()
-    {
-        app.recent.cache.insert(loaded.original.clone(), audio);
-    }
+fn silence(app: &mut App) {
+    app.recent.preview = None;
+    app.recent.listen = None;
 }
 
 fn preview(app: &mut App) {
-    park_preview(app);
+    silence(app);
     app.recent.error = None;
-    let Some(entry) = app.recent.history.entries.get(app.recent.cursor) else {
+    app.recent.listen = app
+        .recent
+        .history
+        .entries
+        .get(app.recent.cursor)
+        .map(|e| e.path.clone());
+    listen(app);
+}
+
+/// Plays the listened file if the cursor is still on it and its WAV exists.
+fn listen(app: &mut App) {
+    let Some(path) = app.recent.listen.clone() else {
         return;
     };
     if app
-        .loaded
-        .as_ref()
-        .is_some_and(|l| l.original == entry.path)
-        && let Some(audio) = app.audition.take_prepared()
+        .recent
+        .history
+        .entries
+        .get(app.recent.cursor)
+        .is_none_or(|e| e.path != path)
     {
-        app.recent.cache.insert(entry.path.clone(), audio);
+        app.recent.listen = None;
+        return;
     }
-    let mut preview = App::empty();
-    preview.player_selection.executable = app.player_selection.executable.clone();
-    #[cfg(test)]
-    {
-        preview.audition = crate::play::audition::Audition::disabled();
-    }
-    preview.load_mid_unchecked(entry.path.clone());
-    if let Some(error) = preview.load_error.take() {
-        app.recent.error = Some(error);
-    } else {
-        if let Some(audio) = app.recent.cache.remove(&entry.path) {
-            preview.audition.reuse_prepared(audio);
+    let wav = match prefetch::wav(app, &path) {
+        Ok(None) => return,
+        Ok(Some(wav)) => Ok(wav),
+        Err(error) => Err(error),
+    };
+    app.recent.listen = None;
+    let player = wav.and_then(|wav| {
+        if app.audition.is_disabled() {
+            return Ok(None);
         }
-        crate::play::playback::start(&mut preview, crate::play::playback::Mode::AllTracks);
-        app.recent.preview = Some(Box::new(preview));
+        let (rate, samples) = crate::play::wav::read(&wav)?;
+        crate::play::wav::Player::play(rate, samples).map(Some)
+    });
+    match player {
+        Ok(player) => app.recent.preview = Some(Preview { _player: player }),
+        Err(error) => app.recent.error = Some(error),
     }
 }
 
@@ -217,7 +237,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) -> bool {
     }
     if cancel || chosen.is_some() {
         app.recent.open = false;
-        park_preview(app);
+        silence(app);
         if let Some(path) = chosen
             .and_then(|i| app.recent.history.entries.get(i))
             .map(|e| e.path.clone())
@@ -232,18 +252,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) -> bool {
         preview(app);
         ctx.request_repaint();
     }
-    if ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Space))
-        && let Some(preview) = &mut app.recent.preview
-    {
-        crate::play::transport::stop(preview);
-    }
-    // Pump the independent preview voice while the document stays untouched.
-    if !moved && let Some(preview) = &mut app.recent.preview {
-        crate::play::transport::advance(preview);
-        preview.audition.pump();
-        if preview.audition.needs_pump() || preview.playback.pending.is_some() {
-            ctx.request_repaint_after(std::time::Duration::from_millis(32));
-        }
+    if ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Space)) {
+        silence(app);
     }
     draw(app, ctx);
     super::comma_menu::swallow(ctx);
@@ -295,9 +305,6 @@ fn draw(app: &mut App, ctx: &egui::Context) {
             {
                 ui.colored_label(Color32::LIGHT_RED, error);
             }
-            if let Some(error) = app.recent.preview.as_ref().and_then(|p| p.audition.error()) {
-                ui.colored_label(Color32::LIGHT_RED, error);
-            }
             let max_height = (screen.height()
                 - margin.top
                 - margin.bottom
@@ -345,30 +352,7 @@ fn draw(app: &mut App, ctx: &egui::Context) {
                             );
                             x += widths[column] + 12.0;
                         }
-                        let path = &app.recent.history.entries[i].path;
-                        let status = if let Some(preview) = app
-                            .recent
-                            .preview
-                            .as_ref()
-                            .filter(|p| p.loaded.as_ref().is_some_and(|l| &l.original == path))
-                        {
-                            if preview.audition.error().is_some() {
-                                "準備失敗"
-                            } else if crate::play::transport::preparing(preview) {
-                                "準備中…"
-                            } else if preview.audition.is_prepared() {
-                                "準備済み"
-                            } else {
-                                ""
-                            }
-                        } else if app.recent.cache.get(path).is_some_and(|a| a.is_prepared())
-                            || app.loaded.as_ref().is_some_and(|l| &l.original == path)
-                                && app.audition.is_prepared()
-                        {
-                            "準備済み"
-                        } else {
-                            ""
-                        };
+                        let status = prefetch::status(app, &app.recent.history.entries[i].path);
                         ui.painter().text(
                             egui::pos2(x, rect.center().y),
                             egui::Align2::LEFT_CENTER,
@@ -386,7 +370,7 @@ fn draw(app: &mut App, ctx: &egui::Context) {
     if let Some(i) = select {
         let path = app.recent.history.entries[i].path.clone();
         app.recent.open = false;
-        park_preview(app);
+        silence(app);
         app.open_mid_and_play(path);
     }
 }

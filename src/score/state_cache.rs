@@ -14,7 +14,7 @@ use std::{
 const MAX_STATE: usize = 16 * 1024 * 1024;
 const GENERATOR_VERSION: u32 = 1;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Entry {
     version: u32,
@@ -24,6 +24,7 @@ struct Entry {
     checksum: String,
 }
 
+#[derive(Clone)]
 pub struct Cache {
     directory: Option<PathBuf>,
     used: BTreeMap<String, Entry>,
@@ -91,6 +92,13 @@ fn fingerprint(reference: &PatchReference) -> Result<String, String> {
 }
 
 impl Cache {
+    /// Keep states resolved by idle work without replacing newer foreground entries.
+    pub fn absorb(&mut self, other: Self) {
+        for (key, entry) in other.used {
+            self.used.entry(key).or_insert(entry);
+        }
+    }
+
     pub fn new(application_data: Option<PathBuf>) -> Self {
         Self {
             directory: application_data

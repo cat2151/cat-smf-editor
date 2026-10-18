@@ -17,6 +17,7 @@ mod tests;
 pub enum Action {
     Save,
     EnableAutoSave,
+    New,
     Load(PathBuf),
     LoadAndPlay(PathBuf),
     Close,
@@ -54,6 +55,9 @@ impl App {
     }
 
     pub(super) fn finish_departure(&mut self, save: bool, ctx: &egui::Context) {
+        if save && self.saved.is_untitled() {
+            crate::play::transport::stop(self);
+        }
         let result = if !save {
             Ok(())
         } else if matches!(
@@ -62,13 +66,15 @@ impl App {
         ) {
             self.enable_auto_save()
         } else {
-            self.remember_loaded().and_then(|_| self.saved.save())
+            self.remember_loaded()
+                .and_then(|_| self.saved.save_confirmed())
         };
         if let Err(error) = result {
             self.saved.error = Some(error.clone());
             self.config.navigation.departure_error = Some(error);
             return;
         }
+        self.sync_saved_path();
         // Persist plugin caches before approving a close, including the discard path.
         if matches!(self.config.navigation.departure, Some(Action::Close))
             && let Err(error) = self.state_cache.save()
@@ -83,6 +89,7 @@ impl App {
         self.saved.error = None;
         match action {
             Action::Save | Action::EnableAutoSave => {}
+            Action::New => super::busy::request(self, ctx, super::busy::Task::New),
             Action::Load(path) => self.load_mid_unchecked(path),
             Action::LoadAndPlay(path) => self.load_and_play(path),
             Action::Close => {
@@ -112,7 +119,15 @@ pub fn inputs(app: &mut App, ctx: &egui::Context) {
     if !super::recent::available(app, ctx) || app.recent.open {
         return;
     }
-    if open::requested(ctx) {
+    if new_requested(ctx, Modifiers::CTRL | Modifiers::SHIFT) {
+        if let Err(error) = app.add_track() {
+            app.load_error = Some(error);
+        }
+        super::comma_menu::swallow(ctx);
+    } else if new_requested(ctx, Modifiers::CTRL) {
+        app.new_smf(ctx);
+        super::comma_menu::swallow(ctx);
+    } else if open::requested(ctx) {
         app.file_open_requested = true;
         super::comma_menu::swallow(ctx);
     } else if ctx.input_mut(|i| i.consume_key(Modifiers::CTRL, Key::S)) {
@@ -121,10 +136,26 @@ pub fn inputs(app: &mut App, ctx: &egui::Context) {
     }
 }
 
+fn new_requested(ctx: &egui::Context, modifiers: Modifiers) -> bool {
+    ctx.input_mut(|i| {
+        let pressed = i.events.iter().any(|e| {
+            matches!(e,
+            egui::Event::Key { key: Key::N, pressed: true, repeat: false, modifiers: m, .. }
+            // Windows sets `command` together with Ctrl; compare physical modifiers.
+            if m.ctrl && m.shift == modifiers.shift && !m.alt && !m.mac_cmd)
+        });
+        if pressed {
+            i.consume_key(modifiers, Key::N);
+        }
+        pressed
+    })
+}
+
 pub fn confirmation(app: &mut App, ctx: &egui::Context) {
     backup_tip::prepare(app);
     let closing = matches!(app.config.navigation.departure, Some(Action::Close));
     let saving = matches!(app.config.navigation.departure, Some(Action::Save));
+    let creating = matches!(app.config.navigation.departure, Some(Action::New));
     let enabling = matches!(
         app.config.navigation.departure,
         Some(Action::EnableAutoSave)
@@ -152,6 +183,8 @@ pub fn confirmation(app: &mut App, ctx: &egui::Context) {
             save |= ui
                 .button(if failed {
                     "y: 保存を再試行"
+                } else if app.saved.is_untitled() {
+                    "y: 名前を付けて保存する"
                 } else {
                     "y: 上書き保存する"
                 })
@@ -168,6 +201,16 @@ pub fn confirmation(app: &mut App, ctx: &egui::Context) {
                 })
                 .clicked();
             discard |= ui.button("n: 編集を破棄してアプリ終了").clicked();
+            resume |= ui.button("esc: 編集を続ける").clicked();
+        } else if creating {
+            save |= ui
+                .button(if failed {
+                    "y: 保存を再試行して新規作成"
+                } else {
+                    "y: 保存して新規作成"
+                })
+                .clicked();
+            discard |= ui.button("n: 編集を破棄して新規作成").clicked();
             resume |= ui.button("esc: 編集を続ける").clicked();
         } else {
             save |= ui

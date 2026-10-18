@@ -52,3 +52,6 @@ pub mod lissajous_ui;
 pub mod spectrum;
 #[path = "../../cat-plugin-player/shared/spectrum_ui.rs"]
 pub mod spectrum_ui;
+
+#[path = "../../cat-plugin-player/shared/mml.rs"]
+pub mod mml;

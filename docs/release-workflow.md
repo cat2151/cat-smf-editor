@@ -12,7 +12,8 @@ package名とexe名が一致する、Windows MSVC向けの単一バイナリア�
 リポジトリ依存の設定は `.github/release.json` に集約する。
 
 - `dependencies`: 公開GitHubリポジトリ、解決するref、兄弟checkoutのディレクトリ名。
-  各refを一度だけSHAに解決し、ビルドとnotesで同じSHAを使う。editorにはUAPMD、cat-plugin-playerの共有ソース、clap-mml-play-server内の`core-lib`（`cmrt-core`）が必要。
+  各refを一度だけSHAに解決し、ビルドとnotesで同じSHAを使う。editorにはUAPMD、cat-plugin-playerの共有ソース、clap-mml-play-server内の`core-lib`（`cmrt-core`）、clap-mml-render-tui内の`chord`と`midi-filter`が必要。
+  MML・コード入力はplayerのshared入力UI・変換経路を使い、TUIのchord変換とGit依存のMML変換器を利用する。
   `cmrt-core`はpath identity用に`default-features = false`で参照し、MMLアプリ本体やhost機能はビルドしない。
 - `verified_sha`: 任意の、手元で確認した依存版の基準。上流mainを固定する値ではない。
   一致は依存版の一致を意味し、配布するexeの手動確認済みを意味しない。
@@ -69,7 +70,7 @@ jobs:
 共有版はSHA固定を推奨する。一つの修正が全アプリへ即時波及するのを避け、確認後に参照SHAを更新する。
 各アプリでのビルド・音声動作確認は引き続き必要。
 
-playerの場合は依存一覧へMML関連の二つのリポジトリを追加し、adapterで静的CRTのRust flags、
+playerも同じMML関連の二つのリポジトリを使うが、adapterでは静的CRTのRust flags、
 共有build driver、exeと埋込みDLLのCRT検査を実行する。editorのadapterをそのまま使わない。
 UAPMDの補修、plugin固有処理、音声エンジンまで今回の共通workflowに取り込む必要はない。
 複数exe、macOS/Linux、private依存、submodule必須の依存、独自ZIPレイアウトは追加設計が必要。
@@ -88,8 +89,8 @@ UAPMDの補修、plugin固有処理、音声エンジンまで今回の共通wor
 
 検証用にPyYAMLが必要（実際のActions実行では不要）。
 `python -m unittest discover -s scripts -p 'test_release_workflow.py'` で、workflow内のPython処理を
-mockしたGitHub/git応答で検証する。初回公開、入力一致時の省略、依存変更（`cmrt-core`の取得元だけの変更を含む）、engine変更、手動再ビルド、
-通信失敗、Cargoの`cmrt-core` pathと取得先の整合、兄弟checkoutのSHA、ZIPの内容を対象にする。
+mockしたGitHub/git応答で検証する。初回公開、入力一致時の省略、依存変更（`cmrt-core`・`cmrt-chord`の取得元だけの変更を含む）、engine変更、手動再ビルド、
+通信失敗、Cargoの`cmrt-core`・`cmrt-chord` pathと取得先の整合、兄弟checkoutのSHA、ZIPの内容を対象にする。
 Actions YAMLはactionlint、adapterは実際のローカルReleaseビルドとdumpbinで検証する。
 GitHub runnerの新規checkoutでの完走は別途必要で、既存ローカルcacheでの成功とは区別する。
 

@@ -72,7 +72,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertNotIn('cat-plugin-player-2.3.4-windows-x64.zip', notes)
             dependencies = json.loads(out['dependencies'])
             self.assertEqual([dep['path'] for dep in dependencies],
-                             ['uapmd', 'cat-plugin-player', 'clap-mml-play-server'])
+                             ['uapmd', 'cat-plugin-player', 'clap-mml-play-server', 'clap-mml-render-tui'])
             self.assertTrue(all(dep['sha'] == SHA for dep in dependencies))
             self.assertIn('cat2151/cat-plugin-player', notes)
             self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {SHA}', notes)
@@ -87,6 +87,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
                        if dep['path'] == Path(dependency['path']).parts[1])
         self.assertEqual(sibling['repository'], 'cat2151/clap-mml-play-server')
         self.assertEqual(sibling['ref'], 'refs/heads/main')
+
+    def test_mml_converter_path_is_provided_and_its_changes_rebuild(self):
+        manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))
+        dependency = manifest['dependencies']['cmrt-chord']
+        self.assertEqual(dependency['path'], '../clap-mml-render-tui/chord')
+        config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
+        sibling = next(dep for dep in config['dependencies']
+                       if dep['path'] == Path(dependency['path']).parts[1])
+        self.assertEqual(sibling['repository'], 'cat2151/clap-mml-render-tui')
+        with workspace():
+            _, body = self.resolve(missing=True)
+            out, notes = self.resolve(body=body, dependency_shas={
+                'https://github.com/cat2151/clap-mml-render-tui': OTHER_SHA})
+            self.assertEqual(out['build'], 'true')
+            self.assertIn(f'cat2151/clap-mml-render-tui (refs/heads/main): {OTHER_SHA}', notes)
 
     def test_unchanged_schedule_skips_but_manual_rebuilds(self):
         with workspace():
@@ -117,7 +132,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})
             self.assertEqual(out['build'], 'true')
             dependencies = json.loads(out['dependencies'])
-            self.assertEqual([dep['sha'] for dep in dependencies], [SHA, SHA, OTHER_SHA])
+            self.assertEqual([dep['sha'] for dep in dependencies], [SHA, SHA, OTHER_SHA, SHA])
             self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {OTHER_SHA}', notes)
             out, _ = self.resolve(body=notes, dependency_shas={
                 'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})

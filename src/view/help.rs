@@ -40,10 +40,12 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
         &[
             (", / ☰", "設定menu"),
             ("Ctrl+O / Ctrl+P", "開く / 最近開いたファイル"),
-            ("Ctrl+S", "上書き保存"),
+            ("Ctrl+N", "新規SMF"),
+            ("Ctrl+Shift+N", "トラック追加"),
+            ("Ctrl+S", "保存"),
             ("Ctrl+Z", "元に戻す"),
             ("V", "Notes / Raw"),
-            ("i / e / .", "挿入menu / 編集menu / くり返す"),
+            ("i / e / .", "MML・コード進行 / 編集menu / 反復"),
             ("r", "ピアノロール / テンポカーブ"),
             ("左ドラッグ", "A-B repeat"),
         ],
@@ -93,7 +95,7 @@ pub(super) fn key_groups(ui: &mut egui::Ui, groups: &[(Color32, &[(&str, &str)])
 
 pub(super) fn close_guide(ui: &mut egui::Ui) {
     ui.separator();
-    ui.weak("ヘルプを閉じる: F1 / ? / Esc");
+    ui.weak("Esc: 閉じる");
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {

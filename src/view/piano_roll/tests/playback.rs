@@ -104,8 +104,8 @@ fn help_has_roll_operations_and_closes_without_closing_the_roll_or_starting_play
             _ => None,
         })
         .collect();
-    assert!(words.contains(&"開始 / 位置 / 長さを編集"));
-    assert!(words.contains(&"最大化を切替"));
+    assert!(words.contains(&"開始 / 位置 / 長さ"));
+    assert!(words.contains(&"最大化"));
     assert!(!words.contains(&"ポイント追加・移動"));
     press(&mut app, &ctx, egui::Key::Space);
     assert!(app.playback.active.is_none() && app.playback.pending.is_none());

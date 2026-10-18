@@ -7,10 +7,16 @@ fn exact_chords_use_one_row_with_a_trailing_length_and_spaces() {
     assert_eq!(output.len(), 1);
     assert_eq!(text(&output[0].tokens), " 'ce<g2' ");
     assert!(output[0].tokens.iter().all(|t| t.tick == 0));
-    for playing in [None, Some(0), Some(240), Some(960)] {
-        let painted = job(output[0].tokens.iter(), playing, 480);
+    for (playing, lit) in [
+        (None, false),
+        (Some(0), true),
+        (Some(480), true),
+        (Some(959), true),
+        (Some(960), false),
+    ] {
+        let painted = job(output[0].tokens.iter(), playing);
         for note in &tracks[0] {
-            let expected = Palette::dark_note(note.color, score::lit(0, 960, playing, 480));
+            let expected = Palette::dark_note(note.color, lit);
             assert!(painted.sections.iter().any(|s| s.format.color == expected));
         }
     }
@@ -175,7 +181,6 @@ fn shortened_quarters_place_rests_in_the_following_beats() {
                     .iter()
                     .filter(|t| t.tick >= beat * 384 && t.tick < (beat + 1) * 384),
                 None,
-                384,
             )
             .text
         })

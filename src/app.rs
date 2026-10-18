@@ -1,5 +1,6 @@
+mod creation;
 mod loading;
-mod sound;
+pub(crate) mod sound;
 pub(crate) mod undo;
 use cat_smf_editor::{model::Music, score::musical_time::MusicalTime, score::note_view::NoteView};
 use eframe::egui;
@@ -20,6 +21,8 @@ pub struct App {
     pub config: crate::store::config::Store,
     pub comma_menu: crate::view::comma_menu::State,
     pub analysis: crate::view::analysis::State,
+    pub mml_input: crate::view::mml_input::State,
+    pub busy: crate::view::busy::State,
     pub note_edit: Option<crate::view::note_edit::Editing>,
     pub trill_edit: Option<crate::view::trill_edit::Editing>,
     /// Set by `e` / `.`; the row drawing the cursor's note opens this field.
@@ -124,6 +127,8 @@ impl App {
             config: Default::default(),
             comma_menu: crate::view::comma_menu::State::default(),
             analysis: crate::view::analysis::State::default(),
+            mml_input: Default::default(),
+            busy: Default::default(),
             note_edit: None,
             trill_edit: None,
             note_edit_request: None,
@@ -190,6 +195,13 @@ impl App {
 }
 impl Loaded {
     pub fn refresh(&mut self) {
+        self.track_titles = self
+            .music
+            .tracks
+            .iter()
+            .enumerate()
+            .map(|(i, t)| format!("{} · {}", i + 1, t.name().unwrap_or_else(|| "—".into())))
+            .collect();
         self.time = MusicalTime::new(&self.music);
         self.keys = cat_smf_editor::score::key_signature::KeySignatures::new(&self.music);
         self.note_views = self
@@ -225,19 +237,14 @@ impl eframe::App for App {
         #[cfg(windows)]
         let started = std::time::Instant::now();
         self.log_errors();
-        self.recent.cache.retain(|_, audio| {
-            audio.pump();
-            audio.is_prepared()
-        });
-        if !self.recent.cache.is_empty() {
-            ctx.request_repaint_after(std::time::Duration::from_millis(32));
-        }
+        crate::view::recent::prefetch(self, ctx);
         crate::view::show(self, ctx);
         if !self.player_selection.setup.is_active() {
             crate::view::files::open_dialog(self, ctx, frame);
         }
         self.save_session();
         self.close(ctx);
+        crate::view::busy::show(self, ctx);
         self.log_errors();
         #[cfg(windows)]
         crate::player::resident_link::trace_frame(self, started);

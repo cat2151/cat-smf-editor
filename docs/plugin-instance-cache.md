@@ -41,18 +41,19 @@ cache数の上限は設けず、保持中はpluginとstateの分だけメモリ�
 master設定変更、音声エラーなどの既存の音源リセット時と終了時にも解放する。
 初回と解放後の再訪では、pluginの生成時間が必要になる。
 
-## ファイル別の演奏準備cache
+## Ctrl+Pの試聴
 
-曲切替とCtrl+Pの試聴移動・キャンセル時は、準備済みの`Audition`の音源を
-canonical pathごとにメモリへ保持する。ファイル別cacheには5分の期限を適用せず、
-アプリ終了まで保持する。streamは停止指令を送って一時停止し、main-thread pumpは継続する。
-再利用時にstreamを再開し、読み直したSMFの音量・音色・effectで演奏する。
-master構成が違う場合は破棄して再準備し、track側の変更は既存の構成比較・reload経路で処理する。
-キャッシュへ編集内容を保存せず、ファイルは毎回読み直す。永続化形式の変更はない。
+ファイルごとに音源をメモリへ保持しない。曲切替では前の曲の音源を破棄する。
+試聴は先頭1小節を書き出したwavで行い、音源はwavを書き終えると破棄する（操作と保存先はREADMEを参照）。
+書き出しは演奏と同じmixer（`audition_mix.rs`）を音声deviceなしで回す。
+UAPMDの`renderOfflineProject`はUAPMD project形式の`SequencerEngine`を前提とし、
+layer・track/master effect・auto gainの解釈が二重になるため使わない。
+音源の生成・pump・破棄は共通hostのUI thread契約を守るためワーカーへ移さず、
+process呼び出しだけをワーカーで行う。ワーカーが止まるまで音源を破棄しない。
 
 ## 検証
 
-- `native_session_cache_reuses_the_same_voice_without_sounding_notes`: 音符を送らずに実音声streamの退避・復帰を3往復し、同じvoice・音量・auto gainを確認するignored test。
+- `native_render_writes_audible_first_measure`: インストール済みの既定音源で先頭1小節を書き出し、無音でないことと長さを確認するignored test。
 - `instance_cache_tests`: plugin往復、track分離、stateの再読込、effect構成の区別、所有権の解放。
 - `browser_activity::tests`: 開いている間の1分更新、閉じてからの保持期間、再表示。
 - `native_round_trips_reuse_chains_and_idle_expiry_keeps_active_audio`:

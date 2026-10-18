@@ -1,10 +1,12 @@
 //! 読み込んだ SMF への編集。どの編集も触れたイベント以外の tick を変えない。
+pub mod mml;
 pub mod note_length;
 pub mod note_move;
 pub mod note_start;
 pub mod reference_tempo;
 mod relocate;
 pub mod tempo_curve;
+pub mod tracks;
 pub mod trill;
 
 /// Rebuild derived notes and then the tempo events at their final positions.

@@ -48,12 +48,10 @@ fn immediate_exit_after_activation_has_no_prompt_or_extra_backup() {
     let ctx = egui::Context::default();
     enable(&mut f, &ctx);
     let before = std::fs::read(&f.first).unwrap();
-    let output = super::clean_close::close_request(&mut f.app, &ctx);
+    super::clean_close::close_request(&mut f.app, &ctx);
     assert!(f.app.config.navigation.departure.is_none());
-    assert!(!output
-        .viewport_output
-        .values()
-        .any(|v| v.commands.contains(&egui::ViewportCommand::CancelClose)));
+    // Approved without confirmation; the busy modal is painted before closing.
+    assert!(f.app.config.navigation.close_approved);
     assert_eq!(std::fs::read(&f.first).unwrap(), before);
     assert_eq!(
         std::fs::read_dir(f.root.join("config/backup"))

@@ -15,6 +15,11 @@
       "repository": "cat2151/clap-mml-play-server",
       "ref": "refs/heads/main",
       "path": "clap-mml-play-server"
+    },
+    {
+      "repository": "cat2151/clap-mml-render-tui",
+      "ref": "refs/heads/main",
+      "path": "clap-mml-render-tui"
     }
   ],
   "build_script": "scripts/release.ps1",

@@ -157,7 +157,7 @@ fn question_opens_contextual_help_and_escape_closes_only_help() {
     at(&mut app, &ctx, 11.0, vec![egui::Event::Text("?".into())]);
     assert!(app.help_open);
     let output = at(&mut app, &ctx, 12.0, vec![]);
-    assert!(output.shapes.iter().any(|s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text().contains("テンポを追加・移動"))));
+    assert!(output.shapes.iter().any(|s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text().contains("テンポ追加・移動"))));
     super::super::super::piano_roll::tests::press(&mut app, &ctx, egui::Key::Escape);
     assert!(!app.help_open);
     assert!(app.tempo_curve.open);

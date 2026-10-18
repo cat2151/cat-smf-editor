@@ -57,13 +57,11 @@ fn unedited_native_close_has_no_confirmation_or_file_writes() {
     let mut f = fixture("clean-native-close");
     let ctx = egui::Context::default();
     let original = std::fs::read(&f.first).unwrap();
-    let output = close_request(&mut f.app, &ctx);
+    close_request(&mut f.app, &ctx);
     assert!(!f.app.saved.dirty());
     assert!(f.app.config.navigation.departure.is_none());
-    assert!(!output
-        .viewport_output
-        .values()
-        .any(|v| v.commands.contains(&egui::ViewportCommand::CancelClose)));
+    // Approved without confirmation; the busy modal is painted before closing.
+    assert!(f.app.config.navigation.close_approved);
     assert_eq!(std::fs::read(&f.first).unwrap(), original);
     assert!(!f.root.join("config/backup").exists());
 }
@@ -76,12 +74,10 @@ fn saved_edits_close_without_another_confirmation() {
     save(&mut f.app, &ctx);
     press(&mut f.app, &ctx, Key::Y);
     assert!(!f.app.saved.dirty());
-    let output = close_request(&mut f.app, &ctx);
+    close_request(&mut f.app, &ctx);
     assert!(f.app.config.navigation.departure.is_none());
-    assert!(!output
-        .viewport_output
-        .values()
-        .any(|v| v.commands.contains(&egui::ViewportCommand::CancelClose)));
+    // Approved without confirmation; the busy modal is painted before closing.
+    assert!(f.app.config.navigation.close_approved);
 }
 
 #[test]

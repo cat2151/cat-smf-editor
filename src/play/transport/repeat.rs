@@ -28,13 +28,21 @@ pub fn prepare(app: &App, (a, b): (u64, u64)) -> Option<Prepared> {
 }
 
 pub fn start(app: &mut App, range: (u64, u64)) {
+    if play_once(app, range) {
+        app.playback.repeat = Some(range);
+    }
+}
+
+/// Plays `range` without looping; false when it has nothing to play.
+pub fn play_once(app: &mut App, range: (u64, u64)) -> bool {
     let Some(prepared) = prepare(app, range) else {
-        return;
+        return false;
     };
     app.audition.stop();
     app.playback.active = None;
     app.playback.pending = Some(prepared);
-    app.playback.repeat = Some(range);
+    app.playback.repeat = None;
+    true
 }
 
 pub fn clear(app: &mut App) {

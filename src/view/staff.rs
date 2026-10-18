@@ -300,7 +300,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 voice(&staff, &painter, notes, x, shown, beat, ppqn, gray);
             }
             let color = |note: &score::Note| {
-                let lit = score::lit(note.tick, note.end, playing, ppqn);
+                let lit = score::lit(note.tick, note.end, playing);
                 palette.note(state.light, note.color, lit)
             };
             for notes in &voices {
@@ -332,7 +332,6 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         &mml,
         track,
         playing,
-        ppqn,
         state.mml_track != Some(track),
         state.mml_measure != measure,
     );

@@ -7,12 +7,21 @@ use cat_smf_editor::{
 };
 use std::{io::Write, path::PathBuf};
 
+#[derive(Clone)]
 pub struct Cache {
     file: Option<PathBuf>,
     table: Option<Table>,
 }
 
 impl Cache {
+    /// Background lookups may refresh in memory, but never race the UI cache writer.
+    pub fn detached(&self) -> Self {
+        let mut copy = self.clone();
+        copy.table();
+        copy.file = None;
+        copy
+    }
+
     pub fn new(application_data: Option<PathBuf>) -> Self {
         Self {
             file: application_data

@@ -16,12 +16,9 @@ pub(super) struct Note {
     pub color: Color32,
 }
 
-/// Shared staff/MML pulse: start bright, then alternate each eighth while sounding.
-pub(super) fn lit(start: u64, end: u64, playing: Option<u64>, ppqn: u16) -> bool {
-    let blink = u64::from(ppqn / 2).max(1);
-    playing.is_some_and(|tick| {
-        (start..end).contains(&tick) && ((tick - start) / blink).is_multiple_of(2)
-    })
+/// Shared staff/MML highlight while the note sounds.
+pub(super) fn lit(start: u64, end: u64, playing: Option<u64>) -> bool {
+    playing.is_some_and(|tick| (start..end).contains(&tick))
 }
 
 /// SMPTE division has no quarter note; 480 only sizes the notes.

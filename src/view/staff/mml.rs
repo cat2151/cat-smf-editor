@@ -177,15 +177,11 @@ pub(super) fn height(rows: &[Row]) -> f32 {
     rows.len() as f32 * LINE + PAD
 }
 
-fn job<'a>(
-    tokens: impl Iterator<Item = &'a Token>,
-    playing: Option<u64>,
-    ppqn: u16,
-) -> egui::text::LayoutJob {
+fn job<'a>(tokens: impl Iterator<Item = &'a Token>, playing: Option<u64>) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     for token in tokens {
         let color = token.tone.map_or(Color32::from_gray(220), |tone| {
-            Palette::dark_note(tone.color, score::lit(tone.start, tone.end, playing, ppqn))
+            Palette::dark_note(tone.color, score::lit(tone.start, tone.end, playing))
         });
         job.append(
             &token.text,
@@ -219,7 +215,6 @@ pub(super) fn show(
     rows: &[Row],
     current: usize,
     playing: Option<u64>,
-    ppqn: u16,
     reveal: bool,
     reset: bool,
 ) {
@@ -257,7 +252,6 @@ pub(super) fn show(
                             .iter()
                             .filter(|t| t.tick >= start && t.tick < end),
                         playing,
-                        ppqn,
                     ))
                 })
                 .collect()

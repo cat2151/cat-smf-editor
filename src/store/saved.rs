@@ -21,6 +21,7 @@ impl std::fmt::Display for LoadError {
 pub struct Document {
     pub directory: Option<PathBuf>,
     key: Option<PathBuf>,
+    untitled: bool,
     baseline: Vec<u8>,
     expected: Vec<u8>,
     bytes: Vec<u8>,
@@ -45,6 +46,7 @@ impl Document {
         let music = cat_smf_editor::ffi::parse(&expected).map_err(LoadError::InvalidSmf)?;
         let bytes = smf_io::encode(&music).map_err(LoadError::Other)?;
         self.key = Some(path.to_owned());
+        self.untitled = false;
         self.auto_save = super::auto_save::enabled(&music);
         self.saved_auto_save = self.auto_save;
         self.dirty_since = None;
@@ -54,6 +56,67 @@ impl Document {
         self.baseline = bytes.clone();
         self.bytes = bytes;
         Ok(music)
+    }
+
+    pub(crate) fn untitled(directory: Option<PathBuf>, music: &Music) -> Result<Self, String> {
+        let mut document = Self::new(directory);
+        document.untitled = true;
+        document.bytes = smf_io::encode(music)?;
+        document.dirty_since = Some(Instant::now());
+        Ok(document)
+    }
+
+    pub(crate) fn is_untitled(&self) -> bool {
+        self.untitled
+    }
+
+    pub(crate) fn path(&self) -> Option<&Path> {
+        self.key.as_deref()
+    }
+
+    pub(crate) fn save_confirmed(&mut self) -> Result<(), String> {
+        if !self.is_untitled() {
+            return self.save();
+        }
+        let path = rfd::FileDialog::new()
+            .add_filter("SMF", &["mid", "midi", "smf"])
+            .set_file_name("untitled.mid")
+            .save_file()
+            .ok_or("Save cancelled")?;
+        self.save_as(&path)
+    }
+
+    pub(crate) fn save_as(&mut self, path: &Path) -> Result<(), String> {
+        if path.exists() {
+            let expected = std::fs::read(path).map_err(|e| e.to_string())?;
+            let directory = self
+                .directory
+                .as_ref()
+                .ok_or("Backup directory is unavailable")?;
+            super::saved_write::replace_with_backup(
+                path,
+                &self.bytes,
+                &expected,
+                &directory.join("backup"),
+            )
+            .map_err(|e| e.to_string())?;
+        } else {
+            use std::io::Write;
+            let mut file = tempfile::NamedTempFile::new_in(path.parent().unwrap_or(Path::new(".")))
+                .map_err(|e| e.to_string())?;
+            file.write_all(&self.bytes).map_err(|e| e.to_string())?;
+            file.as_file().sync_all().map_err(|e| e.to_string())?;
+            file.persist_noclobber(path).map_err(|e| e.to_string())?;
+        }
+        self.key = Some(path.to_owned());
+        self.untitled = false;
+        self.expected = self.bytes.clone();
+        self.baseline = self.bytes.clone();
+        self.saved_auto_save = self.auto_save;
+        self.dirty_since = None;
+        self.auto_save_stopped = false;
+        self.error = None;
+        Ok(())
     }
 
     pub fn dirty(&self) -> bool {
@@ -133,9 +196,12 @@ impl crate::app::App {
         if !ctx.input(|i| i.viewport().close_requested()) {
             return;
         }
-        if !self.config.navigation.close_approved
-            && !self.allow_departure(crate::view::files::Action::Close)
-        {
+        if !self.config.navigation.close_approved {
+            if self.allow_departure(crate::view::files::Action::Close) {
+                // Close again after the busy modal is painted.
+                self.config.navigation.close_approved = true;
+                crate::view::busy::request(self, ctx, crate::view::busy::Task::Close);
+            }
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             return;
         }

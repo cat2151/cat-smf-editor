@@ -4,7 +4,7 @@ use cat_smf_editor::{
     smf_io,
 };
 
-fn music() -> Music {
+pub(super) fn music() -> Music {
     Music {
         format: 0,
         division: 480,
@@ -43,7 +43,12 @@ fn music() -> Music {
     }
 }
 
-fn press(app: &mut App, ctx: &egui::Context, key: Key, modifiers: Modifiers) -> egui::FullOutput {
+pub(super) fn press(
+    app: &mut App,
+    ctx: &egui::Context,
+    key: Key,
+    modifiers: Modifiers,
+) -> egui::FullOutput {
     ctx.run(
         egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
@@ -115,6 +120,7 @@ fn preview_cancel_and_confirm_preserve_unsaved_document_and_persist_order() {
     let mut app = crate::view::tests::app(source.clone());
     app.loaded = None;
     app.recent.history = History::open(root.join("recent-files.json"));
+    app.recent.prefetch.directory = Some(root.join("wav"));
     app.open_mid(first.clone());
     app.open_mid(second.clone());
     assert_eq!(app.recent.history.entries.len(), 2);
@@ -140,19 +146,8 @@ fn preview_cancel_and_confirm_preserve_unsaved_document_and_persist_order() {
     assert_eq!(app.recent.cursor, 0);
     press(&mut app, &ctx, Key::J, Modifiers::NONE);
     assert_eq!(app.recent.cursor, 1);
-    assert!(app.recent.preview.is_some());
-    let output = press(&mut app, &ctx, Key::F2, Modifiers::NONE);
-    assert!(output.shapes.iter().any(|s| matches!(&s.shape,
-        egui::epaint::Shape::Text(t) if t.galley.text() == "準備中…")));
-    app.recent
-        .preview
-        .as_ref()
-        .unwrap()
-        .audition
-        .set_test_seconds(0.1);
-    let output = press(&mut app, &ctx, Key::F2, Modifiers::NONE);
-    assert!(output.shapes.iter().any(|s| matches!(&s.shape,
-        egui::epaint::Shape::Text(t) if t.galley.text() == "準備済み")));
+    assert!(app.recent.listen.is_some());
+    press(&mut app, &ctx, Key::F2, Modifiers::NONE);
     assert!(!app.track_view.go_open && !app.edit_menu.open);
     assert_eq!(app.loaded.as_ref().unwrap().original, loaded_path);
     assert_eq!(
@@ -171,9 +166,7 @@ fn preview_cancel_and_confirm_preserve_unsaved_document_and_persist_order() {
         order
     );
     press(&mut app, &ctx, Key::Escape, Modifiers::NONE);
-    assert!(!app.recent.open && app.recent.preview.is_none());
-    let first_key = std::fs::canonicalize(&first).unwrap();
-    assert!(app.recent.cache.get(&first_key).unwrap().is_prepared());
+    assert!(!app.recent.open && app.recent.listen.is_none());
     assert!(app.saved.dirty());
     assert_eq!(app.cursor_row, Some(1));
     press(&mut app, &ctx, Key::P, Modifiers::CTRL);
@@ -188,7 +181,6 @@ fn preview_cancel_and_confirm_preserve_unsaved_document_and_persist_order() {
     );
     assert_eq!(app.playback.last, crate::play::playback::Mode::AllTracks);
     assert!(app.playback.pending.is_some());
-    assert!(!app.recent.cache.contains_key(&first_key));
     let persisted = History::open(root.join("recent-files.json"));
     assert_eq!(
         persisted.entries[0].path,

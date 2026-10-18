@@ -73,9 +73,13 @@ impl crate::app::App {
         // Keep the active document and its history untouched if persistence fails.
         let mut saved = self.saved.clone();
         saved.remember(&loaded.original, &music)?;
-        saved.save()?;
+        if saved.is_untitled() {
+            crate::play::transport::stop(self);
+        }
+        saved.save_confirmed()?;
         self.apply_volume_music(music)?;
         self.saved = saved;
+        self.sync_saved_path();
         self.undo.push(before);
         Ok(())
     }

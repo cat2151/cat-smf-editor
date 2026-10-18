@@ -84,13 +84,11 @@ fn auto_save_waits_for_input_and_pointer_but_close_flushes_before_deadline() {
     enable(&mut f, &ctx);
     edit(&mut f.app);
     let before = std::fs::read(&f.first).unwrap();
-    let output = super::clean_close::close_request(&mut f.app, &ctx);
+    super::clean_close::close_request(&mut f.app, &ctx);
     assert!(!f.app.saved.dirty());
     assert!(f.app.config.navigation.departure.is_none());
-    assert!(!output
-        .viewport_output
-        .values()
-        .any(|v| v.commands.contains(&egui::ViewportCommand::CancelClose)));
+    // Approved without confirmation; the busy modal is painted before closing.
+    assert!(f.app.config.navigation.close_approved);
     assert_ne!(std::fs::read(&f.first).unwrap(), before);
     crate::play::mixer::volume::set(&mut f.app, 0, 0.5).unwrap();
     let deadline = f.app.saved.auto_save_deadline().unwrap();

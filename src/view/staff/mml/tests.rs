@@ -170,10 +170,11 @@ fn colors_match_the_dark_staff_for_idle_playing_and_ended_notes() {
         for (tick, expected) in [
             (None, Palette::tinted(tone)),
             (Some(0), tone),
-            (Some(240), Palette::tinted(tone)),
+            (Some(240), tone),
+            (Some(479), tone),
             (Some(480), Palette::tinted(tone)),
         ] {
-            let painted = job(row.tokens.iter(), tick, 480);
+            let painted = job(row.tokens.iter(), tick);
             assert!(painted.sections.iter().any(|s| s.format.color == expected));
         }
     }
@@ -202,7 +203,6 @@ fn each_attack_is_assigned_to_its_actual_beat() {
                     .iter()
                     .filter(|t| t.tick >= beat * 480 && t.tick < (beat + 1) * 480),
                 None,
-                480,
             )
             .text
         })

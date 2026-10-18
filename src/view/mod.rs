@@ -1,6 +1,7 @@
 //! 画面描画: パネル・行・鍵盤・help。
 pub(crate) mod analysis;
 pub(crate) mod beat_audition;
+pub(crate) mod busy;
 pub(crate) mod comma_menu;
 pub(crate) mod edit_menu;
 pub(crate) mod effects;
@@ -8,6 +9,7 @@ mod event_repeat;
 mod help;
 pub(crate) mod layers;
 mod meta_text;
+pub(crate) mod mml_input;
 pub(crate) mod note_edit;
 pub(crate) mod piano_roll;
 mod pitch_keyboard;
@@ -42,6 +44,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         app.audition.pump();
         return;
     }
+    busy::run(app, ctx);
     show_contents(app, ctx);
     // Outside show_contents: a viewport skipped for one frame closes.
     analysis::show(app, ctx);
@@ -51,10 +54,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 
 fn show_contents(app: &mut App, ctx: &egui::Context) {
     let mut invalid_smf = files::invalid_smf_dialog(app, ctx);
-    if !invalid_smf && recent::show(app, ctx) {
+    if !invalid_smf && !app.mml_input.open && recent::show(app, ctx) {
         return;
     }
-    if !invalid_smf {
+    if !invalid_smf && !app.mml_input.open {
         crate::view::files::inputs(app, ctx);
     }
     let departure = app.config.navigation.departure.is_some();
@@ -70,37 +73,44 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         crate::player::resident_link::refresh_browser_activity(app);
         #[cfg(windows)]
         let started = std::time::Instant::now();
-        crate::play::transport::stop_shortcut(app, ctx);
-        crate::play::transport::advance(app);
-        undo::shortcuts(app, ctx);
-        crate::view::layers::show(app, ctx);
-        crate::view::effects::show(app, ctx);
-        #[cfg(windows)]
-        crate::player::resident_link::trace_slow(app, "advance", started);
-        if app.player_selection.no_notes_error {
-            crate::player::bulk::show_note_error(app, ctx);
-            return;
+        mml_input::shortcuts(app, ctx);
+        let mml_owns_input = app.mml_input.open;
+        if mml_owns_input {
+            mml_input::show(app, ctx);
         }
-        if app.trill_edit.is_none() {
-            crate::view::piano_roll::shortcuts(app, ctx);
-            crate::view::comma_menu::shortcuts(app, ctx);
-            crate::view::edit_menu::shortcuts(app, ctx);
-            crate::cursor::split::shortcuts(app, ctx);
-            crate::view::layers::shortcuts(app, ctx);
-            if !app.track_view.go_open && !app.track_view.split_open {
-                crate::play::playback::shortcuts(app, ctx);
-                crate::play::transport::shortcuts(app, ctx);
-                let view_keys = !ctx.wants_keyboard_input()
-                    && !app.help_open
-                    && !app.playback.mixer_focused()
-                    && !app.playback.open;
-                if view_keys && consume_plain(ctx, egui::Key::V) {
-                    app.note_mode = !app.note_mode;
-                    crate::cursor::moves::sync_mode(app);
-                    app.reset_scroll = true;
+        if !mml_owns_input {
+            crate::play::transport::stop_shortcut(app, ctx);
+            crate::play::transport::advance(app);
+            undo::shortcuts(app, ctx);
+            crate::view::layers::show(app, ctx);
+            crate::view::effects::show(app, ctx);
+            #[cfg(windows)]
+            crate::player::resident_link::trace_slow(app, "advance", started);
+            if app.player_selection.no_notes_error {
+                crate::player::bulk::show_note_error(app, ctx);
+                return;
+            }
+            if app.trill_edit.is_none() {
+                crate::view::piano_roll::shortcuts(app, ctx);
+                crate::view::comma_menu::shortcuts(app, ctx);
+                crate::view::edit_menu::shortcuts(app, ctx);
+                crate::cursor::split::shortcuts(app, ctx);
+                crate::view::layers::shortcuts(app, ctx);
+                if !app.track_view.go_open && !app.track_view.split_open {
+                    crate::play::playback::shortcuts(app, ctx);
+                    crate::play::transport::shortcuts(app, ctx);
+                    let view_keys = !ctx.wants_keyboard_input()
+                        && !app.help_open
+                        && !app.playback.mixer_focused()
+                        && !app.playback.open;
+                    if view_keys && consume_plain(ctx, egui::Key::V) {
+                        app.note_mode = !app.note_mode;
+                        crate::cursor::moves::sync_mode(app);
+                        app.reset_scroll = true;
+                    }
+                    crate::view::help::shortcuts(app, ctx);
+                    crate::cursor::moves::shortcuts(app, ctx);
                 }
-                crate::view::help::shortcuts(app, ctx);
-                crate::cursor::moves::shortcuts(app, ctx);
             }
         }
     }
@@ -111,6 +121,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         });
 
         let mut track = app.track;
+        let mut add_track = false;
         egui::SidePanel::left("tracks")
             .resizable(true)
             .default_width(260.0)
@@ -131,9 +142,23 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
                         for (index, title) in loaded.track_titles.iter().enumerate() {
                             ui.selectable_value(&mut track, index, title);
                         }
+                        add_track = ui
+                            .add_enabled(
+                                !confirming
+                                    && !app.mml_input.open
+                                    && !app.recent.open
+                                    && recent::available(app, ctx),
+                                egui::Button::new("+"),
+                            )
+                            .on_hover_text("Add track")
+                            .clicked();
                     });
             });
-        if track != app.track {
+        if add_track {
+            if let Err(error) = app.add_track() {
+                app.load_error = Some(error);
+            }
+        } else if track != app.track {
             app.select_track(track);
         }
     }

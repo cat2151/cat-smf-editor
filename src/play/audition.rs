@@ -5,6 +5,10 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
+#[path = "audition_mix.rs"]
+mod mix;
+#[path = "audition_offline.rs"]
+pub(crate) mod offline;
 #[path = "audition_output.rs"]
 mod output;
 use output::Voice;
@@ -39,7 +43,6 @@ pub struct Audition {
     voice: Option<Voice>,
     error: Option<String>,
     disabled: bool,
-    prepared: bool,
     progress: Option<Arc<AtomicU64>>,
     gains: std::collections::HashMap<usize, f32>,
     auto_gain_disabled: bool,
@@ -50,40 +53,6 @@ pub struct Audition {
     pub auditioned: Vec<u8>,
 }
 impl Audition {
-    /// Move prepared audio into a session cache without carrying document gains.
-    pub fn take_prepared(&mut self) -> Option<Self> {
-        if !self.is_prepared() {
-            return None;
-        }
-        self.stop();
-        if let Some(voice) = &self.voice {
-            voice.pause();
-        }
-        Some(Self {
-            voice: self.voice.take(),
-            master: self.master.clone(),
-            auto_gain_disabled: self.auto_gain_disabled,
-            disabled: self.disabled,
-            prepared: true,
-            ..Self::default()
-        })
-    }
-    pub fn reuse_prepared(&mut self, mut cached: Self) {
-        if self.master == cached.master && cached.is_prepared() {
-            self.voice = cached.voice.take();
-            self.prepared = cached.prepared;
-            if let Some(voice) = &self.voice {
-                voice.mailbox.lock().unwrap().auto_gain_disabled = self.auto_gain_disabled;
-                voice.resume();
-            }
-        }
-    }
-    pub fn is_prepared(&self) -> bool {
-        self.voice
-            .as_ref()
-            .is_some_and(|v| !v.failed.load(Ordering::Relaxed))
-            || self.disabled && self.prepared
-    }
     pub fn master(&self) -> &cat_smf_editor::master_effects::Settings {
         &self.master
     }
@@ -131,6 +100,10 @@ impl Audition {
             ..Self::default()
         }
     }
+    /// True for test auditions, which never open plugins or audio devices.
+    pub fn is_disabled(&self) -> bool {
+        self.disabled
+    }
     pub fn error(&self) -> Option<&str> {
         self.error
             .as_deref()
@@ -143,13 +116,11 @@ impl Audition {
         self.key_voice = None;
         self.key_active = false;
         self.voice = None;
-        self.prepared = false;
         self.progress = None;
         self.error = None;
     }
     fn prepare(&mut self, patches: &[(usize, Patch)]) -> bool {
         if self.disabled {
-            self.prepared = true;
             return true;
         }
         self.last_browser_use
@@ -375,74 +346,5 @@ mod key;
 mod cache_tests;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn master_auto_gain_defaults_on_and_selection_resets_preserve_the_switch() {
-        let mut audition = Audition::disabled();
-        assert!(audition.auto_gain_enabled());
-        audition.set_auto_gain_enabled(false);
-        audition.reset();
-        audition.stop();
-        assert!(!audition.auto_gain_enabled());
-        audition.set_auto_gain_enabled(true);
-        assert!(audition.auto_gain_enabled());
-    }
-    #[test]
-    #[ignore = "requires installed Surge XT and default audio output; emits audio"]
-    fn default_device_plays_two_patches_in_one_stream() {
-        let mut audition = Audition::default();
-        let ep = Patch::default();
-        let sequence = |duration| Sequence {
-            notes: vec![crate::play::audio_sequence::Note {
-                start: 0.05,
-                duration,
-                pitch: 60,
-                velocity: 80,
-            }],
-            end: duration + 0.05,
-        };
-        assert!(
-            audition.sequences(vec![
-                (0, Patch::default(), sequence(0.25)),
-                (1, ep.clone(), sequence(0.5))
-            ]),
-            "{:?}",
-            audition.error()
-        );
-        assert_eq!(audition.voice.as_ref().unwrap().natives.len(), 2);
-        assert_eq!(audition.voice.as_ref().unwrap().patches[1].1, ep);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(650);
-        while std::time::Instant::now() < deadline {
-            audition.pump();
-            assert!(audition.error().is_none(), "{:?}", audition.error());
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        audition.stop();
-    }
-    #[test]
-    #[ignore = "requires installed Surge XT and default audio output; emits audio"]
-    fn default_device_auditions_duration_and_can_stop() {
-        let mut audition = Audition::default();
-        assert!(
-            audition.play_track(
-                0,
-                &Patch::default(),
-                &[(60, 80, Some(0.25)), (67, 70, Some(0.5))]
-            ),
-            "{:?}",
-            audition.error()
-        );
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(650);
-        while std::time::Instant::now() < deadline {
-            audition.pump();
-            assert!(audition.error().is_none(), "{:?}", audition.error());
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        audition.stop();
-    }
-}
-
-#[cfg(test)]
-#[path = "audition_session_tests.rs"]
-mod session_tests;
+#[path = "audition_tests.rs"]
+mod tests;

@@ -33,6 +33,8 @@ pub(crate) fn app(music: Music) -> App {
         config: crate::store::config::Store::default(),
         comma_menu: crate::view::comma_menu::State::default(),
         analysis: crate::view::analysis::State::default(),
+        mml_input: Default::default(),
+        busy: Default::default(),
         note_edit: None,
         trill_edit: None,
         note_edit_request: None,
