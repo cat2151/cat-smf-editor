@@ -290,7 +290,7 @@ mod hover;
 #[cfg(test)]
 pub(crate) mod tests;
 
-mod viewport;
+pub(crate) mod viewport;
 mod window;
 
 mod canvas;
@@ -299,4 +299,4 @@ mod panes;
 mod navigation;
 
 mod keyboard;
-mod minimap;
+pub(crate) mod minimap;

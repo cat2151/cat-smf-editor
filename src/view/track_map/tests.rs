@@ -54,7 +54,8 @@ fn track_map_outlines_visible_ticks() {
             _ => None,
         })
         .expect("visible range outline");
-    assert!(frame.left() > 1300.0, "{frame:?}");
+    // The score takes the right column, so the pane and its map end mid-screen.
+    assert!(frame.left() > 600.0 && frame.right() < 850.0, "{frame:?}");
     assert!(frame.height() < 450.0, "{frame:?}");
 }
 
@@ -323,3 +324,36 @@ fn noteless_track_map_shows_every_note() {
 }
 
 mod repeat;
+
+/// Effect buttons wider than the pane are cut off, so the rows stay left of the map and its clicks still navigate.
+#[test]
+fn overflowing_track_header_leaves_the_map_clickable() {
+    let mut app = app(Music {
+        format: 1,
+        division: 480,
+        tracks: vec![Track {
+            events: (0..400u64).flat_map(|i| note(i * 480, 60, 240)).collect(),
+        }],
+    });
+    app.loaded.as_mut().unwrap().patches[0].effects = (0..6)
+        .map(|i| cat_smf_editor::chain_settings::PluginState {
+            reference: None,
+            plugin: cat_smf_editor::host::PluginKey {
+                format: "CLAP".into(),
+                id: format!("effect {i}"),
+                name: format!("A long effect name to overflow the pane {i}"),
+                vendor: "fixture".into(),
+                bundle_path: "X:/plugins/fixture.clap".into(),
+            },
+            state: vec![1],
+            preset_name: None,
+            bypass: false,
+        })
+        .collect();
+    let ctx = egui::Context::default();
+    render(&ctx, &mut app, Vec::new());
+    let map = outlines(&render(&ctx, &mut app, Vec::new()))[0];
+    click(&ctx, &mut app, egui::pos2(map.center().x, 700.0));
+    // Measure 78 of the 400 quarter notes in 4/4 lies under y = 700.
+    assert_eq!(app.track_view.cursor_tick, Some(77 * 1920));
+}

@@ -2,21 +2,21 @@
 use super::*;
 
 const BAR: f32 = 24.0;
-pub(super) const BUTTON: f32 = 16.0;
+pub(crate) const BUTTON: f32 = 16.0;
 const ACTIVE: Color32 = Color32::from_rgb(0xe6, 0xdb, 0x74);
 
 #[derive(Default)]
-pub(super) struct Viewport {
+pub(crate) struct Viewport {
     pub seek: Option<u64>,
     zoom: egui::Vec2,
     pub pending: Option<egui::Vec2>,
-    pub(super) scroll: egui::Vec2,
+    pub(crate) scroll: egui::Vec2,
     pub(super) panel: Option<egui::Rect>,
     pub(super) bars: [Option<egui::Rect>; 2],
     drag: Option<(usize, f32, egui::Rect)>,
-    pub(super) minimap_state: crate::view::timeline_minimap::State,
+    pub(crate) minimap_state: crate::view::timeline_minimap::State,
     pub(super) zoom_bars: [Option<egui::Rect>; 2],
-    pub(super) panes: usize,
+    pub(crate) panes: usize,
 }
 
 impl Viewport {
@@ -89,7 +89,7 @@ impl Viewport {
         }
     }
 
-    fn zoom(&self) -> egui::Vec2 {
+    pub(crate) fn zoom(&self) -> egui::Vec2 {
         if self.zoom == egui::Vec2::ZERO {
             egui::Vec2::splat(1.0)
         } else {

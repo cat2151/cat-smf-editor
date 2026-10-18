@@ -3,7 +3,7 @@ use super::*;
 use crate::view::timeline_minimap::tempos::Tempos;
 use cat_smf_editor::edit::{reference_tempo, tempo_curve};
 
-pub(super) struct Data {
+pub(crate) struct Data {
     events: Vec<(u64, f64)>,
     curve: Option<tempo_curve::Curve>,
     references: Vec<reference_tempo::Reference>,
@@ -52,6 +52,15 @@ impl Data {
             layout.size.x = width;
             layout.beats = beats_of(loaded, meter, end, layout.scale);
         }
+    }
+
+    /// Beats per minute at `tick` from the tempo events.
+    pub fn tempo_at(&self, tick: u64) -> Option<f64> {
+        self.events
+            .iter()
+            .take_while(|(t, _)| *t <= tick)
+            .last()
+            .map(|(_, bpm)| *bpm)
     }
 
     pub fn layers(&self) -> Tempos<'_> {

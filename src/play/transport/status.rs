@@ -193,7 +193,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 append("—", color);
             }
             append(&tick_text, color);
-            ui.label(job);
+            ui.label(job).on_hover_text(
+                "p / Space  再生menu / 前回の再生
+Shift+Space  演奏停止",
+            );
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button("☰").clicked() {

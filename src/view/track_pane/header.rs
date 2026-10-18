@@ -3,51 +3,62 @@ use crate::app::Loaded;
 use cat_smf_editor::score::instrument::ResolvedLayer;
 use eframe::egui::{self, Color32, RichText};
 
-pub(super) fn show(loaded: &Loaded, ui: &mut egui::Ui, track: usize) -> (bool, Option<usize>) {
+pub(super) fn show(loaded: &Loaded, parent: &mut egui::Ui, track: usize) -> (bool, Option<usize>) {
     let mut patch = false;
     let mut effect = None;
     // One line, so split panes start their rows at the same height.
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(&loaded.track_titles[track]).strong());
-        let layers = &loaded.patches[track].layers;
-        let hover = layers
-            .iter()
-            .map(|l| l.label())
-            .collect::<Vec<_>>()
-            .join("\n");
-        if ui
-            .button(layer_names(ui, layers))
-            .on_hover_text(if hover.is_empty() { "—" } else { &hover })
-            .clicked()
-        {
-            patch = true;
+    // Clipped to the pane: an overflowing line would widen the rows over the map beside them.
+    let line = egui::Rect::from_min_size(
+        parent.cursor().min,
+        egui::vec2(parent.available_width(), parent.spacing().interact_size.y),
+    );
+    let ui = &mut parent.new_child(
+        egui::UiBuilder::new()
+            .max_rect(line)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    ui.set_clip_rect(line.intersect(ui.clip_rect()));
+    ui.label(RichText::new(&loaded.track_titles[track]).strong());
+    let layers = &loaded.patches[track].layers;
+    let hover = layers
+        .iter()
+        .map(|l| l.label())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if ui
+        .button(layer_names(ui, layers))
+        .on_hover_text(if hover.is_empty() { "—" } else { &hover })
+        .clicked()
+    {
+        patch = true;
+    }
+    for (slot, plugin) in loaded.patches[track].effects.iter().enumerate() {
+        let name = crate::play::mixer::effect_name(plugin);
+        let color = if plugin.bypass {
+            crate::play::mixer::EFFECT_COLOR.gamma_multiply(0.35)
+        } else {
+            crate::play::mixer::EFFECT_COLOR
+        };
+        if ui.button(RichText::new(name).color(color)).clicked() {
+            effect = Some(slot);
         }
-        for (slot, plugin) in loaded.patches[track].effects.iter().enumerate() {
-            let name = crate::play::mixer::effect_name(plugin);
-            let color = if plugin.bypass {
-                crate::play::mixer::EFFECT_COLOR.gamma_multiply(0.35)
-            } else {
-                crate::play::mixer::EFFECT_COLOR
-            };
-            if ui.button(RichText::new(name).color(color)).clicked() {
-                effect = Some(slot);
-            }
-        }
-        if let Some(map) = loaded.time.map(track) {
-            let warnings: Vec<&str> = map
-                .assumed_four_four
-                .then_some("有効な拍子が無いため tick 0 で 4/4 とみなした。")
-                .into_iter()
-                .chain(map.warnings.iter().map(String::as_str))
-                .collect();
-            if !warnings.is_empty() {
-                ui.label(
-                    RichText::new(format!("Warnings {}", warnings.len())).color(Color32::YELLOW),
-                )
+    }
+    if let Some(map) = loaded.time.map(track) {
+        let warnings: Vec<&str> = map
+            .assumed_four_four
+            .then_some("有効な拍子が無いため tick 0 で 4/4 とみなした。")
+            .into_iter()
+            .chain(map.warnings.iter().map(String::as_str))
+            .collect();
+        if !warnings.is_empty() {
+            ui.label(RichText::new(format!("Warnings {}", warnings.len())).color(Color32::YELLOW))
                 .on_hover_text(warnings.join("\n"));
-            }
         }
-    });
+    }
+    parent.advance_cursor_after_rect(egui::Rect::from_min_size(
+        line.min,
+        egui::vec2(line.width(), ui.min_rect().height()),
+    ));
     (patch, effect)
 }
 

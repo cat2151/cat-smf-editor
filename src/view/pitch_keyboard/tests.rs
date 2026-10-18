@@ -157,10 +157,11 @@ fn simultaneous_chord_is_drawn_once_on_trailing_cc_row_with_selection() {
         "one filled key per pitch, with no repeated keyboard"
     );
     assert!(output.shapes.iter().any(|s| matches!(&s.shape, egui::epaint::Shape::Rect(key) if key.stroke.color == egui::Color32::from_rgb(0x27, 0x28, 0x22) && key.stroke.width == 2.0)));
+    // Only the score in the right column draws circles, for its clefs.
     assert!(output
         .shapes
         .iter()
-        .all(|s| !matches!(s.shape, egui::epaint::Shape::Circle(_))));
+        .all(|s| !matches!(&s.shape, egui::epaint::Shape::Circle(c) if c.center.x < 1000.0)));
     assert!((keys[0].rect.center().y - keys[1].rect.center().y).abs() < 0.1);
     assert!(keys[2].rect.center().y > keys[1].rect.center().y);
     let cc = output

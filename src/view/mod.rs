@@ -15,6 +15,7 @@ mod row;
 pub(crate) use row::beat_color;
 pub(crate) mod files;
 pub(crate) mod recent;
+pub(crate) mod staff;
 pub(crate) mod tempo_curve;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -171,6 +172,24 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
                             egui::StrokeKind::Inside,
                         );
                     }
+                }
+            });
+        } else if app.note_mode {
+            // The single column leaves the second column to the score.
+            ui.columns(2, |panes| {
+                if let Some(tick) = pane(
+                    app,
+                    &mut panes[0],
+                    app.track,
+                    true,
+                    &mut browse_patch,
+                    &mut replace_effect,
+                ) {
+                    map_click = Some((app.track_view.active, app.track, tick));
+                }
+                // The tick overlays show the same time axis and own the wheel while open.
+                if !app.piano_roll.open && !app.tempo_curve.open {
+                    staff::show(app, &mut panes[1]);
                 }
             });
         } else if let Some(tick) = pane(

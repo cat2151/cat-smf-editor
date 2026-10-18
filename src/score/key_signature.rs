@@ -43,6 +43,11 @@ impl KeySignature {
         )
     }
 
+    /// Sharps when positive, flats when negative.
+    pub fn sharps(self) -> i8 {
+        self.sharps
+    }
+
     pub fn minor(self) -> bool {
         self.minor
     }

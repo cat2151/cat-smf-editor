@@ -38,6 +38,7 @@ pub(crate) fn app(music: Music) -> App {
         note_edit_request: None,
         edit_menu: crate::view::edit_menu::State::default(),
         piano_roll: crate::view::piano_roll::State::default(),
+        staff: crate::view::staff::State::default(),
         tempo_curve: crate::view::tempo_curve::State::default(),
         last_command: None,
         loaded: Some(Loaded {
