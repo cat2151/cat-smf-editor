@@ -5,6 +5,7 @@ use crate::{
 };
 use eframe::egui::{self, Color32, Key, Modifiers};
 
+pub(crate) mod commands;
 mod prefetch;
 pub(crate) use prefetch::update as prefetch;
 
@@ -53,6 +54,7 @@ fn shortcut(index: usize) -> String {
     }
 }
 
+#[cfg(test)]
 fn direct(key: Key, modifiers: Modifiers) -> Option<usize> {
     let name = key.name();
     let ch = name.chars().next()?;
@@ -174,86 +176,10 @@ fn listen(app: &mut App) {
 
 /// Returns true for every frame owned by this overlay, including its close frame.
 pub fn show(app: &mut App, ctx: &egui::Context) -> bool {
-    let mut opened = false;
-    if !app.recent.open
-        && available(app, ctx)
-        && ctx.input_mut(|i| i.consume_key(Modifiers::CTRL, Key::P))
-    {
-        crate::play::transport::stop(app);
-        app.recent.open = true;
-        app.recent.cursor = 0;
-        app.recent.reveal = true;
-        app.recent.error = None;
-        opened = true;
-    }
+    let owned = app.recent.open;
+    crate::view::commands::route(app, ctx);
     if !app.recent.open {
-        return false;
-    }
-    let mut cancel = false;
-    let mut chosen = None;
-    let mut moved = false;
-    let events = ctx.input(|i| i.events.clone());
-    for event in events {
-        if let egui::Event::Key {
-            key,
-            modifiers,
-            pressed: true,
-            repeat,
-            ..
-        } = event
-        {
-            if opened {
-                continue;
-            }
-            let delta = match (key, modifiers) {
-                (Key::J | Key::ArrowDown, Modifiers::NONE) => 1,
-                (Key::K | Key::ArrowUp, Modifiers::NONE) => -1,
-                (Key::PageDown, Modifiers::NONE) => 10,
-                (Key::PageUp, Modifiers::NONE) => -10,
-                _ => 0,
-            };
-            if key == Key::Escape {
-                cancel = true;
-                break;
-            }
-            if delta != 0 && !app.recent.history.entries.is_empty() {
-                app.recent.cursor = app
-                    .recent
-                    .cursor
-                    .saturating_add_signed(delta)
-                    .min(app.recent.history.entries.len() - 1);
-                moved = true;
-            } else if !repeat && key == Key::Enter && modifiers == Modifiers::NONE {
-                chosen = Some(app.recent.cursor);
-                break;
-            } else if !repeat
-                && let Some(index) = direct(key, modifiers)
-                && index < app.recent.history.entries.len()
-            {
-                chosen = Some(index);
-                break;
-            }
-        }
-    }
-    if cancel || chosen.is_some() {
-        app.recent.open = false;
-        silence(app);
-        if let Some(path) = chosen
-            .and_then(|i| app.recent.history.entries.get(i))
-            .map(|e| e.path.clone())
-        {
-            app.open_mid_and_play(path);
-        }
-        super::comma_menu::swallow(ctx);
-        return true;
-    }
-    if moved {
-        app.recent.reveal = true;
-        preview(app);
-        ctx.request_repaint();
-    }
-    if ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Space)) {
-        silence(app);
+        return owned && !super::opening::pending(app);
     }
     draw(app, ctx);
     super::comma_menu::swallow(ctx);

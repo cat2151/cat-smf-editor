@@ -1,4 +1,5 @@
 use super::*;
+use crate::view::piano_roll::{draw_horizontal_grid_line, STAFF_COLOR};
 
 /// Both kinds of marks are directly draggable.
 pub(super) fn draw(
@@ -15,20 +16,29 @@ pub(super) fn draw(
     draw_beats(&notes_painter, notes_rect, &layout.beats);
     let factor = notes_rect.height() / layout.size.y;
     for &y in &layout.staff {
-        notes_painter.hline(
-            notes_rect.x_range(),
+        draw_horizontal_grid_line(
+            &notes_painter,
+            notes_rect,
             notes_rect.top() + y * factor,
-            egui::Stroke::new(1.0_f32, Color32::from_gray(90)),
+            STAFF_COLOR,
         );
     }
-    for (i, &(_, mut note)) in layout.notes.iter().enumerate() {
+    for (&note, color) in layout
+        .references
+        .iter()
+        .map(|note| (note, super::super::piano_roll::REFERENCE_COLOR))
+        .chain(
+            layout
+                .notes
+                .iter()
+                .zip(&layout.colors)
+                .map(|((_, note), &color)| (note, color)),
+        )
+    {
+        let mut note = note;
         note.min.y *= factor;
         note.max.y *= factor;
-        notes_painter.rect_filled(
-            note.translate(notes_rect.min.to_vec2()),
-            0.0,
-            layout.colors[i],
-        );
+        notes_painter.rect_filled(note.translate(notes_rect.min.to_vec2()), 0.0, color);
     }
     let painter = &painter.with_clip_rect(painter.clip_rect().intersect(roll.rect.expand(HIT)));
     let rect = roll.rect;
@@ -39,7 +49,7 @@ pub(super) fn draw(
     let mut bpm = (roll.axis.low / step).ceil() * step;
     while bpm <= roll.axis.high {
         let y = roll.pos(0.0, bpm).y;
-        painter.hline(rect.x_range(), y, egui::Stroke::new(1.0_f32, GRID));
+        draw_horizontal_grid_line(painter, rect, y, GRID);
         painter.text(
             egui::pos2(label_x, y),
             egui::Align2::LEFT_BOTTOM,

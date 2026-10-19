@@ -1,5 +1,5 @@
 use crate::app::App;
-use eframe::egui::{self, Key, Modifiers};
+use eframe::egui;
 use std::path::Path;
 
 pub(super) fn prepare(app: &mut App) {
@@ -14,7 +14,7 @@ pub(super) fn prepare(app: &mut App) {
     }
 }
 
-pub(super) fn show(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
+pub(super) fn show(app: &mut App, _ctx: &egui::Context, ui: &mut egui::Ui) {
     if !app.config.navigation.backup_tip_visible {
         return;
     }
@@ -27,9 +27,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui) {
         "TIPS : ファイルを上書き保存すると、元のファイルはバックアップディレクトリに保存されます",
     );
     let clicked = ui.link(directory.display().to_string()).clicked();
-    if (clicked || ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::O)))
-        && let Err(error) = open_directory(&directory)
-    {
+    if clicked && let Err(error) = open_directory(&directory) {
         app.config.navigation.departure_error = Some(error);
     }
     ui.separator();
@@ -42,7 +40,7 @@ fn local_date() -> String {
     format!("{:04}-{:02}-{:02}", local[0], local[1], local[3])
 }
 
-fn open_directory(path: &Path) -> Result<(), String> {
+pub(super) fn open_directory(path: &Path) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     let result = (|| -> Result<(), String> {
         std::fs::create_dir_all(path).map_err(|e| e.to_string())?;

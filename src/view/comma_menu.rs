@@ -5,7 +5,7 @@ use eframe::egui;
 pub struct State {
     pub open: bool,
     /// `,t` was pressed: the overlay lists the program change targets.
-    program: bool,
+    pub(crate) program: bool,
 }
 
 pub fn open(app: &mut App) {
@@ -16,65 +16,7 @@ pub fn open(app: &mut App) {
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if app.edit_menu.open || ctx.wants_keyboard_input() {
-        return;
-    }
-    if !app.comma_menu.open {
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Comma)) {
-            open(app);
-            swallow(ctx);
-        }
-        return;
-    }
-    for key in pressed(ctx) {
-        match (app.comma_menu.program, key) {
-            (_, egui::Key::Escape) => app.comma_menu.open = false,
-            (false, egui::Key::S) => app.toggle_auto_save(),
-            (false, egui::Key::M) => {
-                let maximized = !app.config.tempo_curve_maximized;
-                app.config.select_tempo_curve_maximized(maximized);
-            }
-            (false, egui::Key::R) => {
-                let maximized = !app.config.piano_roll_maximized;
-                app.config.select_piano_roll_maximized(maximized);
-            }
-            (false, egui::Key::I) => {
-                app.config
-                    .select_meta_text_icons(!app.config.meta_text_icons);
-            }
-            (false, egui::Key::A) => {
-                app.config
-                    .select_meta_text_visible(!app.config.meta_text_visible);
-            }
-            (false, egui::Key::T) => app.comma_menu.program = true,
-            (false, egui::Key::F) => crate::view::analysis::toggle(app),
-            (false, egui::Key::P) => crate::view::analysis::reset_window(app),
-            (true, egui::Key::A) => choose(app, Target::Auto),
-            (true, egui::Key::C) => choose(app, Target::Current),
-            _ => {}
-        }
-    }
-    // The menu owns the keyboard while open, so its letters never reach other shortcuts.
-    swallow(ctx);
-}
-
-/// Plain key presses of this frame.
-pub(crate) fn pressed(ctx: &egui::Context) -> Vec<egui::Key> {
-    ctx.input(|i| {
-        i.events
-            .iter()
-            .filter_map(|e| match e {
-                egui::Event::Key {
-                    key,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: egui::Modifiers::NONE,
-                    ..
-                } => Some(*key),
-                _ => None,
-            })
-            .collect()
-    })
+    crate::view::commands::route(app, ctx);
 }
 
 pub(crate) fn swallow(ctx: &egui::Context) {
@@ -84,7 +26,7 @@ pub(crate) fn swallow(ctx: &egui::Context) {
     });
 }
 
-fn choose(app: &mut App, target: Target) {
+pub(crate) fn choose(app: &mut App, target: Target) {
     app.config.select_program_target(target);
     app.comma_menu.open = false;
 }
@@ -102,11 +44,23 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             if app.comma_menu.program {
                 let current = app.config.program_target;
-                for (target, label) in [
-                    (Target::Auto, "a: auto"),
-                    (Target::Current, "c: current track"),
+                for (target, label, description) in [
+                    (
+                        Target::Auto,
+                        "a: auto",
+                        "ノートのあるtrackが複数あり、すべて同じProgram change名なら、まとめて同じ音色を割り当てます。それ以外は現在のtrackだけに割り当てます。",
+                    ),
+                    (
+                        Target::Current,
+                        "c: current track",
+                        "Program change名が同じでも、現在のtrackだけに音色を割り当てます。trackごとに個別の音色を選べます。",
+                    ),
                 ] {
-                    if ui.selectable_label(current == target, label).clicked() {
+                    if ui
+                        .selectable_label(current == target, label)
+                        .on_hover_text(description)
+                        .clicked()
+                    {
                         choose(app, target);
                     }
                 }
@@ -120,6 +74,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         app.loaded.is_some(),
                         egui::Checkbox::new(&mut auto_save, "s: このファイルのAuto save"),
                     )
+                    .on_hover_text("このファイルの編集内容を自動保存します。有効にするときは現在の編集内容を保存します。")
                     .changed()
                 {
                     app.toggle_auto_save();
@@ -128,6 +83,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 let mut maximized = app.config.tempo_curve_maximized;
                 if ui
                     .checkbox(&mut maximized, "m: Tempo curve always maximized")
+                    .on_hover_text("Tempo curve画面を最大化表示します。")
                     .changed()
                 {
                     app.config.select_tempo_curve_maximized(maximized);
@@ -135,33 +91,40 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 let mut maximized = app.config.piano_roll_maximized;
                 if ui
                     .checkbox(&mut maximized, "r: Piano roll always maximized")
+                    .on_hover_text("Piano roll画面を最大化表示します。")
                     .changed()
                 {
                     app.config.select_piano_roll_maximized(maximized);
                 }
-                let mut icons = app.config.meta_text_icons;
-                if ui.checkbox(&mut icons, "i: Meta text icons").changed() {
-                    app.config.select_meta_text_icons(icons);
-                }
                 let mut visible = app.config.meta_text_visible;
                 if ui
                     .checkbox(&mut visible, "a: All tracks meta text")
+                    .on_hover_text("meta eventのtextを、他のtrackにいるときもTempo curve・Piano roll画面に表示します。")
                     .changed()
                 {
                     app.config.select_meta_text_visible(visible);
                 }
-                if ui.button("t: program change target").clicked() {
+                if ui
+                    .button("t: program change target")
+                    .on_hover_text("Program changeにInstrumentオーディオプラグインの音色を割り当てる対象を選びます。autoは、ノートのある複数のtrackがすべて同じProgram change名ならまとめて同じ音色を割り当て、それ以外は現在のtrackだけに割り当てます。current trackは常に現在のtrackだけに割り当てます。")
+                    .clicked()
+                {
                     app.comma_menu.program = true;
                 }
                 ui.separator();
                 let mut analysis = app.analysis.is_open();
                 if ui
                     .checkbox(&mut analysis, "f: Spectrum / Lissajous")
+                    .on_hover_text("出力音声の周波数成分と、左右チャンネルの関係を別ウィンドウに表示します。")
                     .changed()
                 {
                     crate::view::analysis::toggle(app);
                 }
-                if ui.button("p: Reset spectrum window position").clicked() {
+                if ui
+                    .button("p: Reset spectrum window position")
+                    .on_hover_text("Spectrum / Lissajousウィンドウの保存された位置とサイズをリセットします。画面外に移動して見えなくなったときにも使えます。")
+                    .clicked()
+                {
                     crate::view::analysis::reset_window(app);
                 }
             }

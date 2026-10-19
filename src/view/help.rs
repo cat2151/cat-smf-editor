@@ -2,34 +2,7 @@ use crate::app::App;
 use eframe::egui::{self, Color32, RichText};
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if ctx.wants_keyboard_input() || app.playback.open || app.playback.mixer_focused() {
-        return;
-    }
-    ctx.input_mut(|input| {
-        let question = input
-            .events
-            .iter()
-            .any(|e| matches!(e, egui::Event::Text(text) if text == "?"));
-        let repeat = input.events.iter().any(|e| {
-            matches!(
-                e,
-                egui::Event::Key {
-                    pressed: true,
-                    repeat: true,
-                    ..
-                }
-            )
-        });
-        if (question || input.consume_key(egui::Modifiers::NONE, egui::Key::F1)) && !repeat {
-            app.help_open = !app.help_open;
-            input
-                .events
-                .retain(|e| !matches!(e, egui::Event::Text(text) if text == "?"));
-        }
-        if app.help_open && input.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
-            app.help_open = false;
-        }
-    });
+    crate::view::commands::route(app, ctx);
 }
 
 /// 機能ごとのキー。色は row.rs / pitch_keyboard.rs と同じ Monokai から、ACTIVE_PANE の orange を避けて選ぶ。
@@ -38,7 +11,7 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
     (
         Color32::from_rgb(0xe6, 0xdb, 0x74),
         &[
-            (", / ☰", "設定menu"),
+            ("Ctrl+,", "設定menu"),
             ("Ctrl+O / Ctrl+P", "開く / 最近開いたファイル"),
             ("Ctrl+N", "新規SMF"),
             ("Ctrl+Shift+N", "トラック追加"),
@@ -58,7 +31,7 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
             ("g", "移動menu"),
             ("j k / PageDown PageUp", "行 / 10行"),
             ("l h / J K", "小節 / 拍"),
-            ("Ctrl+→ ←", "トラック"),
+            ("Ctrl+→ ←", "次 / 前のトラック"),
             ("Home / End", "track先頭 / 末尾"),
         ],
     ),
@@ -76,7 +49,7 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
             ("M", "ミキサー"),
             ("T / Shift+t", "音色 / Instrument layers"),
             ("X", "エフェクト"),
-            (",f", "Spectrum / Lissajous"),
+            ("Ctrl+, → f", "Spectrum / Lissajous"),
         ],
     ),
 ];
@@ -96,6 +69,15 @@ pub(super) fn key_groups(ui: &mut egui::Ui, groups: &[(Color32, &[(&str, &str)])
 
 pub(super) fn close_guide(ui: &mut egui::Ui) {
     ui.separator();
+    egui::Grid::new("common-help-keys").show(ui, |ui| {
+        key_groups(
+            ui,
+            &[(
+                Color32::from_rgb(0xe6, 0xdb, 0x74),
+                &[("Ctrl+Shift+P", "コマンドパレット")],
+            )],
+        );
+    });
     ui.weak("Esc: 閉じる");
 }
 

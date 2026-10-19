@@ -57,7 +57,12 @@ impl Viewport {
         for (x, _) in &mut layout.beats {
             *x *= self.zoom;
         }
-        for (_, note) in &mut layout.notes {
+        for note in layout
+            .notes
+            .iter_mut()
+            .map(|(_, note)| note)
+            .chain(&mut layout.references)
+        {
             note.min.x *= self.zoom;
             note.max.x *= self.zoom;
         }

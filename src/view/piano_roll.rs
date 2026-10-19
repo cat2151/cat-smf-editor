@@ -1,13 +1,10 @@
 //! `r` overlay: the current track's notes as rectangles over a staff and beat grid.
 use crate::{
     app::{App, Loaded},
-    view::{
-        comma_menu::{pressed, swallow},
-        row::beat_color,
-    },
+    view::row::beat_color,
 };
 use cat_smf_editor::score::{musical_time::Position, note_view::note_on};
-use eframe::egui::{self, Color32};
+use eframe::egui::{self, emath::GuiRounding, Color32};
 
 /// Width of one quarter note.
 pub(crate) const PX_PER_QUARTER: f32 = 96.0;
@@ -17,7 +14,8 @@ pub(crate) const ROW_HEIGHT: f32 = 10.0;
 const MARGIN: u8 = 2;
 /// Treble staff E4 G4 B4 D5 F5 and bass staff G2 B2 D3 F3 A3.
 const STAFF: [u8; 10] = [64, 67, 71, 74, 77, 43, 47, 50, 53, 57];
-pub(crate) const STAFF_COLOR: Color32 = Color32::WHITE;
+pub(crate) const STAFF_COLOR: Color32 = Color32::from_gray(90);
+pub(crate) const REFERENCE_COLOR: Color32 = Color32::from_gray(90);
 
 #[derive(Default)]
 pub struct State {
@@ -37,58 +35,19 @@ pub struct State {
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if app.comma_menu.open
-        || app.edit_menu.open
-        || app.track_view.go_open
-        || app.track_view.split_open
-        || app.help_open
-        || app.playback.open
-        || app.playback.mixer_focused()
-        || app.player_selection.open
-        || app.loaded.is_none()
-        || ctx.wants_keyboard_input()
-    {
-        return;
+    crate::view::commands::route(app, ctx);
+}
+
+pub(crate) fn open(app: &mut App) {
+    if app.track == 0 && app.loaded.as_ref().is_some_and(|l| l.music.format == 1) {
+        app.tempo_curve = crate::view::tempo_curve::State::opened();
+    } else {
+        app.piano_roll = State {
+            open: true,
+            reveal: true,
+            ..Default::default()
+        };
     }
-    if !app.piano_roll.open && !app.tempo_curve.open {
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::R)) {
-            // The conductor has no notes, so its `r` opens the tempo curve instead.
-            if app.track == 0 && app.loaded.as_ref().is_some_and(|l| l.music.format == 1) {
-                app.tempo_curve = crate::view::tempo_curve::State::opened();
-            } else {
-                app.piano_roll = State {
-                    open: true,
-                    reveal: true,
-                    ..State::default()
-                };
-            }
-            swallow(ctx);
-        }
-        return;
-    }
-    crate::view::help::shortcuts(app, ctx);
-    if app.help_open {
-        return;
-    }
-    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Comma)) {
-        crate::view::comma_menu::open(app);
-        swallow(ctx);
-        return;
-    }
-    crate::play::playback::shortcuts(app, ctx);
-    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F)) {
-        app.playback.follow = !app.playback.follow;
-    }
-    let keys = pressed(ctx);
-    if keys
-        .iter()
-        .any(|key| matches!(key, egui::Key::R | egui::Key::Escape))
-    {
-        app.piano_roll.open = false;
-        app.tempo_curve.open = false;
-    }
-    // The overlay owns the keyboard while open, so its keys never reach other shortcuts.
-    swallow(ctx);
 }
 
 /// Positions inside the roll, with the origin at tick 0 and the highest shown pitch.
@@ -103,6 +62,8 @@ pub(crate) struct Layout {
     /// Note On index within its track and its rectangle from Note On to Note Off.
     pub(crate) notes: Vec<(usize, egui::Rect)>,
     pub(crate) colors: Vec<Color32>,
+    /// Other tracks' notes, drawn behind the editable notes and never hit-tested.
+    pub(crate) references: Vec<egui::Rect>,
     /// x where the measure holding `cursor_tick` begins.
     pub(crate) start: f32,
     /// Width of one tick.
@@ -142,13 +103,37 @@ pub(crate) fn layout_of(
                 .filter_map(move |(i, e)| durations[i].map(|d| (i, e.tick, d, e.data[0])))
         })
         .collect();
+    let mut references: Vec<_> = (0..music.tracks.len())
+        .filter(|t| !ons.is_empty() && !tracks.contains(t))
+        .flat_map(|t| {
+            music.tracks[t]
+                .events
+                .iter()
+                .enumerate()
+                .filter_map(move |(i, e)| {
+                    if note_on(e) {
+                        loaded.note_views[t].durations[i].map(|d| (e.tick, d, e.data[0]))
+                    } else {
+                        None
+                    }
+                })
+        })
+        .collect();
     let low = ons.iter().map(|n| n.3).min().unwrap_or(60);
     let high = ons.iter().map(|n| n.3).max().unwrap_or(60);
     let (low, high) = (
         low.saturating_sub(MARGIN),
         high.saturating_add(MARGIN).min(127),
     );
+    references.retain(|&(_, _, pitch)| (low..=high).contains(&pitch));
     let top = |p: u8| f32::from(high - p) * ROW_HEIGHT;
+    let note_rect = |tick: u64, duration: u64, pitch: u8| {
+        let left = tick as f32 * scale;
+        egui::Rect::from_min_max(
+            egui::pos2(left, top(pitch)),
+            egui::pos2(left + duration as f32 * scale, top(pitch) + ROW_HEIGHT),
+        )
+    };
     let end = music
         .tracks
         .iter()
@@ -201,14 +186,11 @@ pub(crate) fn layout_of(
             .collect(),
         notes: ons
             .iter()
-            .map(|&(i, tick, duration, pitch)| {
-                let left = tick as f32 * scale;
-                let rect = egui::Rect::from_min_max(
-                    egui::pos2(left, top(pitch)),
-                    egui::pos2(left + duration as f32 * scale, top(pitch) + ROW_HEIGHT),
-                );
-                (i, rect)
-            })
+            .map(|&(i, tick, duration, pitch)| (i, note_rect(tick, duration, pitch)))
+            .collect(),
+        references: references
+            .iter()
+            .map(|&(tick, duration, pitch)| note_rect(tick, duration, pitch))
             .collect(),
         start: start as f32 * scale,
         scale,
@@ -243,6 +225,20 @@ pub(crate) fn draw_beats(painter: &egui::Painter, rect: egui::Rect, beats: &[(f3
     }
 }
 
+/// Stationary background lines must not move long offscreen endpoints when scrolling.
+pub(crate) fn draw_horizontal_grid_line(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    y: f32,
+    color: Color32,
+) {
+    let range = rect
+        .intersect(painter.clip_rect())
+        .round_to_pixels(painter.pixels_per_point())
+        .x_range();
+    painter.hline(range, y, egui::Stroke::new(1.0_f32, color));
+}
+
 /// `moved` replaces one rectangle of `layout.notes` while it is dragged.
 /// `hover` is the index into `layout.notes` and the part to paint in its hover color.
 fn draw(
@@ -255,16 +251,15 @@ fn draw(
     let origin = rect.min.to_vec2();
     draw_beats(painter, rect, &layout.beats);
     for &y in &layout.staff {
-        painter.hline(
-            rect.x_range(),
-            rect.top() + y,
-            egui::Stroke::new(1.0_f32, STAFF_COLOR),
-        );
+        draw_horizontal_grid_line(painter, rect, rect.top() + y, STAFF_COLOR);
     }
     let note = |i: usize| match moved {
         Some((m, rect)) if m == i => rect,
         _ => layout.notes[i].1,
     };
+    for &note in &layout.references {
+        painter.rect_filled(note.translate(origin), 0.0, REFERENCE_COLOR);
+    }
     for i in 0..layout.notes.len() {
         painter.rect(
             note(i).translate(origin),

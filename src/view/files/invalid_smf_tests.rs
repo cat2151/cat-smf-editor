@@ -18,6 +18,8 @@ fn invalid_drop_shows_filename_and_japanese_dialog_and_owns_keyboard() {
             },
             |ctx| crate::view::show(&mut f.app, ctx),
         );
+        assert!(crate::view::opening::pending(&f.app));
+        crate::view::opening::tests::finish(&mut f.app, &ctx);
         assert_eq!(f.app.invalid_smf_name.as_deref(), Some("誤ったファイル.md"));
         // egui measures a newly opened modal before painting it on the next frame.
         let output = ctx.run(Default::default(), |ctx| crate::view::show(&mut f.app, ctx));

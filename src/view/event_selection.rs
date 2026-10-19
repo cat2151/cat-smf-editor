@@ -4,6 +4,7 @@ use eframe::egui;
 use std::ops::Range;
 
 mod actions;
+pub(crate) mod commands;
 #[cfg(test)]
 mod tests;
 
@@ -35,7 +36,7 @@ pub(super) fn range(app: &App) -> Option<Range<usize>> {
     Some(if b < a { b..a } else { a..b + 1 })
 }
 
-fn count(app: &App) -> usize {
+pub(crate) fn count(app: &App) -> usize {
     app.loaded.as_ref().map_or(0, |l| {
         if app.note_mode {
             l.display_rows[app.track].len()
@@ -45,7 +46,7 @@ fn count(app: &App) -> usize {
     })
 }
 
-fn whole(app: &App) -> bool {
+pub(crate) fn whole(app: &App) -> bool {
     range(app).is_some_and(|r| r == (0..count(app)))
 }
 
@@ -54,81 +55,9 @@ pub(super) fn shortcuts(app: &mut App, ctx: &egui::Context) -> bool {
     if !valid(app) {
         app.event_selection = State::default();
     }
-    if app.mml_input.open
-        || ctx.wants_keyboard_input()
-        || app.help_open
-        || app.comma_menu.open
-        || app.edit_menu.open
-        || app.note_edit.is_some()
-        || app.trill_edit.is_some()
-        || app.layer_editor.open
-        || app.effect_editor.is_open()
-        || app.track_view.go_open
-        || app.track_view.split_open
-        || app.playback.open
-        || app.playback.mixer_focused()
-        || app.player_selection.open
-        || app.piano_roll.open
-        || app.tempo_curve.open
-        || app.recent.open
-        || super::busy::pending(app)
-    {
-        return false;
-    }
-    if app.event_selection.menu {
-        for key in super::comma_menu::pressed(ctx) {
-            match key {
-                egui::Key::Escape => app.event_selection.menu = false,
-                egui::Key::A => actions::apply(app, actions::Action::Repeat),
-                egui::Key::D => actions::apply(app, actions::Action::DeleteEvents),
-                egui::Key::I if whole(app) => actions::apply(app, actions::Action::Init),
-                egui::Key::T if whole(app) => actions::apply(app, actions::Action::DeleteTrack),
-                _ => {}
-            }
-        }
-        super::comma_menu::swallow(ctx);
-        return true;
-    }
-    if super::consume_plain(ctx, egui::Key::S) && count(app) > 0 {
-        if valid(app) {
-            app.event_selection.menu = true;
-        } else {
-            let row = app
-                .cursor_row
-                .or(app.selected_event.and_then(|i| {
-                    if app.note_mode {
-                        app.loaded.as_ref()?.display_rows[app.track].event_row(i)
-                    } else {
-                        Some(i)
-                    }
-                }))
-                .unwrap_or(0)
-                .min(count(app) - 1);
-            crate::cursor::moves::place(app, row);
-            app.event_selection = State {
-                anchor: Some(row),
-                song: app.song_id,
-                generation: app.generation,
-                track: app.track,
-                note_mode: app.note_mode,
-                menu: false,
-            };
-            app.playback.follow = false;
-            app.reveal_cursor = true;
-        }
-        super::comma_menu::swallow(ctx);
-        return true;
-    }
-    if !valid(app) {
-        return false;
-    }
-    if super::consume_plain(ctx, egui::Key::Escape) {
-        app.event_selection = State::default();
-    } else {
-        crate::cursor::moves::shortcuts(app, ctx);
-    }
-    super::comma_menu::swallow(ctx);
-    true
+    let owns = valid(app);
+    crate::view::commands::route(app, ctx);
+    owns || valid(app)
 }
 
 pub(super) fn show(app: &mut App, ctx: &egui::Context) {
@@ -183,4 +112,29 @@ pub(super) fn paint(
         0.0,
         egui::Color32::from_rgba_unmultiplied(102, 217, 239, 45),
     );
+}
+
+pub(crate) fn begin(app: &mut App) {
+    let row = app
+        .cursor_row
+        .or(app.selected_event.and_then(|i| {
+            if app.note_mode {
+                app.loaded.as_ref()?.display_rows[app.track].event_row(i)
+            } else {
+                Some(i)
+            }
+        }))
+        .unwrap_or(0)
+        .min(count(app) - 1);
+    crate::cursor::moves::place(app, row);
+    app.event_selection = State {
+        anchor: Some(row),
+        song: app.song_id,
+        generation: app.generation,
+        track: app.track,
+        note_mode: app.note_mode,
+        menu: false,
+    };
+    app.playback.follow = false;
+    app.reveal_cursor = true;
 }

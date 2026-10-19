@@ -62,10 +62,6 @@ fn both_overlays_show_all_tracks_at_ticks_and_respect_display_settings() {
             assert!(breath[i].y > fermata[i].y);
             assert!(rit[i].y > breath[i].y);
         }
-        app.config.meta_text_icons = true;
-        let output = render(&mut app, &ctx, vec![]);
-        assert!(positions(&output, "Fermata").is_empty());
-        app.config.meta_text_icons = false;
         app.config.meta_text_visible = false;
         let output = render(&mut app, &ctx, vec![]);
         assert!(positions(&output, "Fermata").is_empty());
@@ -74,16 +70,15 @@ fn both_overlays_show_all_tracks_at_ticks_and_respect_display_settings() {
 }
 
 #[test]
-fn annotations_follow_tick_scale_scroll_and_icons_remain_visible() {
+fn annotations_follow_tick_scale_scroll_and_visibility() {
     let mut app = fixture();
     let loaded = app.loaded.as_mut().unwrap();
     loaded.music.tracks[0].events[0].tick = 480;
     loaded.music.tracks[1].events.clear();
     loaded.music.tracks[2].events.clear();
     let ctx = egui::Context::default();
-    let draw = |scale, left, icons, visible| {
+    let draw = |scale, left, visible| {
         let config = Store {
-            meta_text_icons: icons,
             meta_text_visible: visible,
             ..Store::default()
         };
@@ -108,25 +103,11 @@ fn annotations_follow_tick_scale_scroll_and_icons_remain_visible() {
             },
         )
     };
-    let first = positions(&draw(0.2, 20.0, false, true), "Fermata")[0];
-    let zoomed = positions(&draw(0.4, 20.0, false, true), "Fermata")[0];
-    let scrolled = positions(&draw(0.4, -30.0, false, true), "Fermata")[0];
+    let first = positions(&draw(0.2, 20.0, true), "Fermata")[0];
+    let zoomed = positions(&draw(0.4, 20.0, true), "Fermata")[0];
+    let scrolled = positions(&draw(0.4, -30.0, true), "Fermata")[0];
     assert!((zoomed.x - first.x - 96.0).abs() < 0.01);
     assert!((zoomed.x - scrolled.x - 50.0).abs() < 0.01);
-    let icon = draw(0.2, 20.0, true, true);
-    assert!(positions(&icon, "Fermata").is_empty());
-    let bubbles = |output: &egui::FullOutput| {
-        output
-            .shapes
-            .iter()
-            .filter(|s| {
-                matches!(
-                    &s.shape, egui::epaint::Shape::Rect(r) if r.stroke.color == COLOR
-                )
-            })
-            .count()
-    };
-    assert_eq!(bubbles(&icon), 1);
-    assert_eq!(bubbles(&draw(0.2, 20.0, true, false)), 0);
-    assert_eq!(bubbles(&draw(0.2, -200.0, true, true)), 0);
+    assert!(positions(&draw(0.2, 20.0, false), "Fermata").is_empty());
+    assert!(positions(&draw(0.2, -200.0, true), "Fermata").is_empty());
 }

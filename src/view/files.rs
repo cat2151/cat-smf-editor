@@ -1,6 +1,8 @@
 //! File save, switch and exit confirmations.
 use crate::app::App;
-use eframe::egui::{self, Key, Modifiers};
+use eframe::egui;
+#[cfg(test)]
+use egui::{Key, Modifiers};
 use std::path::PathBuf;
 mod backup_tip;
 mod invalid_smf;
@@ -19,6 +21,7 @@ pub enum Action {
     EnableAutoSave,
     New,
     Load(PathBuf),
+    LoadWithProgress(PathBuf),
     LoadAndPlay(PathBuf),
     Close,
 }
@@ -91,6 +94,7 @@ impl App {
             Action::Save | Action::EnableAutoSave => {}
             Action::New => super::busy::request(self, ctx, super::busy::Task::New),
             Action::Load(path) => self.load_mid_unchecked(path),
+            Action::LoadWithProgress(path) => super::opening::request(self, path, false),
             Action::LoadAndPlay(path) => self.load_and_play(path),
             Action::Close => {
                 self.config.navigation.close_approved = true;
@@ -111,7 +115,7 @@ pub fn inputs(app: &mut App, ctx: &egui::Context) {
             .find_map(|file| file.path.clone())
     });
     if let Some(path) = dropped {
-        app.open_mid(path);
+        super::opening::request_drop(app, path);
         // A file drop owns this frame, including any simultaneously pressed keys.
         super::comma_menu::swallow(ctx);
         return;
@@ -119,38 +123,23 @@ pub fn inputs(app: &mut App, ctx: &egui::Context) {
     if !super::recent::available(app, ctx) || app.recent.open {
         return;
     }
-    if new_requested(ctx, Modifiers::CTRL | Modifiers::SHIFT) {
-        super::busy::request(app, ctx, super::busy::Task::AddTrack);
-        super::comma_menu::swallow(ctx);
-    } else if new_requested(ctx, Modifiers::CTRL) {
-        app.new_smf(ctx);
-        super::comma_menu::swallow(ctx);
-    } else if open::requested(ctx) {
-        app.file_open_requested = true;
-        super::comma_menu::swallow(ctx);
-    } else if ctx.input_mut(|i| i.consume_key(Modifiers::CTRL, Key::S)) {
-        app.allow_departure(Action::Save);
-        super::comma_menu::swallow(ctx);
-    }
+    crate::view::commands::route(app, ctx);
 }
 
-fn new_requested(ctx: &egui::Context, modifiers: Modifiers) -> bool {
-    ctx.input_mut(|i| {
-        let pressed = i.events.iter().any(|e| {
-            matches!(e,
-            egui::Event::Key { key: Key::N, pressed: true, repeat: false, modifiers: m, .. }
-            // Windows sets `command` together with Ctrl; compare physical modifiers.
-            if m.ctrl && m.shift == modifiers.shift && !m.alt && !m.mac_cmd)
-        });
-        if pressed {
-            i.consume_key(modifiers, Key::N);
-        }
-        pressed
-    })
+pub(crate) fn open_backup(app: &mut App, _ctx: &egui::Context) {
+    if let Some(root) = &app.saved.directory
+        && let Err(e) = backup_tip::open_directory(&root.join("backup"))
+    {
+        app.config.navigation.departure_error = Some(e);
+    }
 }
 
 pub fn confirmation(app: &mut App, ctx: &egui::Context) {
     backup_tip::prepare(app);
+    crate::view::commands::route(app, ctx);
+    if app.config.navigation.departure.is_none() {
+        return;
+    }
     let closing = matches!(app.config.navigation.departure, Some(Action::Close));
     let saving = matches!(app.config.navigation.departure, Some(Action::Save));
     let creating = matches!(app.config.navigation.departure, Some(Action::New));
@@ -159,9 +148,9 @@ pub fn confirmation(app: &mut App, ctx: &egui::Context) {
         Some(Action::EnableAutoSave)
     );
     let failed = app.config.navigation.departure_error.is_some();
-    let mut save = ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Y));
-    let mut discard = ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::N));
-    let mut resume = ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
+    let mut save = false;
+    let mut discard = false;
+    let mut resume = false;
     egui::Modal::new(egui::Id::new("file-confirmation")).show(ctx, |ui| {
         ui.set_min_width(370.0);
         if let Some(loaded) = &app.loaded {

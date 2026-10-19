@@ -9,5 +9,6 @@ pub(crate) mod saved;
 mod saved_write;
 pub(crate) mod session;
 pub(crate) mod settings;
+pub(crate) mod startup;
 
 pub(crate) mod recent;

@@ -75,9 +75,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             .with_position([x, y])
             .with_inner_size([width, height]);
     }
-    let state = &mut app.analysis;
     let mut close = false;
-    ctx.show_viewport_immediate(viewport(state.placement), builder, |ctx, _class| {
+    ctx.show_viewport_immediate(viewport(app.analysis.placement), builder, |ctx, _class| {
+        let palette_input = crate::view::palette::begin(app, ctx);
+        crate::view::commands::route(app, ctx);
         let (requested, outer, inner) = ctx.input(|i| {
             let viewport = i.viewport();
             (
@@ -86,21 +87,19 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 viewport.inner_rect,
             )
         });
-        close = requested
-            || ctx.input_mut(|i| {
-                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
-                    || i.consume_key(egui::Modifiers::NONE, egui::Key::F)
-            });
+        close = requested;
         if let (Some(outer), Some(inner)) = (outer, inner) {
-            state.seen = Some([outer.min.x, outer.min.y, inner.width(), inner.height()]);
+            app.analysis.seen = Some([outer.min.x, outer.min.y, inner.width(), inner.height()]);
         }
         egui::CentralPanel::default().show(ctx, |ui| {
             body(ui, spectrum.as_deref(), lissajous.as_deref());
         });
+        crate::view::palette::end(app, ctx, palette_input);
         // The child viewport is painted by the root update, which must keep running.
         ctx.request_repaint_after_for(Duration::from_millis(50), egui::ViewportId::ROOT);
         ctx.request_repaint_after(Duration::from_millis(50));
     });
+    let state = &mut app.analysis;
     // The editor is the foreground window while it has focus.
     #[cfg(windows)]
     if !state.owned && editor_focused {

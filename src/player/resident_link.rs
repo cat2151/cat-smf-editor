@@ -373,7 +373,9 @@ pub fn loading(app: &App) -> bool {
 fn spawn(executable: &Path, name: &str) -> std::io::Result<Option<Child>> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    Command::new(executable)
+    let mut command = Command::new(executable);
+    cat_smf_editor::surge_data_home::restore_for_child(&mut command);
+    command
         .arg("--resident")
         .arg(name)
         .stdout(Stdio::null())

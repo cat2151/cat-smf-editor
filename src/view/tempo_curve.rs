@@ -107,7 +107,15 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     };
     let reference_points = cat_smf_editor::edit::reference_tempo::read(&prepared);
-    let tracks: Vec<usize> = (0..loaded.music.tracks.len()).collect();
+    let tracks: Vec<usize> = if loaded.music.tracks[app.track]
+        .events
+        .iter()
+        .any(cat_smf_editor::score::note_view::note_on)
+    {
+        vec![app.track]
+    } else {
+        (0..loaded.music.tracks.len()).collect()
+    };
     let mut layout = layout_of(loaded, &tracks, 0, crate::play::playback::location(app).0);
     let (curve, read_error) = match tempo_curve::read(&loaded.music) {
         Ok(curve) => (curve, None),

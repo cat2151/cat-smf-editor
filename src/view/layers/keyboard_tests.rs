@@ -58,7 +58,18 @@ fn frame(app: &mut App, ctx: &egui::Context, mut events: Vec<egui::Event>) -> eg
 }
 
 fn press(app: &mut App, ctx: &egui::Context, k: egui::Key) {
-    frame(app, ctx, vec![key(k, egui::Modifiers::NONE)]);
+    frame(
+        app,
+        ctx,
+        vec![key(
+            k,
+            if k == egui::Key::Comma {
+                egui::Modifiers::CTRL
+            } else {
+                egui::Modifiers::NONE
+            },
+        )],
+    );
 }
 
 fn replace(app: &mut App, ctx: &egui::Context, text: &str) {

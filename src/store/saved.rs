@@ -29,6 +29,7 @@ pub struct Document {
     auto_save: bool,
     dirty_since: Option<Instant>,
     auto_save_stopped: bool,
+    loading: bool,
     pub error: Option<String>,
 }
 
@@ -41,10 +42,22 @@ impl Document {
     }
 
     pub fn load(&mut self, path: &Path) -> Result<Music, LoadError> {
+        self.load_for_startup(path, false)
+    }
+
+    pub(crate) fn load_for_startup(
+        &mut self,
+        path: &Path,
+        deferred: bool,
+    ) -> Result<Music, LoadError> {
+        let _span = cat_smf_editor::startup_trace::span(if deferred {
+            "document_read_parse"
+        } else {
+            "document_read_parse_encode"
+        });
         let expected = std::fs::read(path)
             .map_err(|e| LoadError::Other(format!("{}: {e}", path.display())))?;
         let music = cat_smf_editor::ffi::parse(&expected).map_err(LoadError::InvalidSmf)?;
-        let bytes = smf_io::encode(&music).map_err(LoadError::Other)?;
         self.key = Some(path.to_owned());
         self.untitled = false;
         self.auto_save = super::auto_save::enabled(&music);
@@ -53,9 +66,22 @@ impl Document {
         self.auto_save_stopped = false;
         self.error = None;
         self.expected = expected;
-        self.baseline = bytes.clone();
-        self.bytes = bytes;
+        self.loading = true;
+        if !deferred {
+            self.finish_loading(&music).map_err(LoadError::Other)?;
+        }
         Ok(music)
+    }
+
+    pub(crate) fn finish_loading(&mut self, music: &Music) -> Result<(), String> {
+        if self.loading {
+            let _span = cat_smf_editor::startup_trace::span("save_baseline_encode");
+            let bytes = smf_io::encode(music)?;
+            self.baseline = bytes.clone();
+            self.bytes = bytes;
+            self.loading = false;
+        }
+        Ok(())
     }
 
     pub(crate) fn untitled(directory: Option<PathBuf>, music: &Music) -> Result<Self, String> {
@@ -196,12 +222,12 @@ impl crate::app::App {
         if !ctx.input(|i| i.viewport().close_requested()) {
             return;
         }
+        if crate::view::opening::pending(self) {
+            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+            return;
+        }
         if !self.config.navigation.close_approved {
-            if self.allow_departure(crate::view::files::Action::Close) {
-                // Close again after the busy modal is painted.
-                self.config.navigation.close_approved = true;
-                crate::view::busy::request(self, ctx, crate::view::busy::Task::Close);
-            }
+            self.request_close(ctx);
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             return;
         }
@@ -210,6 +236,14 @@ impl crate::app::App {
             self.config.navigation.departure = Some(crate::view::files::Action::Close);
             self.config.navigation.departure_error = Some(error);
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+        }
+    }
+
+    pub(crate) fn request_close(&mut self, ctx: &eframe::egui::Context) {
+        if self.allow_departure(crate::view::files::Action::Close) {
+            // Both native close and the palette use the save/confirmation path.
+            self.config.navigation.close_approved = true;
+            crate::view::busy::request(self, ctx, crate::view::busy::Task::Close);
         }
     }
 }

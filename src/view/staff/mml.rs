@@ -218,6 +218,10 @@ pub(super) fn show(
     reveal: bool,
     reset: bool,
 ) {
+    // Rows retain tracks that have notes elsewhere, even in a silent measure.
+    let all_colored = !rows.iter().any(|row| row.track == current);
+    let colored = |row: &Row| all_colored || row.track == current;
+    let gray = Color32::from_gray(140);
     let font = egui::FontId::monospace(FONT);
     let labels: Vec<_> = rows
         .iter()
@@ -231,7 +235,11 @@ pub(super) fn show(
                     String::new()
                 },
                 font.clone(),
-                track_color(row.track),
+                if colored(row) {
+                    track_color(row.track)
+                } else {
+                    gray
+                },
             )
         })
         .collect();
@@ -247,12 +255,18 @@ pub(super) fn show(
                 .enumerate()
                 .map(|(i, &start)| {
                     let end = row.beats.get(i + 1).copied().unwrap_or(u64::MAX);
-                    ui.painter().layout_job(job(
+                    let mut job = job(
                         row.tokens
                             .iter()
                             .filter(|t| t.tick >= start && t.tick < end),
                         playing,
-                    ))
+                    );
+                    if !colored(row) {
+                        for section in &mut job.sections {
+                            section.format.color = gray;
+                        }
+                    }
+                    ui.painter().layout_job(job)
                 })
                 .collect()
         })

@@ -405,4 +405,6 @@ mod gestures;
 mod colors;
 
 mod keyboard;
+mod references;
+mod staff;
 mod tempo_layers;

@@ -43,8 +43,6 @@ pub struct Status {
     pub tempo_curve_maximized: bool,
     #[serde(default = "enabled")]
     pub piano_roll_maximized: bool,
-    #[serde(default)]
-    pub meta_text_icons: bool,
     #[serde(default = "enabled")]
     pub meta_text_visible: bool,
     #[serde(default)]
@@ -61,13 +59,16 @@ pub struct Status {
 }
 
 pub struct Store {
+    pub(crate) persisted_mid: Option<PathBuf>,
+    /// Document belonging to the deferred UI snapshot, independent of startup.json.
+    pub(crate) session_document: Option<PathBuf>,
+    pub(crate) read_failed: bool,
     pub navigation: super::navigation::Navigation,
     pub path: Option<PathBuf>,
     pub session: Option<Session>,
     pub program_target: ProgramTarget,
     pub tempo_curve_maximized: bool,
     pub piano_roll_maximized: bool,
-    pub meta_text_icons: bool,
     pub meta_text_visible: bool,
     pub browser_panes: std::collections::BTreeMap<String, [String; 2]>,
     pub browser_queries: std::collections::BTreeMap<String, String>,
@@ -89,7 +90,6 @@ impl Default for Status {
             program_target: ProgramTarget::default(),
             tempo_curve_maximized: true,
             piano_roll_maximized: true,
-            meta_text_icons: false,
             meta_text_visible: true,
             browser_panes: Default::default(),
             browser_queries: Default::default(),
@@ -103,13 +103,15 @@ impl Default for Status {
 impl Default for Store {
     fn default() -> Self {
         Self {
+            persisted_mid: None,
+            session_document: None,
+            read_failed: false,
             navigation: Default::default(),
             path: None,
             session: None,
             program_target: ProgramTarget::default(),
             tempo_curve_maximized: true,
             piano_roll_maximized: true,
-            meta_text_icons: false,
             meta_text_visible: true,
             browser_panes: Default::default(),
             browser_queries: Default::default(),
@@ -162,7 +164,6 @@ impl Store {
                     program_target,
                     tempo_curve_maximized,
                     piano_roll_maximized,
-                    meta_text_icons,
                     meta_text_visible,
                     browser_panes,
                     browser_queries,
@@ -175,7 +176,6 @@ impl Store {
                     store.program_target = program_target;
                     store.tempo_curve_maximized = tempo_curve_maximized;
                     store.piano_roll_maximized = piano_roll_maximized;
-                    store.meta_text_icons = meta_text_icons;
                     store.meta_text_visible = meta_text_visible;
                     store.browser_panes = browser_panes;
                     store.browser_queries = browser_queries;
@@ -192,6 +192,15 @@ impl Store {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => store.error = Some(format!("Cannot read {}: {error}", path.display())),
         }
+        store.session_document = store.navigation.last_mid.clone();
+        match super::startup::read(path) {
+            Ok(startup) => {
+                store.navigation.last_mid = startup.last_mid.clone();
+                store.persisted_mid = startup.last_mid;
+            }
+            Err(error) => store.error = Some(error),
+        }
+        store.read_failed = store.error.is_some();
         store
     }
 
@@ -215,11 +224,6 @@ impl Store {
 
     pub fn select_piano_roll_maximized(&mut self, maximized: bool) {
         self.piano_roll_maximized = maximized;
-        self.persist();
-    }
-
-    pub fn select_meta_text_icons(&mut self, icons: bool) {
-        self.meta_text_icons = icons;
         self.persist();
     }
 
@@ -271,9 +275,19 @@ impl Store {
     }
 
     pub(crate) fn persist(&mut self) {
+        if self.read_failed {
+            return;
+        }
         let Some(path) = &self.path else {
             return;
         };
+        if self.persisted_mid != self.navigation.last_mid {
+            if let Err(error) = super::startup::save(path, self.navigation.last_mid.clone()) {
+                self.error = Some(error);
+                return;
+            }
+            self.persisted_mid = self.navigation.last_mid.clone();
+        }
         let temporary = path.with_extension(format!("json.{}.tmp", std::process::id()));
         let result = (|| -> Result<(), Box<dyn std::error::Error>> {
             std::fs::create_dir_all(path.parent().unwrap())?;
@@ -287,7 +301,6 @@ impl Store {
                 program_target: self.program_target,
                 tempo_curve_maximized: self.tempo_curve_maximized,
                 piano_roll_maximized: self.piano_roll_maximized,
-                meta_text_icons: self.meta_text_icons,
                 meta_text_visible: self.meta_text_visible,
                 browser_panes: self.browser_panes.clone(),
                 browser_queries: self.browser_queries.clone(),
@@ -306,6 +319,8 @@ impl Store {
         })();
         if result.is_err() {
             let _ = std::fs::remove_file(&temporary);
+        } else {
+            self.session_document = self.navigation.last_mid.clone();
         }
         self.error = result
             .err()

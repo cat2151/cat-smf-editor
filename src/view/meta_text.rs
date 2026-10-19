@@ -52,11 +52,7 @@ pub(super) fn show_music(
             egui::FontId::proportional(13.0),
             COLOR,
         );
-        let size = if config.meta_text_icons {
-            egui::vec2(12.0, 14.0)
-        } else {
-            galley.size() + egui::vec2(6.0, 4.0)
-        };
+        let size = galley.size() + egui::vec2(6.0, 4.0);
         let x = rect.left() + tick as f32 * scale;
         if x > clip.right() || x + size.x < clip.left() {
             continue;
@@ -73,13 +69,7 @@ pub(super) fn show_music(
             continue;
         }
         painter.rect_filled(label, 2.0, Color32::from_rgb(30, 30, 30));
-        if config.meta_text_icons {
-            let bubble = label.shrink2(egui::vec2(2.0, 3.0));
-            painter.rect_stroke(bubble, 1.0, (1.0, COLOR), egui::StrokeKind::Inside);
-            painter.line_segment([bubble.left_bottom(), label.left_bottom()], (1.0, COLOR));
-        } else {
-            painter.galley(label.min + egui::vec2(3.0, 2.0), galley, COLOR);
-        }
+        painter.galley(label.min + egui::vec2(3.0, 2.0), galley, COLOR);
         let editable = cat_smf_editor::edit::trill::owned(event);
         let response = ui
             .interact(

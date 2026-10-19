@@ -119,6 +119,7 @@ fn browsing_closing_and_dropping_preserve_original_with_or_without_saved_metadat
         assert!(d.app.allow_departure(Action::Close));
         d.drop_second(&ctx);
         assert!(d.app.config.navigation.departure.is_none());
+        crate::view::opening::tests::finish(&mut d.app, &ctx);
         assert_eq!(
             d.app.loaded.as_ref().unwrap().original,
             std::fs::canonicalize(&d.second).unwrap()

@@ -24,16 +24,12 @@ impl App {
             }
         };
         if self.allow_departure(crate::view::files::Action::LoadAndPlay(path.clone())) {
-            self.load_and_play(path);
+            crate::view::opening::request(self, path, true);
         }
     }
 
     pub(crate) fn load_and_play(&mut self, path: PathBuf) {
-        let before = self.song_id;
-        self.load_mid_unchecked(path);
-        if self.song_id != before {
-            crate::play::playback::start(self, crate::play::playback::Mode::AllTracks);
-        }
+        crate::view::opening::request(self, path, true);
     }
 
     pub(crate) fn load_mid_unchecked(&mut self, path: PathBuf) {
@@ -44,7 +40,7 @@ impl App {
             .to_string_lossy()
             .into_owned();
         let mut document = crate::store::saved::Document::new(self.saved.directory.clone());
-        match document.load(&path) {
+        match document.load_for_startup(&path, self.startup.pending) {
             Ok(music) => {
                 self.install_document(path, name, music, document);
             }
@@ -63,17 +59,30 @@ impl App {
         music: Music,
         document: crate::store::saved::Document,
     ) -> bool {
-        let super::sound::Sound {
-            patches,
-            master,
-            volumes,
-        } = match self.resolve_sound(&music) {
+        let sound = match self.resolve_sound(&music) {
             Ok(sound) => sound,
             Err(error) => {
                 self.load_error = Some(error);
                 return false;
             }
         };
+        self.install_resolved(path, name, music, document, sound);
+        true
+    }
+
+    pub(crate) fn install_resolved(
+        &mut self,
+        path: PathBuf,
+        name: String,
+        music: Music,
+        document: crate::store::saved::Document,
+        sound: super::sound::Sound,
+    ) {
+        let super::sound::Sound {
+            patches,
+            master,
+            volumes,
+        } = sound;
         self.song_id = self.song_id.wrapping_add(1);
         self.undo.clear();
         self.layer_editor = Default::default();
@@ -102,58 +111,50 @@ impl App {
             self.audition.set_gain(track, gain);
         }
         self.audition.set_master(master);
+        let display_span = cat_smf_editor::startup_trace::span(if self.startup.pending {
+            "playback_indexes"
+        } else {
+            "score_display_build"
+        });
         let time = MusicalTime::new(&music);
-        let track_titles = music
+        let note_views = music
             .tracks
             .iter()
-            .enumerate()
-            .map(|(index, track)| {
-                format!(
-                    "{} · {}",
-                    index + 1,
-                    track.name().unwrap_or_else(|| "—".into())
-                )
-            })
+            .map(|t| NoteView::new(&t.events))
             .collect();
-        self.loaded = Some(Loaded {
+        let mut loaded = Loaded {
             patches,
             original: path.clone(),
-            display_rows: music
-                .tracks
-                .iter()
-                .enumerate()
-                .map(|(i, t)| {
-                    cat_smf_editor::score::display_rows::DisplayRows::new(
-                        &t.events,
-                        &NoteView::new(&t.events).rows,
-                        time.map(i),
-                    )
-                })
-                .collect(),
             name,
             keys: cat_smf_editor::score::key_signature::KeySignatures::new(&music),
-            time_columns: music
-                .tracks
-                .iter()
-                .enumerate()
-                .map(|(i, t)| crate::view::time_columns::TimeColumns::new(&t.events, time.map(i)))
-                .collect(),
-            note_views: music
-                .tracks
-                .iter()
-                .map(|t| NoteView::new(&t.events))
-                .collect(),
-            music,
             time,
-            track_titles,
-        });
+            note_views,
+            track_titles: Vec::new(),
+            display_rows: Vec::new(),
+            time_columns: Vec::new(),
+            music,
+        };
+        if !self.startup.pending {
+            loaded.refresh_display();
+        }
+        self.loaded = Some(loaded);
+        drop(display_span);
+        let persist_span = (!self.startup.pending)
+            .then(|| cat_smf_editor::startup_trace::span("history_status_write"));
         if !document.is_untitled() {
             let loaded = self.loaded.as_ref().unwrap();
-            self.recent.history.record(&loaded.original, &loaded.music);
+            if !self.startup.pending {
+                self.recent.history.record(&loaded.original, &loaded.music);
+            }
+            if self.config.navigation.last_mid.as_ref() != Some(&path) {
+                self.config.session = None;
+            }
             self.config.navigation.last_mid = Some(path.clone());
         }
         self.saved = document;
-        self.config.persist();
-        true
+        if !self.startup.pending {
+            self.config.persist();
+        }
+        drop(persist_span);
     }
 }

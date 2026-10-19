@@ -164,6 +164,7 @@ fn startup_reopens_the_saved_file_and_position() {
     assert!(restored.reveal_cursor);
     std::fs::remove_file(path).unwrap();
     std::fs::remove_file(root.join("status.json")).unwrap();
+    std::fs::remove_file(root.join("startup.json")).unwrap();
     std::fs::remove_dir(root).unwrap();
 }
 
@@ -178,7 +179,6 @@ fn session_json_is_renamed_and_existing_status_takes_priority() {
         program_target: Default::default(),
         tempo_curve_maximized: true,
         piano_roll_maximized: true,
-        meta_text_icons: false,
         meta_text_visible: true,
         browser_panes: Default::default(),
         browser_queries: Default::default(),

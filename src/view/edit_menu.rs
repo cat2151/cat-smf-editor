@@ -1,11 +1,5 @@
 //! `e` opens the note editor for the cursor's note; `.` repeats the last `e` command.
-use crate::{
-    app::App,
-    view::{
-        comma_menu::{pressed, swallow},
-        note_edit::Field,
-    },
-};
+use crate::{app::App, view::note_edit::Field};
 use eframe::egui;
 
 const CHOICES: [(egui::Key, Field, &str); 2] = [
@@ -25,46 +19,10 @@ pub struct State {
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if app.comma_menu.open
-        || app.layer_editor.open
-        || app.note_edit.is_some()
-        || app.trill_edit.is_some()
-        || app.track_view.go_open
-        || app.track_view.split_open
-        || app.help_open
-        || app.playback.open
-        || app.playback.mixer_focused()
-        || app.player_selection.open
-        || app.loaded.is_none()
-        || ctx.wants_keyboard_input()
-    {
-        return;
-    }
-    if !app.edit_menu.open {
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::E)) {
-            app.edit_menu.open = true;
-            swallow(ctx);
-        } else if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Period)) {
-            repeat(app);
-            swallow(ctx);
-        }
-        return;
-    }
-    for key in pressed(ctx) {
-        if key == egui::Key::Escape {
-            app.edit_menu.open = false;
-        } else if key == egui::Key::U {
-            app.edit_menu.open = false;
-            super::undo::apply(app);
-        } else if let Some(&(_, field, _)) = CHOICES.iter().find(|(k, ..)| *k == key) {
-            choose(app, field);
-        }
-    }
-    // The menu owns the keyboard while open, so its letters never reach other shortcuts.
-    swallow(ctx);
+    crate::view::commands::route(app, ctx);
 }
 
-fn choose(app: &mut App, field: Field) {
+pub(crate) fn choose(app: &mut App, field: Field) {
     app.edit_menu.open = false;
     app.last_command = Some(Command::Note(field));
     edit_cursor_note(app, field);
@@ -76,7 +34,7 @@ fn edit_cursor_note(app: &mut App, field: Field) {
     app.reveal_cursor = true;
 }
 
-fn repeat(app: &mut App) {
+pub(crate) fn repeat(app: &mut App) {
     match app.last_command {
         Some(Command::Note(field)) => edit_cursor_note(app, field),
         None => {}

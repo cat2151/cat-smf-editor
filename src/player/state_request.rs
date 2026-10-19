@@ -11,6 +11,7 @@ pub fn headless(explicit: Option<PathBuf>, flag: &str) -> Result<Command, String
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let player = super::selection::resolve(explicit, &executable, std::env::var_os("PATH"))?;
     let mut command = Command::new(player);
+    cat_smf_editor::surge_data_home::restore_for_child(&mut command);
     command
         .arg(flag)
         .stdin(Stdio::piped())
@@ -25,6 +26,7 @@ pub fn headless(explicit: Option<PathBuf>, flag: &str) -> Result<Command, String
 }
 
 pub fn generate(reference: &PatchReference, explicit: Option<PathBuf>) -> Result<Vec<u8>, String> {
+    let _span = cat_smf_editor::startup_trace::span("state_generate");
     let mut child = headless(explicit, "--restore-state")?
         .spawn()
         .map_err(|e| e.to_string())?;

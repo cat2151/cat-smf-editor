@@ -1,17 +1,9 @@
 //! Keep the native dialog at the eframe boundary so it can own the editor window.
 use crate::app::App;
-use eframe::egui::{self, Key};
+use eframe::egui;
+#[cfg(test)]
+use egui::Key;
 use std::path::PathBuf;
-
-pub(super) fn requested(ctx: &egui::Context) -> bool {
-    ctx.input(|i| {
-        i.events.iter().any(|event| {
-            matches!(event, egui::Event::Key {
-                key: Key::O, pressed: true, repeat: false, modifiers, ..
-            } if modifiers.ctrl && !modifiers.shift && !modifiers.alt && !modifiers.mac_cmd)
-        })
-    })
-}
 
 pub fn open_dialog(app: &mut App, ctx: &egui::Context, frame: &eframe::Frame) {
     if !std::mem::take(&mut app.file_open_requested) {

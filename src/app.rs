@@ -1,11 +1,14 @@
 mod creation;
 mod loading;
 pub(crate) mod sound;
+mod startup;
 pub(crate) mod undo;
 use cat_smf_editor::{model::Music, score::musical_time::MusicalTime, score::note_view::NoteView};
 use eframe::egui;
 
 pub struct App {
+    pub startup: startup::State,
+    pub palette: crate::view::palette::State,
     pub undo: undo::History,
     pub file_open_requested: bool,
     pub recent: crate::view::recent::State,
@@ -24,6 +27,7 @@ pub struct App {
     pub event_selection: crate::view::event_selection::State,
     pub mml_input: crate::view::mml_input::State,
     pub busy: crate::view::busy::State,
+    pub opening: crate::view::opening::State,
     pub note_edit: Option<crate::view::note_edit::Editing>,
     pub trill_edit: Option<crate::view::trill_edit::Editing>,
     /// Set by `e` / `.`; the row drawing the cursor's note opens this field.
@@ -63,54 +67,10 @@ pub struct Loaded {
     pub display_rows: Vec<cat_smf_editor::score::display_rows::DisplayRows>,
 }
 impl App {
-    pub fn new(
-        cc: &eframe::CreationContext<'_>,
-        settings_error: Option<String>,
-        player: Option<std::path::PathBuf>,
-        mid: Option<std::path::PathBuf>,
-    ) -> Self {
-        // Add a Windows font for Japanese paths without bundling a font license.
-        let mut fonts = egui::FontDefinitions::default();
-        for font in [
-            "C:/Windows/Fonts/meiryo.ttc",
-            "C:/Windows/Fonts/YuGothM.ttc",
-        ] {
-            if let Ok(bytes) = std::fs::read(font) {
-                fonts
-                    .font_data
-                    .insert("japanese".into(), egui::FontData::from_owned(bytes).into());
-                for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-                    fonts
-                        .families
-                        .entry(family)
-                        .or_default()
-                        .push("japanese".into());
-                }
-                break;
-            }
-        }
-        cc.egui_ctx.set_fonts(fonts);
-        let mut app = Self::empty();
-        app.config = crate::store::config::Store::local();
-        app.settings_error = settings_error;
-        app.recent.history = crate::store::recent::History::local();
-        app.player_selection.executable = player;
-        app.player_selection
-            .setup
-            .begin(app.player_selection.executable.clone(), &cc.egui_ctx);
-        if app.player_selection.setup.is_active() {
-            app.player_selection.setup.initial = Some(mid);
-        } else {
-            app.open_initial(mid);
-            if app.config.analysis_open {
-                crate::view::analysis::toggle(&mut app);
-            }
-            crate::play::playback::start(&mut app, crate::play::playback::Mode::AllTracks);
-        }
-        app
-    }
     pub(crate) fn empty() -> Self {
         Self {
+            startup: Default::default(),
+            palette: Default::default(),
             undo: Default::default(),
             file_open_requested: false,
             recent: Default::default(),
@@ -131,6 +91,7 @@ impl App {
             event_selection: Default::default(),
             mml_input: Default::default(),
             busy: Default::default(),
+            opening: Default::default(),
             note_edit: None,
             trill_edit: None,
             note_edit_request: None,
@@ -197,13 +158,6 @@ impl App {
 }
 impl Loaded {
     pub fn refresh(&mut self) {
-        self.track_titles = self
-            .music
-            .tracks
-            .iter()
-            .enumerate()
-            .map(|(i, t)| format!("{} · {}", i + 1, t.name().unwrap_or_else(|| "—".into())))
-            .collect();
         self.time = MusicalTime::new(&self.music);
         self.keys = cat_smf_editor::score::key_signature::KeySignatures::new(&self.music);
         self.note_views = self
@@ -211,6 +165,16 @@ impl Loaded {
             .tracks
             .iter()
             .map(|t| NoteView::new(&t.events))
+            .collect();
+        self.refresh_display();
+    }
+    pub(crate) fn refresh_display(&mut self) {
+        self.track_titles = self
+            .music
+            .tracks
+            .iter()
+            .enumerate()
+            .map(|(i, t)| format!("{} · {}", i + 1, t.name().unwrap_or_else(|| "—".into())))
             .collect();
         self.display_rows = self
             .music
@@ -236,10 +200,16 @@ impl Loaded {
 }
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        cat_smf_editor::startup_trace::publish();
+        if cat_smf_editor::startup_trace::quit_requested() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
         #[cfg(windows)]
         let started = std::time::Instant::now();
         self.log_errors();
-        crate::view::recent::prefetch(self, ctx);
+        if !crate::view::opening::pending(self) {
+            crate::view::recent::prefetch(self, ctx);
+        }
         crate::view::show(self, ctx);
         if !self.player_selection.setup.is_active() {
             crate::view::files::open_dialog(self, ctx, frame);

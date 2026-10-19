@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-19",
+  "cached_instruments": 48,
+  "cached_effects": 14,
+  "raw_fxp": 48,
+  "baseline_repeats": 2,
+  "independent_baseline_recheck_repeats": 1,
+  "candidate_repeats": 2,
+  "audio_comparison": {
+    "no_fx": {
+      "cases": 111,
+      "equal_state": 111,
+      "state_differences": [],
+      "deterministic_cases": 42,
+      "deterministic_audio_equal": 42,
+      "deterministic_audio_differences": [],
+      "templates": {
+        "cases": 4,
+        "equal_state": 4,
+        "state_differences": [],
+        "deterministic_cases": 1,
+        "deterministic_audio_equal": 1,
+        "deterministic_audio_differences": []
+      }
+    },
+    "no_wavetables": {
+      "cases": 111,
+      "equal_state": 111,
+      "state_differences": [],
+      "deterministic_cases": 42,
+      "deterministic_audio_equal": 42,
+      "deterministic_audio_differences": [],
+      "templates": {
+        "cases": 4,
+        "equal_state": 4,
+        "state_differences": [],
+        "deterministic_cases": 1,
+        "deterministic_audio_equal": 1,
+        "deterministic_audio_differences": []
+      }
+    },
+    "no_fx_or_wt": {
+      "cases": 111,
+      "equal_state": 111,
+      "state_differences": [],
+      "deterministic_cases": 42,
+      "deterministic_audio_equal": 42,
+      "deterministic_audio_differences": [],
+      "templates": {
+        "cases": 4,
+        "equal_state": 4,
+        "state_differences": [],
+        "deterministic_cases": 1,
+        "deterministic_audio_equal": 1,
+        "deterministic_audio_differences": []
+      }
+    }
+  },
+  "startup": {
+    "v1": [
+      {
+        "Run": 1,
+        "ProcessToMainMs": 30.41,
+        "MainToCallbackMs": 1075.19,
+        "MainToNonzeroMs": 1075.19,
+        "ProcessToNonzeroMs": 1105.6
+      },
+      {
+        "Run": 2,
+        "ProcessToMainMs": 29.54,
+        "MainToCallbackMs": 1084.54,
+        "MainToNonzeroMs": 1084.54,
+        "ProcessToNonzeroMs": 1114.07
+      },
+      {
+        "Run": 3,
+        "ProcessToMainMs": 27.6,
+        "MainToCallbackMs": 1029.31,
+        "MainToNonzeroMs": 1029.31,
+        "ProcessToNonzeroMs": 1056.92
+      }
+    ],
+    "v2": [
+      {
+        "Run": 1,
+        "ProcessToMainMs": 30.72,
+        "MainToCallbackMs": 249.66,
+        "MainToNonzeroMs": 249.66,
+        "ProcessToNonzeroMs": 280.38
+      },
+      {
+        "Run": 2,
+        "ProcessToMainMs": 30.38,
+        "MainToCallbackMs": 249.96,
+        "MainToNonzeroMs": 249.96,
+        "ProcessToNonzeroMs": 280.34
+      },
+      {
+        "Run": 3,
+        "ProcessToMainMs": 29.24,
+        "MainToCallbackMs": 258.1,
+        "MainToNonzeroMs": 258.1,
+        "ProcessToNonzeroMs": 287.34
+      }
+    ]
+  },
+  "actual_v2_audio_comparison": {
+    "cases": 111,
+    "equal_state": 111,
+    "state_differences": [],
+    "deterministic_cases": 42,
+    "deterministic_audio_equal": 42,
+    "deterministic_audio_differences": []
+  }
+}

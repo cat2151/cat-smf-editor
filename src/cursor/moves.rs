@@ -100,80 +100,10 @@ fn audition(app: &mut App, chord: bool) {
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if ctx.wants_keyboard_input()
-        || app.help_open
-        || app.playback.open
-        || app.playback.mixer_focused()
-    {
-        return;
-    }
-    let movements = ctx.input_mut(|i| {
-        let mut steps = Vec::new();
-        i.events.retain(|event| {
-            if let egui::Event::Key {
-                key,
-                pressed: true,
-                modifiers,
-                ..
-            } = event
-            {
-                if *modifiers == egui::Modifiers::SHIFT {
-                    let forward = match key {
-                        egui::Key::J => true,
-                        egui::Key::K => false,
-                        _ => return true,
-                    };
-                    steps.push(Movement::Boundary {
-                        forward,
-                        measure: false,
-                    });
-                    return false;
-                }
-                if modifiers.matches_exact(egui::Modifiers::CTRL) {
-                    let forward = match key {
-                        egui::Key::ArrowDown => true,
-                        egui::Key::ArrowUp => false,
-                        _ => return true,
-                    };
-                    steps.push(Movement::Boundary {
-                        forward,
-                        measure: true,
-                    });
-                    return false;
-                }
-                if *modifiers != egui::Modifiers::NONE {
-                    return true;
-                }
-                let step = match key {
-                    egui::Key::J | egui::Key::ArrowDown => 1,
-                    egui::Key::K | egui::Key::ArrowUp => -1,
-                    egui::Key::PageDown => 10,
-                    egui::Key::PageUp => -10,
-                    egui::Key::Home => isize::MIN,
-                    egui::Key::End => isize::MAX,
-                    egui::Key::H | egui::Key::ArrowLeft => {
-                        steps.push(Movement::Boundary {
-                            forward: false,
-                            measure: true,
-                        });
-                        return false;
-                    }
-                    egui::Key::L | egui::Key::ArrowRight => {
-                        steps.push(Movement::Boundary {
-                            forward: true,
-                            measure: true,
-                        });
-                        return false;
-                    }
-                    _ => return true,
-                };
-                steps.push(Movement::Rows(step));
-                return false;
-            }
-            true
-        });
-        steps
-    });
+    crate::view::commands::route(app, ctx);
+}
+
+pub(crate) fn move_rows(app: &mut App, step: isize) {
     let Some(loaded) = &app.loaded else {
         return;
     };
@@ -185,40 +115,25 @@ pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
     if count == 0 {
         return;
     }
-    for movement in movements {
-        if let Movement::Boundary { forward, measure } = movement {
-            boundary(app, forward, measure);
-            continue;
-        }
-        let Movement::Rows(step) = movement else {
-            unreachable!()
-        };
-        let current = app.cursor_row.or_else(|| {
-            app.selected_event.and_then(|i| {
-                if app.note_mode {
-                    app.loaded.as_ref()?.display_rows[app.track].event_row(i)
-                } else {
-                    Some(i)
-                }
-            })
-        });
-        let first = if step == isize::MAX { count - 1 } else { 0 };
-        let next = current.map_or(first, |i| i.saturating_add_signed(step).min(count - 1));
-        if current != Some(next) {
-            place(app, next);
-            audition(app, false);
-            app.reveal_cursor = true;
-        }
-    }
+    let current = app.cursor_row.or_else(|| {
+        app.selected_event.and_then(|i| {
+            if app.note_mode {
+                app.loaded.as_ref()?.display_rows[app.track].event_row(i)
+            } else {
+                Some(i)
+            }
+        })
+    });
+    let first = if step == isize::MAX { count - 1 } else { 0 };
+    let next = current.map_or(first, |i| i.saturating_add_signed(step).min(count - 1));
+    // Playback follow and manual scrolling can hide an unchanged cursor row.
+    // Reapply placement even at an edge to clear exact-tick overrides and playback.
+    place(app, next);
+    audition(app, false);
+    app.reveal_cursor = true;
 }
 
-#[derive(Clone, Copy)]
-enum Movement {
-    Rows(isize),
-    Boundary { forward: bool, measure: bool },
-}
-
-fn boundary(app: &mut App, forward: bool, measure: bool) {
+pub(crate) fn boundary(app: &mut App, forward: bool, measure: bool) {
     let Some(loaded) = &app.loaded else {
         return;
     };
@@ -245,6 +160,9 @@ fn boundary(app: &mut App, forward: bool, measure: bool) {
         }
     } else {
         let Some(target) = map.adjacent_beat(&current, forward, last.tick) else {
+            if !forward {
+                move_rows(app, 0);
+            }
             return;
         };
         target

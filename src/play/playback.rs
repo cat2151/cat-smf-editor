@@ -122,7 +122,11 @@ fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequence> {
     }
     let events = &loaded.music.tracks[track].events;
     let end_tick = events.last()?.tick;
-    let (tick, position) = location(app);
+    let (tick, position) = if mode == Mode::Track {
+        (0, None)
+    } else {
+        location(app)
+    };
     let mut start = tick;
     let mut end = end_tick;
     if mode == Mode::Track {
@@ -236,62 +240,7 @@ pub fn parts(
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if ctx.wants_keyboard_input() || app.help_open || app.playback.mixer_focused() {
-        return;
-    }
-    let mut chosen = None;
-    ctx.input_mut(|input| {
-        input.events.retain(|event| {
-            let egui::Event::Key {
-                key,
-                pressed: true,
-                repeat: false,
-                modifiers,
-                ..
-            } = event
-            else {
-                return true;
-            };
-            if *modifiers != egui::Modifiers::NONE {
-                return true;
-            }
-            if app.playback.open {
-                chosen = match key {
-                    egui::Key::A => Some(Mode::AllTracks),
-                    egui::Key::C => Some(Mode::AllTracksFromMeasure),
-                    egui::Key::S => Some(Mode::MeasureStart),
-                    egui::Key::M => Some(Mode::Measure),
-                    egui::Key::T => Some(Mode::Track),
-                    egui::Key::P => Some(Mode::Position),
-                    egui::Key::B => Some(Mode::Beat),
-                    egui::Key::I => Some(Mode::BeatOnly),
-                    egui::Key::E => Some(Mode::Event),
-                    egui::Key::N => Some(Mode::Notes),
-                    egui::Key::Space => Some(app.playback.last),
-                    egui::Key::D => {
-                        crate::play::transport::stop(app);
-                        app.playback.open = false;
-                        None
-                    }
-                    egui::Key::Escape => {
-                        app.playback.open = false;
-                        None
-                    }
-                    _ => return false,
-                };
-            } else {
-                match key {
-                    egui::Key::P => app.playback.open = true,
-                    egui::Key::Space => chosen = Some(app.playback.last),
-                    _ => return true,
-                }
-            }
-            false
-        });
-    });
-    if let Some(mode) = chosen {
-        start(app, mode);
-    }
+    crate::view::commands::route(app, ctx);
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {

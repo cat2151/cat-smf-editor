@@ -144,7 +144,7 @@ pub fn go(app: &mut App, track: usize, tick: u64) {
     app.track_view.go_open = false;
 }
 
-fn go_edge(app: &mut App, end: bool) {
+pub(crate) fn go_edge(app: &mut App, end: bool) {
     let count = row_count(app, app.track);
     if count > 0 {
         crate::cursor::moves::place(app, if end { count - 1 } else { 0 });
@@ -153,7 +153,7 @@ fn go_edge(app: &mut App, end: bool) {
     app.track_view.go_open = false;
 }
 
-fn step_track(app: &mut App, forward: bool, tick: u64) {
+pub(crate) fn step_track(app: &mut App, forward: bool, tick: u64) {
     let Some(count) = app.loaded.as_ref().map(|l| l.music.tracks.len()) else {
         return;
     };
@@ -163,7 +163,7 @@ fn step_track(app: &mut App, forward: bool, tick: u64) {
     }
 }
 
-fn split_on(app: &mut App) {
+pub(crate) fn split_on(app: &mut App) {
     app.track_view.split_open = false;
     let Some(loaded) = &app.loaded else { return };
     let count = loaded.music.tracks.len();
@@ -175,14 +175,14 @@ fn split_on(app: &mut App) {
     }
 }
 
-fn split_off(app: &mut App) {
+pub(crate) fn split_off(app: &mut App) {
     app.track_view.split_open = false;
     app.track_view.split = None;
     app.track_view.apply_scroll = true;
 }
 
 /// Replaces the focused column's track with the next or previous track.
-fn step_column(app: &mut App, forward: bool) {
+pub(crate) fn step_column(app: &mut App, forward: bool) {
     split_on(app);
     step_track(app, forward, crate::play::playback::location(app).0);
 }
@@ -200,110 +200,13 @@ pub fn focus(app: &mut App, slot: usize) {
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if ctx.wants_keyboard_input()
-        || app.help_open
-        || app.playback.open
-        || app.playback.mixer_focused()
-        || app.player_selection.open
-    {
-        return;
-    }
-    let events = ctx.input(|i| i.events.clone());
-    for event in events {
-        let egui::Event::Key {
-            key,
-            pressed: true,
-            repeat: false,
-            modifiers,
-            ..
-        } = event
-        else {
-            continue;
-        };
-        let handled = if app.track_view.split_open {
-            if modifiers == egui::Modifiers::NONE {
-                match key {
-                    egui::Key::W => split_off(app),
-                    egui::Key::H => focus(app, 0),
-                    egui::Key::L => focus(app, 1),
-                    egui::Key::J => step_column(app, true),
-                    egui::Key::K => step_column(app, false),
-                    egui::Key::Escape => app.track_view.split_open = false,
-                    _ => {}
-                }
-            }
-            true
-        } else if app.track_view.go_open
-            && (modifiers == egui::Modifiers::NONE || modifiers == egui::Modifiers::SHIFT)
-        {
-            if key == egui::Key::Escape {
-                app.track_view.go_open = false;
-            } else if !app.track_view.track_list {
-                if modifiers == egui::Modifiers::NONE {
-                    match key {
-                        egui::Key::T => app.track_view.track_list = true,
-                        egui::Key::H => go_edge(app, false),
-                        egui::Key::E => go_edge(app, true),
-                        _ => {}
-                    }
-                }
-            } else if modifiers == egui::Modifiers::NONE && key == egui::Key::N {
-                step_track(app, true, app.track_view.origin_tick);
-            } else if modifiers == egui::Modifiers::NONE && key == egui::Key::P {
-                step_track(app, false, app.track_view.origin_tick);
-            } else if let Some(track) = destination(key, modifiers.shift) {
-                go(app, track, app.track_view.origin_tick);
-            }
-            true
-        } else if key == egui::Key::G && modifiers == egui::Modifiers::NONE && app.loaded.is_some()
-        {
-            app.track_view.origin_tick = crate::play::playback::location(app).0;
-            app.track_view.go_open = true;
-            app.track_view.track_list = false;
-            true
-        } else if key == egui::Key::W && modifiers == egui::Modifiers::NONE {
-            app.track_view.split_open = true;
-            true
-        } else if matches!(key, egui::Key::ArrowLeft | egui::Key::ArrowRight)
-            && modifiers.matches_exact(egui::Modifiers::CTRL)
-        {
-            step_track(
-                app,
-                key == egui::Key::ArrowLeft,
-                crate::play::playback::location(app).0,
-            );
-            true
-        } else {
-            false
-        };
-        if handled {
-            ctx.input_mut(|i| {
-                i.consume_key(modifiers, key);
-                // Text events from prefix keys must not reach another overlay.
-                i.events.retain(|e| !matches!(e, egui::Event::Text(_)));
-            });
-        }
-    }
+    crate::view::commands::route(app, ctx);
 }
 
 // n and p step to the next / previous track instead.
 const KEYS: &[u8] = b"123456789abcdefghijklmoqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 /// Track index for a key in the track list: 1–9, then a–z without n / p, then Shift+a–z.
-fn destination(key: egui::Key, shift: bool) -> Option<usize> {
-    let &[c] = key.name().as_bytes() else {
-        return None;
-    };
-    let c = if shift && c.is_ascii_alphabetic() {
-        c
-    } else if !shift {
-        c.to_ascii_lowercase()
-    } else {
-        return None;
-    };
-    KEYS.iter().position(|&k| k == c)
-}
-
 pub fn key_label(track: usize) -> Option<char> {
     KEYS.get(track).map(|&k| char::from(k))
 }

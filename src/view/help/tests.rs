@@ -125,7 +125,7 @@ fn tempo_help_groups_operations_with_distinct_colors_and_clear_area_names() {
         "p / Space",
         "A-B repeat: 左ドラッグ",
         "minimap: 左クリック / ドラッグ",
-        ",m",
+        "Ctrl+, → m",
     ];
     let mut colors = std::collections::BTreeSet::new();
     for label in groups {

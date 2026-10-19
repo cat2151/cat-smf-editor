@@ -30,7 +30,12 @@ pub(super) fn fit_height(layout: &mut Layout, height: f32) {
     for y in &mut layout.staff {
         *y *= factor;
     }
-    for (_, note) in &mut layout.notes {
+    for note in layout
+        .notes
+        .iter_mut()
+        .map(|(_, note)| note)
+        .chain(&mut layout.references)
+    {
         note.min.y *= factor;
         note.max.y *= factor;
     }

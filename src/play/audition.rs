@@ -12,6 +12,8 @@ pub(crate) mod offline;
 #[path = "audition_output.rs"]
 mod output;
 use output::Voice;
+#[path = "audition_opening.rs"]
+pub(crate) mod opening;
 
 pub(super) struct Part {
     velocities: [u8; 128],

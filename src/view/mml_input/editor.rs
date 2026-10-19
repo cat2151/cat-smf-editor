@@ -3,14 +3,7 @@ use super::{Action, State};
 use eframe::egui;
 
 pub(super) fn show(ctx: &egui::Context, state: &mut State) -> Action {
-    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
-        return Action::Cancel;
-    }
-    let mut action = if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
-        Action::Confirm
-    } else {
-        Action::None
-    };
+    let mut action = state.command.take().unwrap_or(Action::None);
     let modal = egui::Modal::new(egui::Id::new("mml-editor")).show(ctx, |ui| {
         ui.set_width(520.0);
         ui.heading("MML / Chord progression");
@@ -20,7 +13,9 @@ pub(super) fn show(ctx: &egui::Context, state: &mut State) -> Action {
             .desired_rows(5)
             .desired_width(f32::INFINITY)
             .show(ui);
-        if let Some(range) = output.cursor_range {
+        if !crate::view::palette::suspended(ctx)
+            && let Some(range) = output.cursor_range
+        {
             let cursor = range.primary.ccursor.index;
             let changed = output.response.changed();
             let previous = state.preview_cursor;
@@ -61,7 +56,7 @@ pub(super) fn show(ctx: &egui::Context, state: &mut State) -> Action {
             }
         });
     });
-    if modal.should_close() {
+    if modal.should_close() && !crate::view::palette::suspended(ctx) {
         action = Action::Cancel;
     }
     action

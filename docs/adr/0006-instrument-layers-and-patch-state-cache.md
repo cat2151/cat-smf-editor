@@ -1,7 +1,7 @@
 # ADR 0006: instrument layerは既存の演奏処理でUXを検証し、その後UAPMDの汎用グラフへ移行する
 
 - 状態: 採用
-- 関連: [0003: 共通hostとplayer選択](0003-shared-host-player-selection.md)、[0004: master effect](0004-master-effects-in-conductor-track.md)、[実装handoff](../../handoff-instrument-layers.md)
+- 関連: [0003: 共通hostとplayer選択](0003-shared-host-player-selection.md)、[0004: master effect](0004-master-effects-in-conductor-track.md)、[0011: 最初の発音までの最小経路](0011-minimal-startup-to-first-audio.md)、[実装handoff](../../handoff-instrument-layers.md)
 
 ## 背景
 

@@ -15,7 +15,11 @@ fn press(app: &mut crate::app::App, ctx: &egui::Context, key: egui::Key) {
                     physical_key: None,
                     pressed,
                     repeat: false,
-                    modifiers: egui::Modifiers::NONE,
+                    modifiers: if key == egui::Key::Comma {
+                        egui::Modifiers::CTRL | egui::Modifiers::COMMAND
+                    } else {
+                        egui::Modifiers::NONE
+                    },
                 }],
                 ..Default::default()
             },
@@ -134,23 +138,20 @@ fn piano_roll_maximization_is_independent_persistent_and_defaults_on() {
 }
 
 #[test]
-fn meta_text_toggles_are_independent_persistent_and_shared_by_both_overlays() {
+fn meta_text_visibility_is_persistent_and_shared_by_both_overlays() {
     let root = std::env::temp_dir().join(format!("cat-smf-meta-text-{}", std::process::id()));
     let status = root.join("status.json");
     let mut app = app(identical());
     app.config = Store::open(status.clone());
-    assert!(app.config.meta_text_visible && !app.config.meta_text_icons);
+    assert!(app.config.meta_text_visible);
     let ctx = egui::Context::default();
     for track in [0, 1] {
         app.select_track(track);
         press(&mut app, &ctx, egui::Key::R);
         press(&mut app, &ctx, egui::Key::Comma);
-        let before = app.config.meta_text_icons;
         press(&mut app, &ctx, egui::Key::I);
-        assert_eq!(app.config.meta_text_icons, !before);
+        assert!(app.comma_menu.open);
         assert!(app.config.meta_text_visible);
-        let saved = Store::open(status.clone());
-        assert_eq!(saved.meta_text_icons, !before);
         press(&mut app, &ctx, egui::Key::A);
         assert!(!Store::open(status.clone()).meta_text_visible);
         press(&mut app, &ctx, egui::Key::A);
@@ -162,7 +163,7 @@ fn meta_text_toggles_are_independent_persistent_and_shared_by_both_overlays() {
     }
     std::fs::write(&status, r#"{"session":null}"#).unwrap();
     let saved = Store::open(status);
-    assert!(saved.meta_text_visible && !saved.meta_text_icons);
+    assert!(saved.meta_text_visible);
     std::fs::remove_dir_all(root).unwrap();
 }
 

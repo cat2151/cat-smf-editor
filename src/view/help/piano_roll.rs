@@ -7,6 +7,7 @@ pub(super) fn rows(ui: &mut egui::Ui) {
             (
                 Color32::from_rgb(0xe6, 0xdb, 0x74),
                 &[
+                    ("Ctrl+,", "設定menu"),
                     ("Ctrl+Z", "元に戻す"),
                     ("i", "MML・コード進行"),
                     ("ノート左端 / 中央 / 右端: ドラッグ", "開始 / 位置 / 長さ"),
@@ -39,9 +40,10 @@ pub(super) fn rows(ui: &mut egui::Ui) {
                     ("左zoom: 左 / 右クリック", "音高の拡大 / 縮小"),
                     ("zoomバー: 左ドラッグ", "範囲拡大"),
                     ("ホイール", "時間移動"),
+                    ("Ctrl+→ ←", "次 / 前のトラック"),
                 ],
             ),
-            (Color32::from_gray(190), &[(",r", "最大化")]),
+            (Color32::from_gray(190), &[("Ctrl+, → r", "最大化")]),
         ],
     );
 }

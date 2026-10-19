@@ -114,7 +114,12 @@ impl Viewport {
         for y in &mut layout.staff {
             *y *= zoom.y;
         }
-        for (_, note) in &mut layout.notes {
+        for note in layout
+            .notes
+            .iter_mut()
+            .map(|(_, note)| note)
+            .chain(&mut layout.references)
+        {
             note.min = (note.min.to_vec2() * zoom).to_pos2();
             note.max = (note.max.to_vec2() * zoom).to_pos2();
         }

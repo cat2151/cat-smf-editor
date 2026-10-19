@@ -9,7 +9,10 @@ pub mod patch_reference;
 #[path = "../../cat-plugin-player/shared/patch_roots.rs"]
 pub mod patch_roots;
 pub mod score;
+pub mod startup_trace;
 pub mod storage_paths;
+#[path = "../../cat-plugin-player/shared/surge_data_home.rs"]
+pub mod surge_data_home;
 
 #[path = "../../cat-plugin-player/shared/smf.rs"]
 pub mod smf;

@@ -9,6 +9,7 @@ mod store;
 mod view;
 
 fn main() -> eframe::Result<()> {
+    cat_smf_editor::startup_trace::init();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         store::error_log::write("panic", &info.to_string());
@@ -36,13 +37,25 @@ fn run() -> eframe::Result<()> {
     };
     let cache = cat_smf_editor::storage_paths::cache_directory()
         .ok_or_else(|| eframe::Error::AppCreation("Cache directory unavailable".into()))?;
-    let _native_library =
-        cat_smf_editor::native_library::load_at(&cache).map_err(eframe::Error::AppCreation)?;
+    {
+        let _span = cat_smf_editor::startup_trace::span("surge_data_home");
+        // SAFETY: no GUI, plugin library, or application worker has started yet.
+        if let Err(error) = unsafe { cat_smf_editor::surge_data_home::before_threads(&cache) } {
+            store::error_log::write("surge-data-home", &error);
+        }
+    }
+    let _native_library = {
+        let _span = cat_smf_editor::startup_trace::span("native_library");
+        cat_smf_editor::native_library::load_at(&cache).map_err(eframe::Error::AppCreation)?
+    };
+    let app = app::App::bootstrap(player, mid);
+    let _settings_span = cat_smf_editor::startup_trace::span("window_settings");
     let settings = crate::store::config::directory()
         .ok_or_else(|| "LOCALAPPDATA is unavailable".to_owned())
         .and_then(|directory| store::settings::Settings::open(&directory));
     let settings_error = settings.as_ref().err().cloned();
     let settings = settings.unwrap_or_default();
+    drop(_settings_span);
     let options = eframe::NativeOptions {
         viewport: settings.viewport(),
         ..Default::default()
@@ -51,7 +64,7 @@ fn run() -> eframe::Result<()> {
         "cat-smf-editor",
         options,
         Box::new(move |cc| {
-            let app = app::App::new(cc, settings_error, player, mid);
+            let app = app.attach(cc, settings_error);
             Ok(Box::new(app))
         }),
     )

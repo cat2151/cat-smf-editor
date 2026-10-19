@@ -2,27 +2,27 @@ use crate::cursor::split::{self, tests::fixture, tests::press};
 use eframe::egui;
 
 #[test]
-fn ctrl_left_steps_forward_and_ctrl_right_steps_back_with_wrap() {
+fn ctrl_right_steps_forward_and_ctrl_left_steps_back_with_wrap() {
     let mut app = fixture();
     let ctx = egui::Context::default();
     let ctrl = egui::Modifiers::CTRL | egui::Modifiers::COMMAND;
     split::go(&mut app, 0, 600);
     let mut visited = Vec::new();
     for _ in 0..4 {
-        press(&mut app, &ctx, &[(egui::Key::ArrowLeft, ctrl)]);
+        press(&mut app, &ctx, &[(egui::Key::ArrowRight, ctrl)]);
         visited.push(app.track);
         assert_eq!(crate::play::playback::location(&app).0, 600);
     }
     assert_eq!(visited, [1, 2, 3, 0]);
     visited.clear();
     for _ in 0..4 {
-        press(&mut app, &ctx, &[(egui::Key::ArrowRight, ctrl)]);
+        press(&mut app, &ctx, &[(egui::Key::ArrowLeft, ctrl)]);
         visited.push(app.track);
     }
     assert_eq!(visited, [3, 2, 1, 0]);
     // Split view replaces the active pane, as gt does.
     app.track_view.split = Some([0, 1]);
-    press(&mut app, &ctx, &[(egui::Key::ArrowRight, ctrl)]);
+    press(&mut app, &ctx, &[(egui::Key::ArrowLeft, ctrl)]);
     assert_eq!((app.track_view.split, app.track), (Some([3, 1]), 3));
 }
 
@@ -58,7 +58,7 @@ fn ctrl_steps_change_only_the_active_pane() {
     app.track_view.split = Some([0, 1]);
     let mut seen = Vec::new();
     for _ in 0..3 {
-        press(&mut app, &ctx, &[(egui::Key::ArrowLeft, ctrl)]);
+        press(&mut app, &ctx, &[(egui::Key::ArrowRight, ctrl)]);
         seen.push((app.track_view.split, app.track));
     }
     // Landing on the other pane's track shows it in both panes.
@@ -67,7 +67,7 @@ fn ctrl_steps_change_only_the_active_pane() {
         [(Some([1, 1]), 1), (Some([2, 1]), 2), (Some([3, 1]), 3)]
     );
     split::focus(&mut app, 1);
-    press(&mut app, &ctx, &[(egui::Key::ArrowRight, ctrl)]);
+    press(&mut app, &ctx, &[(egui::Key::ArrowLeft, ctrl)]);
     assert_eq!((app.track_view.split, app.track), (Some([3, 0]), 0));
     // gtn / gtp share the rule.
     let none = egui::Modifiers::NONE;

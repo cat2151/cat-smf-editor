@@ -101,7 +101,18 @@ impl State {
         let end = view.end.max(1.0);
         let painter = ui.painter().with_clip_rect(ui.clip_rect().intersect(rect));
         painter.rect_filled(rect, 2.0, Color32::from_gray(28));
-        for (i, (_, note)) in layout.notes.iter().enumerate() {
+        for (note, color) in layout
+            .references
+            .iter()
+            .map(|note| (note, super::piano_roll::REFERENCE_COLOR))
+            .chain(
+                layout
+                    .notes
+                    .iter()
+                    .zip(&layout.colors)
+                    .map(|((_, note), &color)| (note, color)),
+            )
+        {
             let point = |p: egui::Pos2| {
                 rect.min
                     + egui::vec2(
@@ -112,7 +123,7 @@ impl State {
             let mut note = egui::Rect::from_min_max(point(note.min), point(note.max));
             note.max.x = note.max.x.max(note.min.x + 1.0);
             note.max.y = note.max.y.max(note.min.y + 1.0);
-            painter.rect_filled(note, 0.0, layout.colors[i].gamma_multiply(0.65));
+            painter.rect_filled(note, 0.0, color.gamma_multiply(0.65));
         }
         overlay(&painter, rect);
         let x = |offset: f32| {

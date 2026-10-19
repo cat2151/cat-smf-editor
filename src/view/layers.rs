@@ -3,9 +3,12 @@ use crate::app::App;
 use cat_smf_editor::score::instrument::{Patch, ResolvedLayer};
 use eframe::egui;
 
+pub(crate) mod commands;
 mod keyboard;
 #[cfg(test)]
 mod keyboard_tests;
+#[cfg(test)]
+mod palette_tests;
 #[cfg(test)]
 mod shortcut_tests;
 #[cfg(test)]
@@ -51,38 +54,7 @@ pub fn open(app: &mut App) {
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if app.layer_editor.open
-        || ctx.wants_keyboard_input()
-        || app.comma_menu.open
-        || app.edit_menu.open
-        || app.track_view.go_open
-        || app.track_view.split_open
-        || app.help_open
-        || app.playback.open
-        || app.playback.mixer_focused()
-        || app.player_selection.open
-        || app.piano_roll.open
-        || app.tempo_curve.open
-        || app.note_edit.is_some()
-        || app.trill_edit.is_some()
-    {
-        return;
-    }
-    let pressed = ctx.input_mut(|i| {
-        let pressed = i.events.iter().any(|e| {
-            matches!(e,
-            egui::Event::Key { key: egui::Key::T, pressed: true, repeat: false, modifiers, .. }
-            if *modifiers == egui::Modifiers::SHIFT)
-        });
-        if pressed {
-            i.consume_key(egui::Modifiers::SHIFT, egui::Key::T);
-        }
-        pressed
-    });
-    if pressed {
-        open(app);
-        crate::view::comma_menu::swallow(ctx);
-    }
+    crate::view::commands::route(app, ctx);
 }
 
 #[cfg(test)]
@@ -204,6 +176,9 @@ impl State {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    if app.layer_editor.open {
+        crate::view::commands::route(app, ctx);
+    }
     if !app.layer_editor.open {
         return;
     }
@@ -220,16 +195,6 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     app.layer_editor.normalize(&patch);
     let mut choose = None;
     let mut error = None;
-    let analysis = keyboard::handle(
-        &mut app.layer_editor,
-        ctx,
-        &mut patch,
-        &mut choose,
-        &mut error,
-    );
-    if analysis {
-        crate::view::analysis::toggle(app);
-    }
     if app.layer_editor.open {
         widgets::show(
             &mut app.layer_editor,

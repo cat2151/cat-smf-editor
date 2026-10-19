@@ -118,7 +118,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             cancel = ui.button("Cancel").clicked();
         });
     });
-    cancel |= response.should_close();
+    cancel |= response.should_close() && !crate::view::palette::suspended(ctx);
     if cancel {
         if !editing.previewed {
             return;
@@ -166,3 +166,13 @@ impl Editing {
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) fn cancel(app: &mut App, _ctx: &egui::Context) {
+    if let Some(mut editing) = app.trill_edit.take()
+        && editing.previewed
+        && let Err(e) = app.apply_music(editing.original.clone())
+    {
+        editing.error = Some(e);
+        app.trill_edit = Some(editing);
+    }
+}

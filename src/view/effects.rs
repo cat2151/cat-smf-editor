@@ -3,6 +3,7 @@ use crate::app::App;
 use cat_smf_editor::chain_settings::PluginState;
 use eframe::egui;
 
+pub(crate) mod commands;
 mod keyboard;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -156,6 +157,9 @@ fn apply(app: &mut App, target: Target, action: Action) -> Result<(), String> {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    if app.effect_editor.is_open() {
+        crate::view::commands::route(app, ctx);
+    }
     let Some(target) = app.effect_editor.target else {
         return;
     };
@@ -170,7 +174,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
     state.count = chain.len();
     state.selected = state.selected.min(chain.len().saturating_sub(1));
-    let mut actions = keyboard::handle(state, ctx, chain.len());
+    let mut actions = Vec::new();
     if app.effect_editor.is_open() {
         actions.extend(widgets::show(app, ctx, target, &chain));
     }

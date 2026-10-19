@@ -27,6 +27,7 @@ impl Setup {
     }
 
     pub fn begin(&mut self, explicit: Option<PathBuf>, ctx: &egui::Context) {
+        let _span = cat_smf_editor::startup_trace::span("dependency_check");
         self.explicit = explicit.clone();
         self.active = true;
         self.error = None;
@@ -141,7 +142,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) -> bool {
     let blocked = show_setup(app, ctx);
     if !blocked && let Some(mid) = app.player_selection.setup.initial.take() {
         app.open_initial(mid);
-        if app.config.analysis_open {
+        if app.config.analysis_open && !app.analysis.is_open() {
             crate::view::analysis::toggle(app);
         }
         crate::play::playback::start(app, crate::play::playback::Mode::AllTracks);
@@ -204,6 +205,17 @@ fn show_setup(app: &mut App, ctx: &egui::Context) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn setup_completion_keeps_an_already_restored_analysis_window_open() {
+        let mut app = App::empty();
+        app.config.analysis_open = true;
+        crate::view::analysis::toggle(&mut app);
+        app.player_selection.setup.initial = Some(None);
+        show(&mut app, &egui::Context::default());
+        assert!(app.analysis.is_open());
+        assert!(app.config.analysis_open);
+    }
+
     #[test]
     fn setup_allows_tab_and_blocks_editor_shortcuts() {
         let mut app = App::empty();

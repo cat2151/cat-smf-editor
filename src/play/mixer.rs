@@ -47,27 +47,32 @@ pub fn unfocus(app: &mut App, ctx: &egui::Context) {
     });
 }
 
-pub fn handle_key(app: &mut App, key: egui::Key) -> bool {
-    if key == egui::Key::F {
-        crate::view::analysis::toggle(app);
-        return true;
-    }
+#[derive(Clone, Copy)]
+pub(crate) enum Operation {
+    Previous,
+    Next,
+    Quieter,
+    Louder,
+    Effects,
+}
+
+pub(crate) fn apply(app: &mut App, operation: Operation) {
     let count = app.loaded.as_ref().map_or(0, |l| l.track_titles.len());
     if count == 0 {
-        return false;
+        return;
     }
     app.playback.mixer_track = app.playback.mixer_track.min(count - 1);
-    match key {
-        egui::Key::H | egui::Key::ArrowLeft => {
+    match operation {
+        Operation::Previous => {
             if app.playback.mixer_master {
-                return true;
+                return;
             }
             if app.playback.mixer_track == 0 {
                 app.playback.mixer_master = true;
             }
             app.playback.mixer_track = app.playback.mixer_track.saturating_sub(1);
         }
-        egui::Key::L | egui::Key::ArrowRight => {
+        Operation::Next => {
             if app.playback.mixer_master {
                 app.playback.mixer_master = false;
                 app.playback.mixer_track = 0;
@@ -75,26 +80,37 @@ pub fn handle_key(app: &mut App, key: egui::Key) -> bool {
                 app.playback.mixer_track = (app.playback.mixer_track + 1).min(count - 1);
             }
         }
-        egui::Key::J | egui::Key::ArrowDown | egui::Key::K | egui::Key::ArrowUp => {
+        Operation::Quieter | Operation::Louder => {
             if app.playback.mixer_master {
-                return true;
+                return;
             }
             let track = app.playback.mixer_track;
-            let delta = if matches!(key, egui::Key::J | egui::Key::ArrowDown) {
+            let delta = if matches!(operation, Operation::Quieter) {
                 -STEP_DB
             } else {
                 STEP_DB
             };
             let db = (gain_to_db(app.audition.gain(track)) + delta).clamp(MIN_DB, MAX_DB);
-            if let Err(error) = volume::set(app, track, crate::play::track_volume::db_to_gain(db)) {
-                app.load_error = Some(error);
+            if let Err(e) = volume::set(app, track, crate::play::track_volume::db_to_gain(db)) {
+                app.load_error = Some(e);
             }
         }
-        egui::Key::X | egui::Key::Enter | egui::Key::Space => {
-            open_effects(app, app.playback.mixer_master);
-        }
-        _ => return false,
+        Operation::Effects => open_effects(app, app.playback.mixer_master),
     }
+}
+
+#[cfg(test)]
+pub fn handle_key(app: &mut App, key: egui::Key) -> bool {
+    let ctx = egui::Context::default();
+    let defs = crate::view::commands::definitions(app, crate::view::commands::Screen::Mixer);
+    let Some(c) = defs.into_iter().find(|c| {
+        c.keys
+            .iter()
+            .any(|(k, m)| *k == key && *m == egui::Modifiers::NONE)
+    }) else {
+        return false;
+    };
+    crate::view::commands::run_direct(app, &ctx, &c);
     true
 }
 

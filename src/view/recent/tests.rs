@@ -175,12 +175,13 @@ fn preview_cancel_and_confirm_preserve_unsaved_document_and_persist_order() {
     assert!(app.config.navigation.departure.is_some());
     assert_eq!(app.loaded.as_ref().unwrap().original, loaded_path);
     press(&mut app, &ctx, Key::N, Modifiers::NONE);
+    crate::view::opening::tests::finish(&mut app, &ctx);
     assert_eq!(
         app.loaded.as_ref().unwrap().original,
         std::fs::canonicalize(&first).unwrap()
     );
     assert_eq!(app.playback.last, crate::play::playback::Mode::AllTracks);
-    assert!(app.playback.pending.is_some());
+    assert!(app.playback.active.is_some());
     let persisted = History::open(root.join("recent-files.json"));
     assert_eq!(
         persisted.entries[0].path,

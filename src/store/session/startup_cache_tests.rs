@@ -71,6 +71,7 @@ fn startup_session_cache_restores_layers_and_reaches_audio_without_player() {
     )
     .unwrap();
     let status = root.join("status.json");
+    crate::store::startup::save(&status, Some(songs.join("organ.mid"))).unwrap();
     std::fs::write(
         &status,
         serde_json::json!({

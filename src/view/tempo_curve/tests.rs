@@ -394,3 +394,5 @@ mod rendering;
 mod trills;
 
 mod deferred;
+mod grid;
+mod note_references;

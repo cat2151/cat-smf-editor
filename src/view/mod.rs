@@ -3,6 +3,7 @@ pub(crate) mod analysis;
 pub(crate) mod beat_audition;
 pub(crate) mod busy;
 pub(crate) mod comma_menu;
+pub(crate) mod commands;
 pub(crate) mod edit_menu;
 pub(crate) mod effects;
 mod event_repeat;
@@ -12,6 +13,8 @@ pub(crate) mod layers;
 mod meta_text;
 pub(crate) mod mml_input;
 pub(crate) mod note_edit;
+pub(crate) mod opening;
+pub(crate) mod palette;
 pub(crate) mod piano_roll;
 mod pitch_keyboard;
 mod row;
@@ -40,17 +43,40 @@ use eframe::egui::{self, Color32, ScrollArea};
 pub const ACTIVE_PANE: Color32 = Color32::from_rgb(0xfd, 0x97, 0x1f);
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    if app.startup_pending(ctx) {
+        return;
+    }
+    opening::advance(app, ctx);
+    let opening_input = opening::suspend_input(app, ctx);
+    let palette_input = palette::begin(app, ctx);
     if crate::player::setup::show(app, ctx) {
         crate::play::transport::advance(app);
         app.audition.pump();
+        palette::end(app, ctx, palette_input);
         return;
     }
     busy::run(app, ctx);
+    crate::play::transport::stop_shortcut(app, ctx);
+    if !opening::pending(app)
+        && (app.palette.is_open()
+            || (!app.recent.open
+                && app.config.navigation.departure.is_none()
+                && app.invalid_smf_name.is_none()))
+    {
+        crate::play::transport::advance(app);
+    }
     show_contents(app, ctx);
+    if app.palette.is_open() {
+        app.audition.pump();
+    }
     // Outside show_contents: a viewport skipped for one frame closes.
     analysis::show(app, ctx);
-    app.auto_save(ctx);
+    if !opening::pending(app) {
+        app.auto_save(ctx);
+    }
     title::update(app, ctx);
+    palette::end(app, ctx, palette_input);
+    opening::show(app, ctx, opening_input);
 }
 
 fn show_contents(app: &mut App, ctx: &egui::Context) {
@@ -82,12 +108,8 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         if mml_owns_input {
             mml_input::show(app, ctx);
         }
-        if selection_owns_input {
-            crate::play::transport::advance(app);
-        }
         if !mml_owns_input && !selection_owns_input {
             crate::play::transport::stop_shortcut(app, ctx);
-            crate::play::transport::advance(app);
             undo::shortcuts(app, ctx);
             crate::view::layers::show(app, ctx);
             crate::view::effects::show(app, ctx);
@@ -106,15 +128,6 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
                 if !app.track_view.go_open && !app.track_view.split_open {
                     crate::play::playback::shortcuts(app, ctx);
                     crate::play::transport::shortcuts(app, ctx);
-                    let view_keys = !ctx.wants_keyboard_input()
-                        && !app.help_open
-                        && !app.playback.mixer_focused()
-                        && !app.playback.open;
-                    if view_keys && consume_plain(ctx, egui::Key::V) {
-                        app.note_mode = !app.note_mode;
-                        crate::cursor::moves::sync_mode(app);
-                        app.reset_scroll = true;
-                    }
                     crate::view::help::shortcuts(app, ctx);
                     crate::cursor::moves::shortcuts(app, ctx);
                 }
@@ -321,18 +334,4 @@ fn pane(
     );
     ui.advance_cursor_after_rect(rect);
     tick
-}
-
-fn consume_plain(ctx: &egui::Context, key: egui::Key) -> bool {
-    ctx.input_mut(|i| {
-        let pressed = i.events.iter().any(|event| {
-            matches!(event,
-                egui::Event::Key { key: k, pressed: true, repeat: false, modifiers, .. }
-                if *k == key && *modifiers == egui::Modifiers::NONE)
-        });
-        if pressed {
-            i.consume_key(egui::Modifiers::NONE, key);
-        }
-        pressed
-    })
 }

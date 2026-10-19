@@ -638,6 +638,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
 name = "byteorder-lite"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -711,7 +717,9 @@ dependencies = [
  "image",
  "libloading",
  "mmlabc-to-smf",
+ "regex",
  "rfd",
+ "rustmigemo",
  "serde",
  "serde_json",
  "sha2",
@@ -3249,6 +3257,14 @@ dependencies = [
  "ring",
  "rustls-pki-types",
  "untrusted",
+]
+
+[[package]]
+name = "rustmigemo"
+version = "0.1.7-dev.0"
+source = "git+https://github.com/oguna/rustmigemo.git?rev=121101dfcfd9465c998ba53fabe43773b14bf868#121101dfcfd9465c998ba53fabe43773b14bf868"
+dependencies = [
+ "byteorder",
 ]
 
 [[package]]

@@ -34,8 +34,9 @@ fn manual_save_and_file_switch_flush_without_confirmation_and_reopen_stays_enabl
     crate::play::mixer::volume::set(&mut f.app, 0, 0.6).unwrap();
     super::open::complete(&mut f.app, Some(f.second.clone()));
     assert!(f.app.config.navigation.departure.is_none());
+    crate::view::opening::tests::finish(&mut f.app, &ctx);
     assert_eq!(f.app.playback.last, crate::play::playback::Mode::AllTracks);
-    assert!(f.app.playback.pending.is_some());
+    assert!(f.app.playback.active.is_some());
     assert_eq!(
         crate::play::track_volume::read(&smf_io::load(&f.first).unwrap().tracks[0]),
         Ok(0.6)

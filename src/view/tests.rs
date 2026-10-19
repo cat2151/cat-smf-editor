@@ -15,6 +15,9 @@ pub(crate) fn app(music: Music) -> App {
         .map(|(i, t)| format!("Track {} · {} events", i + 1, t.events.len()))
         .collect();
     App {
+        startup: Default::default(),
+        opening: Default::default(),
+        palette: Default::default(),
         undo: Default::default(),
         file_open_requested: false,
         recent: Default::default(),

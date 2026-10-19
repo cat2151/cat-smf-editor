@@ -11,7 +11,6 @@ pub(super) fn show(
 ) {
     let mut remove = None;
     let mut wheel = None;
-    let mut commit = false;
     let mut cancel = false;
     if state.editing.is_some() {
         cancel = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
@@ -93,9 +92,8 @@ pub(super) fn show(
                                                 edit.focus = false;
                                             }
                                             if !cancel {
-                                                commit |=
-                                                    ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                                cancel |= output.response.lost_focus() && !commit;
+                                                cancel |= output.response.lost_focus()
+                                                    && !crate::view::palette::suspended(ctx);
                                             }
                                             output.response
                                         } else {
@@ -176,11 +174,6 @@ pub(super) fn show(
     });
     if cancel {
         state.editing = None;
-    } else if commit && let Err(e) = state.commit(patch) {
-        *error = Some(e);
-        if let Some(edit) = &mut state.editing {
-            edit.focus = true;
-        }
     }
     if let Some((id, field, steps)) = wheel {
         state.selected = Some(id);

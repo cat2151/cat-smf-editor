@@ -12,6 +12,7 @@ pub struct State {
     pub open: bool,
     pub buffer: String,
     confirm_ready: bool,
+    command: Option<Action>,
     pending_preview: Option<(u64, usize, bool)>,
     preview_cursor: Option<usize>,
     error: Option<String>,
@@ -31,34 +32,7 @@ pub struct State {
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if app.mml_input.open
-        || super::busy::pending(app)
-        || app.loaded.is_none()
-        || ctx.wants_keyboard_input()
-        || app.help_open
-        || app.comma_menu.open
-        || app.edit_menu.open
-        || app.note_edit.is_some()
-        || app.trill_edit.is_some()
-        || app.layer_editor.open
-        || app.effect_editor.is_open()
-        || app.track_view.go_open
-        || app.track_view.split_open
-        || app.playback.open
-        || app.playback.mixer_focused()
-        || app.player_selection.open
-    {
-        return;
-    }
-    #[cfg(windows)]
-    if crate::player::resident_link::loading(app) {
-        return;
-    }
-    if !super::consume_plain(ctx, egui::Key::I) {
-        return;
-    }
-    swallow_typed_i(ctx);
-    super::busy::request(app, ctx, super::busy::Task::MmlInput);
+    crate::view::commands::route(app, ctx);
 }
 
 pub fn open(app: &mut App, ctx: &egui::Context) {
@@ -115,7 +89,6 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     crate::play::transport::stop_shortcut(app, ctx);
-    crate::play::transport::advance(app);
     if super::busy::pending(app) {
         super::comma_menu::swallow(ctx);
         return;
@@ -264,6 +237,7 @@ fn preview(app: &mut App, state: &mut State) {
     }
 }
 
+pub(crate) mod commands;
 mod editor;
 mod key_prefix;
 #[cfg(test)]

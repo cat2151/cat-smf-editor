@@ -120,7 +120,7 @@ fn keyboard_track_and_measure_navigation_updates_colors_and_the_single_measure()
         &mut app,
         &ctx,
         &[(
-            egui::Key::ArrowLeft,
+            egui::Key::ArrowRight,
             egui::Modifiers::CTRL | egui::Modifiers::COMMAND,
         )],
     );
@@ -129,8 +129,17 @@ fn keyboard_track_and_measure_navigation_updates_colors_and_the_single_measure()
     let texts = mml(&output);
     assert_eq!(texts.len(), 2);
     for (text, pitch) in texts.iter().zip([64, 60]) {
-        assert!(text.galley.job.sections.iter().any(|s| s.format.color
-            == Palette::tinted(crate::view::pitch_keyboard::roll_color(pitch, None))));
+        let expected = if pitch == 60 {
+            Palette::tinted(crate::view::pitch_keyboard::roll_color(pitch, None))
+        } else {
+            Color32::from_gray(140)
+        };
+        assert!(text
+            .galley
+            .job
+            .sections
+            .iter()
+            .all(|s| s.format.color == expected));
     }
     press(&mut app, &ctx, &[(egui::Key::L, egui::Modifiers::NONE)]);
     assert_eq!(crate::play::playback::location(&app).0, 1920);
@@ -144,6 +153,45 @@ fn keyboard_track_and_measure_navigation_updates_colors_and_the_single_measure()
     );
     press(&mut app, &ctx, &[(egui::Key::H, egui::Modifiers::NONE)]);
     assert_eq!(crate::play::playback::location(&app).0, 0);
+}
+
+#[test]
+fn silent_measure_keeps_other_tracks_gray_and_empty_track_restores_colors() {
+    let mut app = fixture();
+    // Track 2 has notes only in the next measure; track 3 still sounds here.
+    let mut music = app.loaded.take().unwrap().music;
+    music.tracks[1].events.retain(|event| event.tick >= 1920);
+    app = crate::view::tests::app(music);
+    app.track = 1;
+    let ctx = egui::Context::default();
+    render(&mut app, &ctx);
+    let output = render(&mut app, &ctx);
+    assert_eq!(mml(&output).len(), 1);
+    assert!(mml(&output)[0]
+        .galley
+        .job
+        .sections
+        .iter()
+        .all(|s| s.format.color == Color32::from_gray(140)));
+    for shape in &output.shapes {
+        if let egui::Shape::Text(t) = &shape.shape
+            && t.galley.job.text == "track3"
+        {
+            assert_eq!(
+                t.galley.job.sections[0].format.color,
+                Color32::from_gray(140)
+            );
+        }
+    }
+    app.track = 0;
+    let output = render(&mut app, &ctx);
+    let expected = Palette::tinted(crate::view::pitch_keyboard::roll_color(64, None));
+    assert!(mml(&output)[0]
+        .galley
+        .job
+        .sections
+        .iter()
+        .all(|s| s.format.color == expected));
 }
 
 #[test]

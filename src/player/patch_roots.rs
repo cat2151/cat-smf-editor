@@ -51,6 +51,7 @@ impl Cache {
     }
 
     fn refresh(&mut self, player: Option<PathBuf>) -> Result<(), String> {
+        let _span = cat_smf_editor::startup_trace::span("patch_roots_refresh");
         let output = super::state_request::headless(player, "--patch-roots")?
             .output()
             .map_err(|e| e.to_string())?;

@@ -8,7 +8,7 @@ tempo curve画面を開くと、Reference Tempoの初期化と同じタイミン
 既にTrill Start / Endの組があれば再検知せず、保存済みの値を使う。
 曲中の`Trill Start`／`Trill End`のtext（tempo curveの上下両方の描画領域）、
 またはevent listのtrill meta（Notes／Raw）をクリックすると、対象trillの編集画面を開く。
-ピアノロールのtrill textと、textの代わりのアイコンも同じ編集に対応する。
+ピアノロールのtrill textも同じ編集に対応する。
 
 `First pitch`の`Upper`／`Lower`で開始音を選ぶ。
 `First note`で最初の1音の長さ、`Interval`で2音目以降の発音間隔を、秒で個別に入力・ドラッグ変更する。

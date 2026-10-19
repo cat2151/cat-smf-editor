@@ -25,6 +25,7 @@ pub struct Prepared {
 
 // Capture the source and range at the start request, independent of later view changes.
 pub fn prepare(app: &App, mode: Mode) -> Option<Prepared> {
+    let _span = cat_smf_editor::startup_trace::span("sequence_prepare");
     if mode == Mode::AllTracksFromMeasure {
         let all = prepare(app, Mode::AllTracks)?;
         let seconds = all.active.tempos[app.track].duration(0, start_tick(app, Mode::MeasureStart));
@@ -58,10 +59,10 @@ pub fn prepare(app: &App, mode: Mode) -> Option<Prepared> {
 }
 
 fn start_tick(app: &App, mode: Mode) -> u64 {
-    let (start, position) = playback::location(app);
     if matches!(mode, Mode::Track | Mode::AllTracks) {
         return 0;
     }
+    let (start, position) = playback::location(app);
     if matches!(
         mode,
         Mode::Measure | Mode::MeasureStart | Mode::Beat | Mode::BeatOnly
@@ -219,23 +220,7 @@ fn row_for_tick(app: &App, track: usize, tick: u64) -> Option<usize> {
 
 /// Stop before preparing audio or dispatching keys to overlays.
 pub fn stop_shortcut(app: &mut App, ctx: &egui::Context) {
-    let mut stopped = false;
-    ctx.input_mut(|input| {
-        input.events.retain(|event| {
-            if matches!(event, egui::Event::Key {
-                key: egui::Key::Space, pressed: true, modifiers, ..
-            } if *modifiers == egui::Modifiers::SHIFT)
-            {
-                stopped = true;
-                false
-            } else {
-                true
-            }
-        });
-    });
-    if stopped {
-        stop(app);
-    }
+    crate::view::commands::route_stop(app, ctx);
 }
 
 pub fn stop(app: &mut App) {
@@ -243,71 +228,21 @@ pub fn stop(app: &mut App) {
     app.playback.active = None;
     app.playback.repeat = None;
     app.audition.stop();
+    if app.cursor_row.is_none() && crate::cursor::split::row_count(app, app.track) > 0 {
+        let tick = playback::location(app).0;
+        app.cursor_row = Some(crate::cursor::split::row_sounding_loaded(
+            app.loaded.as_ref().unwrap(),
+            app.note_mode,
+            app.track,
+            tick,
+        ));
+        app.track_view.cursor_tick = Some(tick);
+    }
+    app.reveal_cursor = true;
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
-    if (ctx.wants_keyboard_input() && !app.playback.mixer_focused())
-        || app.help_open
-        || app.playback.open
-    {
-        return;
-    }
-    let mut program = None;
-    let mut effects = false;
-    let mut unfocus = false;
-    ctx.input_mut(|input| {
-        input.events.retain(|event| {
-            let egui::Event::Key {
-                key,
-                pressed: true,
-                repeat: false,
-                modifiers,
-                ..
-            } = event
-            else {
-                return true;
-            };
-            if *modifiers != egui::Modifiers::NONE {
-                return true;
-            }
-            match key {
-                egui::Key::M => {
-                    if app.playback.mixer_focused() {
-                        app.playback.mixer_open = false;
-                    } else if app.playback.mixer_open {
-                        app.playback.mixer_focus = true;
-                    } else {
-                        crate::play::mixer::open(app);
-                    }
-                }
-                egui::Key::Escape if app.playback.mixer_focused() => unfocus = true,
-                key if app.playback.mixer_focused()
-                    && crate::play::mixer::handle_key(app, *key) => {}
-                egui::Key::F if !app.playback.mixer_focused() => {
-                    app.playback.follow = !app.playback.follow
-                }
-                egui::Key::T if !app.playback.mixer_focused() => {
-                    program = Some(crate::player::selection::Browser::Patch)
-                }
-                egui::Key::X if !app.playback.mixer_focused() => effects = true,
-                _ => return true,
-            }
-            false
-        });
-    });
-    if unfocus {
-        crate::play::mixer::unfocus(app, ctx);
-    }
-    if effects {
-        crate::play::mixer::open_effects(app, false);
-    }
-    if let Some(browser) = program {
-        if browser == crate::player::selection::Browser::Patch {
-            crate::player::bulk::request(app);
-        } else {
-            crate::player::selection::open(app, browser);
-        }
-    }
+    crate::view::commands::route(app, ctx);
 }
 
 mod status;

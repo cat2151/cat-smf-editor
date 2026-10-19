@@ -89,6 +89,9 @@ impl App {
     }
 
     pub fn save_session(&mut self) {
+        if self.startup.pending {
+            return;
+        }
         if !self.saved.is_untitled()
             && let Some(session) = self.session()
         {

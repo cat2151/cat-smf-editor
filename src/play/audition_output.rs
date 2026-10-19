@@ -12,6 +12,83 @@ use std::sync::{
 /// A track's plugin with its held-note state, carried into the next stream.
 type Reusable = Cache<(Native, Render)>;
 
+/// Keeps plugin ownership on the UI thread while opening one track per frame.
+pub(super) struct Builder {
+    device: cpal::Device,
+    supported: cpal::SupportedStreamConfig,
+    reusable: Reusable,
+    master: Option<cat_smf_editor::chain::Chain>,
+    natives: Vec<Native>,
+    renders: Vec<Render>,
+    patches: Vec<(usize, Patch)>,
+}
+
+impl Builder {
+    pub fn new(previous: Option<Voice>) -> Result<Self, String> {
+        let _span = cat_smf_editor::startup_trace::span("audio_device_config");
+        let device = cpal::default_host()
+            .default_output_device()
+            .ok_or("No audio output device")?;
+        let supported = device.default_output_config().map_err(|e| e.to_string())?;
+        let (reusable, master) = match previous {
+            Some(voice) if voice.rate == supported.sample_rate().0 => voice.into_reusable(),
+            _ => (Reusable::default(), None),
+        };
+        Ok(Self {
+            device,
+            supported,
+            reusable,
+            master,
+            natives: Vec::new(),
+            renders: Vec::new(),
+            patches: Vec::new(),
+        })
+    }
+
+    pub fn track(&mut self, track: usize, patch: &Patch) -> Result<(), String> {
+        let _span = cat_smf_editor::startup_trace::span("audio_track_plugins");
+        let (native, render) = take_or_open(
+            &mut self.reusable,
+            track,
+            patch,
+            self.supported.sample_rate().0,
+        )
+        .map_err(|e| format!("Track {}: {e}", track + 1))?;
+        self.natives.push(native);
+        self.renders.push(render);
+        self.patches.push((track, patch.clone()));
+        Ok(())
+    }
+
+    pub fn master(
+        &mut self,
+        settings: &cat_smf_editor::master_effects::Settings,
+    ) -> Result<(), String> {
+        if settings.effects.is_empty() {
+            self.master = None;
+        } else if self.master.is_none() {
+            self.master = Some(
+                cat_smf_editor::chain::Chain::open_master(self.supported.sample_rate().0, settings)
+                    .map_err(|e| format!("Master: {e}"))?,
+            );
+        }
+        Ok(())
+    }
+
+    pub fn pump(&self) {
+        for native in &self.natives {
+            native.pump();
+        }
+        if let Some(master) = &self.master {
+            master.pump();
+        }
+    }
+
+    pub fn finish(self, auto_gain_disabled: bool) -> Result<Voice, String> {
+        Voice::stream(self, auto_gain_disabled)
+    }
+}
+
 pub(super) struct Voice {
     // Declaration order stops the callback before freeing plugins on the UI thread.
     stream: cpal::Stream,
@@ -33,34 +110,27 @@ impl Voice {
         master_settings: &cat_smf_editor::master_effects::Settings,
         auto_gain_disabled: bool,
     ) -> Result<Self, String> {
-        let device = cpal::default_host()
-            .default_output_device()
-            .ok_or("No audio output device")?;
-        let supported = device.default_output_config().map_err(|e| e.to_string())?;
+        let mut builder = Builder::new(previous)?;
+        for (track, patch) in patches {
+            builder.track(*track, patch)?;
+        }
+        builder.master(master_settings)?;
+        builder.finish(auto_gain_disabled)
+    }
+
+    fn stream(builder: Builder, auto_gain_disabled: bool) -> Result<Self, String> {
+        let _span = cat_smf_editor::startup_trace::span("audio_stream_start");
+        let Builder {
+            device,
+            supported,
+            reusable,
+            master,
+            natives,
+            renders,
+            patches,
+        } = builder;
         let config = supported.config();
         let rate = config.sample_rate.0;
-        let (mut reusable, reusable_master) = match previous {
-            Some(voice) if voice.rate == rate => voice.into_reusable(),
-            _ => (Reusable::default(), None),
-        };
-        let mut natives = Vec::new();
-        let mut renders = Vec::new();
-        for (track, patch) in patches {
-            let (native, render) = take_or_open(&mut reusable, *track, patch, rate)
-                .map_err(|e| format!("Track {}: {e}", track + 1))?;
-            natives.push(native);
-            renders.push(render);
-        }
-        let master = if master_settings.effects.is_empty() {
-            None
-        } else if reusable_master.is_some() {
-            reusable_master
-        } else {
-            Some(
-                cat_smf_editor::chain::Chain::open_master(rate, master_settings)
-                    .map_err(|e| format!("Master: {e}"))?,
-            )
-        };
         let master_pointer = master.as_ref().map(|m| unsafe { m.audio_ref() });
         let renders = Arc::new(Mutex::new(renders));
         let mailbox = Arc::new(Mutex::new(Command {
@@ -101,7 +171,7 @@ impl Voice {
             natives,
             cached: reusable,
             master,
-            patches: patches.to_vec(),
+            patches,
             mailbox,
             rate,
             failed,
@@ -206,6 +276,11 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     let max = (data.len() - offset) / channels;
                     // SAFETY: Voice stops this one stream before destroying every Native.
                     let mixed = mixer.block(&mut pointers, &command, max, &callback_failed);
+                    if cat_smf_editor::startup_trace::audio_pending()
+                        && command.parts.iter().any(|part| part.sequence.is_some())
+                    {
+                        cat_smf_editor::startup_trace::audio_block(mixed);
+                    }
                     tap.write(mixed, channels);
                     for (target, sample) in data[offset..].iter_mut().zip(mixed) {
                         *target = T::from_sample(sample.clamp(-1.0, 1.0));

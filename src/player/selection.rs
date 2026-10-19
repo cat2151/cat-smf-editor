@@ -76,6 +76,7 @@ fn sibling_release(executable: &Path) -> Option<PathBuf> {
     )
 }
 
+#[cfg(test)]
 pub fn open(app: &mut App, browser: Browser) {
     app.player_selection.layer = None;
     open_mode(app, browser, false, None);

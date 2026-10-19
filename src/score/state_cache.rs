@@ -81,6 +81,7 @@ fn stamp(path: &Path, output: &mut Vec<u8>) -> Result<(), String> {
 }
 
 fn fingerprint(reference: &PatchReference) -> Result<String, String> {
+    let _span = crate::startup_trace::span("state_fingerprint");
     let mut bytes = GENERATOR_VERSION.to_le_bytes().to_vec();
     stamp(Path::new(&reference.plugin.bundle_path), &mut bytes)?;
     let source = match &reference.source {
@@ -113,6 +114,7 @@ impl Cache {
         reference: &PatchReference,
         generate: impl FnOnce(&PatchReference) -> Result<Vec<u8>, String>,
     ) -> Result<PluginState, String> {
+        let _span = crate::startup_trace::span("state_cache_resolve");
         let id = key(reference)?;
         let current = fingerprint(reference).ok();
         let valid = |entry: &Entry| {

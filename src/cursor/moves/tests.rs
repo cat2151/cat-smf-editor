@@ -1,6 +1,7 @@
 use crate::view::tests::app;
 use cat_smf_editor::model::{Event, Music, Track};
 use eframe::egui;
+mod edges;
 fn fixture() -> crate::app::App {
     app(Music {
         format: 1,

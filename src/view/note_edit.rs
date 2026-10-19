@@ -85,6 +85,9 @@ fn apply(app: &mut App, editing: &Editing) -> Result<(), String> {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    if app.note_edit.is_some() {
+        crate::view::commands::route(app, ctx);
+    }
     let Some(mut editing) = app.note_edit.take() else {
         return;
     };
@@ -105,19 +108,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 response.request_focus();
                 editing.focus = false;
             }
-            if response.lost_focus() {
-                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    match apply(app, &editing) {
-                        Ok(()) => close = true,
-                        Err(error) => {
-                            editing.error = Some(error);
-                            editing.focus = true;
-                        }
-                    }
-                } else {
-                    // Esc or a click elsewhere cancels.
-                    close = true;
-                }
+            if response.lost_focus() && !app.palette.is_open() {
+                close = true;
             }
             if let Some(error) = &editing.error {
                 ui.colored_label(egui::Color32::LIGHT_RED, error);
@@ -129,4 +121,16 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 }
 
 #[cfg(test)]
+mod palette_tests;
+#[cfg(test)]
 pub(crate) mod tests;
+
+pub(crate) fn confirm(app: &mut App, _ctx: &egui::Context) {
+    if let Some(mut editing) = app.note_edit.take()
+        && let Err(error) = apply(app, &editing)
+    {
+        editing.error = Some(error);
+        editing.focus = true;
+        app.note_edit = Some(editing);
+    }
+}

@@ -96,10 +96,11 @@ pub(crate) fn accept(app: &mut App, settings: &Settings) -> Result<(), String> {
 }
 
 pub(crate) fn show_note_error(app: &mut App, ctx: &egui::Context) {
-    let mut close = ctx.input_mut(|input| {
-        input.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
-            || input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
-    });
+    crate::view::commands::route(app, ctx);
+    if !app.player_selection.no_notes_error {
+        return;
+    }
+    let mut close = false;
     egui::Modal::new(egui::Id::new("no-notes-program-error")).show(ctx, |ui| {
         ui.heading("音色を指定できません");
         ui.colored_label(

@@ -90,7 +90,11 @@ fn press(app: &mut App, ctx: &egui::Context, key: Key) -> egui::FullOutput {
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::NONE,
+            modifiers: if key == Key::Comma {
+                Modifiers::CTRL
+            } else {
+                Modifiers::NONE
+            },
         }],
         ..Default::default()
     };
@@ -199,7 +203,7 @@ fn dropping_a_file_confirms_dirty_switch_and_escape_keeps_current_edits() {
     );
     assert!(matches!(
         f.app.config.navigation.departure,
-        Some(Action::Load(_))
+        Some(Action::LoadWithProgress(_))
     ));
     press(&mut f.app, &ctx, Key::Escape);
     assert_eq!(f.app.loaded.as_ref().unwrap().original, first);
@@ -405,12 +409,13 @@ fn native_selection_cancel_preserves_edits_and_selection_uses_departure_confirma
     assert!(f.app.saved.dirty());
     super::open::complete(&mut f.app, Some(f.second.clone()));
     press(&mut f.app, &ctx, Key::N);
+    crate::view::opening::tests::finish(&mut f.app, &ctx);
     assert_eq!(
         f.app.loaded.as_ref().unwrap().original,
         std::fs::canonicalize(&f.second).unwrap()
     );
     assert_eq!(f.app.playback.last, crate::play::playback::Mode::AllTracks);
-    assert!(f.app.playback.pending.is_some());
+    assert!(f.app.playback.active.is_some());
     assert_eq!(
         smf_io::load(&f.first).unwrap().tracks[0].events[0].data[0],
         60
@@ -420,15 +425,20 @@ fn native_selection_cancel_preserves_edits_and_selection_uses_departure_confirma
 #[test]
 fn native_selection_starts_all_tracks_only_after_a_successful_load() {
     let mut f = fixture("native-autoplay");
+    let ctx = egui::Context::default();
     super::open::complete(&mut f.app, Some(f.second.clone()));
+    assert!(crate::view::opening::pending(&f.app));
+    assert!(f.app.playback.pending.is_none());
+    crate::view::opening::tests::finish(&mut f.app, &ctx);
     assert_eq!(f.app.playback.last, crate::play::playback::Mode::AllTracks);
-    assert!(f.app.playback.pending.is_some());
+    assert!(f.app.playback.active.is_some());
     crate::play::transport::stop(&mut f.app);
     super::open::complete(&mut f.app, None);
     assert!(f.app.playback.pending.is_none());
     let invalid = f.root.join("invalid.mid");
     std::fs::write(&invalid, b"invalid MIDI").unwrap();
     super::open::complete(&mut f.app, Some(invalid));
+    crate::view::opening::tests::finish(&mut f.app, &ctx);
     assert!(f.app.load_error.is_some());
     assert!(f.app.playback.pending.is_none());
 }
