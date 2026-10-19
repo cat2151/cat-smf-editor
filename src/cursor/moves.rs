@@ -16,6 +16,22 @@ pub fn sync_mode(app: &mut App) {
     });
 }
 
+/// Places the cursor at an exact tick, including gaps and the insertion end.
+pub fn at_tick(app: &mut App, tick: u64) {
+    let Some(loaded) = &app.loaded else { return };
+    let row = crate::cursor::split::row_sounding_loaded(loaded, app.note_mode, app.track, tick);
+    let count = if app.note_mode {
+        loaded.display_rows[app.track].len()
+    } else {
+        loaded.music.tracks[app.track].events.len()
+    };
+    app.cursor_row = (count > 0).then_some(row.min(count.saturating_sub(1)));
+    app.selected_event = None;
+    app.cursor_position = loaded.time.map(app.track).map(|m| m.position(tick));
+    app.track_view.cursor_tick = Some(tick);
+    app.reveal_cursor = true;
+}
+
 /// Selects the row and auditions the chord at its tick (click, beat moves).
 pub fn select(app: &mut App, row: usize) {
     place(app, row);

@@ -1,8 +1,8 @@
-//! Note insertion overlay. The shared player widget owns text editing; every
-//! input change is applied to the song so all views follow it.
+//! Note insertion overlay. Input changes paint a preparation message before
+//! updating the song and opening plugins for cursor audition or A–B playback.
 use crate::app::App;
 use cat_smf_editor::{
-    mml::{self, Action, CursorPreview},
+    mml::{Action, CursorPreview},
     model::Music,
 };
 use eframe::egui;
@@ -11,6 +11,9 @@ use eframe::egui;
 pub struct State {
     pub open: bool,
     pub buffer: String,
+    confirm_ready: bool,
+    pending_preview: Option<(u64, usize, bool)>,
+    preview_cursor: Option<usize>,
     error: Option<String>,
     focus: bool,
     preview: CursorPreview,
@@ -18,10 +21,13 @@ pub struct State {
     track: usize,
     tick: u64,
     channel: u8,
+    key: Option<String>,
     /// The song as it was when the overlay opened; previews are rebuilt from it.
     base: Option<Music>,
-    /// One undo step restores `base`, however many previews were applied.
-    recorded: bool,
+    session: Option<crate::store::config::Session>,
+    cursor_tick: Option<u64>,
+    /// A repeat editing session never replaces transport audio with cursor audition.
+    repeat_session: bool,
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
@@ -69,10 +75,25 @@ pub fn open(app: &mut App, ctx: &egui::Context) {
         track: app.track,
         tick,
         channel,
+        key: loaded
+            .keys
+            .map(app.track)
+            .and_then(|keys| keys.at(tick))
+            .map(|key| {
+                let name = key.name();
+                let tonic = name.split_whitespace().next().unwrap();
+                format!("{tonic}{}", if key.minor() { " Aeolian" } else { "" })
+            }),
         base: Some(loaded.music.clone()),
+        session: app.session(),
+        cursor_tick: app.track_view.cursor_tick,
+        repeat_session: app.playback.repeat.is_some()
+            && crate::play::transport::timeline::running(app),
         ..Default::default()
     };
-    crate::play::transport::stop(app);
+    if !app.mml_input.repeat_session {
+        crate::play::transport::stop(app);
+    }
     // The text event may arrive with the key or one pass later.
     swallow_typed_i(ctx);
 }
@@ -84,29 +105,112 @@ fn swallow_typed_i(ctx: &egui::Context) {
     });
 }
 
+/// Called only after the waiting overlay has had a frame to paint.
+pub fn ready_to_confirm(app: &mut App) {
+    app.mml_input.confirm_ready = true;
+}
+
 pub fn show(app: &mut App, ctx: &egui::Context) {
     if !app.mml_input.open {
         return;
     }
+    crate::play::transport::stop_shortcut(app, ctx);
+    crate::play::transport::advance(app);
+    if super::busy::pending(app) {
+        super::comma_menu::swallow(ctx);
+        return;
+    }
     let mut state = std::mem::take(&mut app.mml_input);
     if state.song != app.song_id || state.track != app.track || app.loaded.is_none() {
-        app.audition.stop();
+        if !state.repeat_session {
+            app.audition.stop();
+        }
         return;
     }
     const RATE: u32 = 48000;
-    let typed = state.buffer.clone();
-    let (action, request) = mml::editor(
-        ctx,
-        &mut state.buffer,
-        &mut state.focus,
-        &mut state.preview,
-        state.error.as_deref(),
-        RATE,
-        true,
-    );
-    if state.buffer != typed {
-        preview(app, &mut state);
+    if let Some((pass, mut cursor, changed)) = state.pending_preview
+        && ctx.cumulative_pass_nr() > pass
+        && ctx.output(|o| o.num_completed_passes == 0)
+    {
+        state.pending_preview = None;
+        if changed {
+            if let Some(prefixed) = key_prefix::apply(ctx, &mut state.buffer, state.key.as_deref())
+            {
+                cursor = prefixed;
+            }
+            preview(app, &mut state);
+        }
+        let request = state.preview.refresh(&state.buffer, cursor, RATE, changed);
+        audition(app, &state, request);
+        ctx.request_repaint();
     }
+    let ready = std::mem::take(&mut state.confirm_ready);
+    let action = if ready {
+        ctx.request_repaint();
+        Action::Confirm
+    } else {
+        editor::show(ctx, &mut state)
+    };
+    if matches!(action, Action::Confirm) && !ready {
+        app.mml_input = state;
+        super::busy::request(app, ctx, super::busy::Task::MmlConfirm);
+        super::comma_menu::swallow(ctx);
+        return;
+    }
+    match action {
+        Action::Cancel => {
+            if !state.repeat_session {
+                app.audition.stop();
+            }
+            match app.apply_music(state.base.as_ref().unwrap().clone()) {
+                Ok(()) => {
+                    if let Some(session) = &state.session {
+                        app.restore_position(session);
+                    }
+                    app.track_view.cursor_tick = state.cursor_tick;
+                    state.open = false;
+                }
+                Err(error) => state.error = Some(error),
+            }
+        }
+        Action::Confirm => {
+            if !state.repeat_session {
+                app.audition.stop();
+            }
+            match inserted(&state) {
+                Ok((music, end)) => {
+                    if let Err(error) = app.apply_music(music) {
+                        state.error = Some(error);
+                        app.mml_input = state;
+                        super::comma_menu::swallow(ctx);
+                        return;
+                    }
+                    app.undo.push(state.base.as_ref().unwrap().clone());
+                    state.open = false;
+                    if !state.repeat_session {
+                        crate::play::transport::repeat::play_once(app, (state.tick, end));
+                        app.playback.follow = false;
+                    }
+                    crate::cursor::moves::at_tick(app, end);
+                }
+                Err(error) => {
+                    state.error = Some(error);
+                    state.focus = true;
+                }
+            }
+        }
+        Action::None => {}
+    }
+    app.mml_input = state;
+    // Text and navigation belong to the modal, even on its closing frame.
+    super::comma_menu::swallow(ctx);
+}
+
+fn audition(app: &mut App, state: &State, request: Option<Option<cat_smf_editor::mml::Notes>>) {
+    if state.repeat_session {
+        return;
+    }
+    const RATE: u32 = 48000;
     if let Some(notes) = request {
         if let Some(notes) = notes {
             let notes: Vec<_> = notes
@@ -128,29 +232,6 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             app.audition.stop();
         }
     }
-    match action {
-        Action::Cancel => {
-            app.audition.stop();
-            state.open = false;
-        }
-        Action::Confirm => {
-            app.audition.stop();
-            match inserted(&state) {
-                Ok((_, end)) => {
-                    state.open = false;
-                    crate::play::transport::repeat::play_once(app, (state.tick, end));
-                }
-                Err(error) => {
-                    state.error = Some(error);
-                    state.focus = true;
-                }
-            }
-        }
-        Action::None => {}
-    }
-    app.mml_input = state;
-    // Text and navigation belong to the modal, even on its closing frame.
-    super::comma_menu::swallow(ctx);
 }
 
 /// The song with the current input inserted into the overlay's opening state,
@@ -180,13 +261,10 @@ fn preview(app: &mut App, state: &mut State) {
     }
     if let Err(error) = app.apply_music(music) {
         state.error = Some(error);
-        return;
-    }
-    if !state.recorded {
-        app.undo.push(base.clone());
-        state.recorded = true;
     }
 }
 
+mod editor;
+mod key_prefix;
 #[cfg(test)]
 mod tests;

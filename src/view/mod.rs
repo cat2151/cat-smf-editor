@@ -6,6 +6,7 @@ pub(crate) mod comma_menu;
 pub(crate) mod edit_menu;
 pub(crate) mod effects;
 mod event_repeat;
+pub(crate) mod event_selection;
 mod help;
 pub(crate) mod layers;
 mod meta_text;
@@ -57,7 +58,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
     if !invalid_smf && !app.mml_input.open && recent::show(app, ctx) {
         return;
     }
-    if !invalid_smf && !app.mml_input.open {
+    if !invalid_smf && !app.mml_input.open && !event_selection::valid(app) {
         crate::view::files::inputs(app, ctx);
     }
     let departure = app.config.navigation.departure.is_some();
@@ -73,12 +74,18 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         crate::player::resident_link::refresh_browser_activity(app);
         #[cfg(windows)]
         let started = std::time::Instant::now();
-        mml_input::shortcuts(app, ctx);
+        let selection_owns_input = event_selection::shortcuts(app, ctx);
+        if !selection_owns_input {
+            mml_input::shortcuts(app, ctx);
+        }
         let mml_owns_input = app.mml_input.open;
         if mml_owns_input {
             mml_input::show(app, ctx);
         }
-        if !mml_owns_input {
+        if selection_owns_input {
+            crate::play::transport::advance(app);
+        }
+        if !mml_owns_input && !selection_owns_input {
             crate::play::transport::stop_shortcut(app, ctx);
             crate::play::transport::advance(app);
             undo::shortcuts(app, ctx);
@@ -155,9 +162,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
                     });
             });
         if add_track {
-            if let Err(error) = app.add_track() {
-                app.load_error = Some(error);
-            }
+            busy::request(app, ctx, busy::Task::AddTrack);
         } else if track != app.track {
             app.select_track(track);
         }
@@ -252,6 +257,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
     crate::player::selection::show(app, ctx);
     crate::view::help::show(app, ctx);
     crate::play::mixer::show(app, ctx);
+    crate::view::event_selection::show(app, ctx);
     crate::view::edit_menu::show(app, ctx);
     crate::view::note_edit::show(app, ctx);
     crate::view::piano_roll::show(app, ctx);

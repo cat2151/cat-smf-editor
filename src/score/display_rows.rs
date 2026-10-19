@@ -131,6 +131,20 @@ impl DisplayRows {
     pub fn is_measure(&self, index: usize) -> bool {
         matches!(self.block(index).1, Block::Measures { .. })
     }
+    /// Source events in a visible row range, without expanding empty beat runs.
+    pub fn events_in_rows(
+        &self,
+        range: std::ops::Range<usize>,
+    ) -> impl Iterator<Item = usize> + '_ {
+        self.blocks
+            .iter()
+            .filter_map(move |(row, block)| match block {
+                Block::Event(i) if *row >= range.start as u128 && *row < range.end as u128 => {
+                    Some(*i)
+                }
+                _ => None,
+            })
+    }
     pub fn event_row(&self, source: usize) -> Option<usize> {
         self.blocks.iter().find_map(|(row, b)| match b {
             Block::Event(i) if *i == source => usize::try_from(*row).ok(),

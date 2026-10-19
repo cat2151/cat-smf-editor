@@ -44,6 +44,28 @@ fn initial(track: &Track) -> Vec<Event> {
         .collect()
 }
 
+/// Common initial non-note events, matched as whole payloads rather than fields.
+/// Timing is normalized; source order and the common duplicate count are retained.
+pub(super) fn common_initial<'a>(tracks: impl Iterator<Item = &'a Track>) -> Vec<Event> {
+    let mut sources = tracks.map(initial);
+    let mut init = sources.next().unwrap_or_default();
+    for mut source in sources {
+        init.retain(|e| {
+            if let Some(i) = source.iter().position(|other| same(e, other)) {
+                source.remove(i);
+                true
+            } else {
+                false
+            }
+        });
+    }
+    for e in &mut init {
+        e.tick = 0;
+        e.delta = 0;
+    }
+    init
+}
+
 pub fn add(music: &mut Music) -> Result<(), String> {
     if music.tracks.len() >= 32767 {
         return Err("Too many SMF tracks".into());
@@ -52,29 +74,12 @@ pub fn add(music: &mut Music) -> Result<(), String> {
         .tracks
         .iter()
         .filter(|t| t.events.iter().any(note_on))
-        .map(initial)
         .collect();
-    let mut init = sources.first().cloned().unwrap_or_default();
-    if sources.len() < 2 {
-        init.clear();
+    let init = if sources.len() < 2 {
+        Vec::new()
     } else {
-        // Multiset intersection preserves source order and duplicate event counts.
-        for source in &sources[1..] {
-            let mut remaining = source.clone();
-            init.retain(|e| {
-                if let Some(i) = remaining.iter().position(|other| same(e, other)) {
-                    remaining.remove(i);
-                    true
-                } else {
-                    false
-                }
-            });
-        }
-    }
-    for e in &mut init {
-        e.tick = 0;
-        e.delta = 0;
-    }
+        common_initial(sources.into_iter())
+    };
     let mut track = Track { events: init };
     let duration = if music.division & 0x8000 == 0 {
         u64::from(music.division)

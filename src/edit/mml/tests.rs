@@ -94,3 +94,12 @@ fn errors_are_atomic_and_channel_selection_is_deterministic() {
     assert!(insert(&mut target, 0, 0, 5, "c4").is_err());
     assert_eq!(channel(&Track { events: vec![] }, None), 0);
 }
+
+#[test]
+fn phrase_end_includes_trailing_rest_and_survives_smf_roundtrip() {
+    let mut m = music(480);
+    let end = insert(&mut m, 0, 120, 0, "c4 r4").unwrap();
+    assert_eq!(end, 1080);
+    let decoded = crate::ffi::parse(&crate::smf_io::encode(&m).unwrap()).unwrap();
+    assert_eq!(decoded.tracks[0].events.last().unwrap().tick, end);
+}

@@ -58,6 +58,41 @@ impl App {
         Ok(())
     }
 
+    /// Bulk event edits can replace sound metadata and change track indices.
+    pub(crate) fn edit_tracks(
+        &mut self,
+        edit: impl FnOnce(&mut cat_smf_editor::model::Music) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let before = self
+            .loaded
+            .as_ref()
+            .ok_or("No SMF is loaded")?
+            .music
+            .clone();
+        let mut music = before.clone();
+        edit(&mut music)?;
+        cat_smf_editor::smf_io::encode(&music)?;
+        let sound = self.resolve_sound(&music)?;
+        self.saved
+            .remember(&self.loaded.as_ref().unwrap().original, &music)?;
+        crate::play::transport::stop(self);
+        self.apply_volume_music(music)?;
+        self.audition.reset();
+        self.audition.clear_gains();
+        for (track, gain) in sound.volumes.into_iter().enumerate() {
+            self.audition.set_gain(track, gain);
+        }
+        self.audition.set_master(sound.master);
+        self.loaded.as_mut().unwrap().patches = sound.patches;
+        self.playback.mixer_track = self
+            .playback
+            .mixer_track
+            .min(self.loaded.as_ref().unwrap().music.tracks.len() - 1);
+        self.song_id = self.song_id.wrapping_add(1);
+        self.undo.push(before);
+        Ok(())
+    }
+
     pub(crate) fn sync_saved_path(&mut self) {
         let Some(path) = self.saved.path().map(std::path::Path::to_owned) else {
             return;

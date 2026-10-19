@@ -120,9 +120,7 @@ pub fn inputs(app: &mut App, ctx: &egui::Context) {
         return;
     }
     if new_requested(ctx, Modifiers::CTRL | Modifiers::SHIFT) {
-        if let Err(error) = app.add_track() {
-            app.load_error = Some(error);
-        }
+        super::busy::request(app, ctx, super::busy::Task::AddTrack);
         super::comma_menu::swallow(ctx);
     } else if new_requested(ctx, Modifiers::CTRL) {
         app.new_smf(ctx);

@@ -16,6 +16,9 @@ pub fn show(
     browse_patch: &mut bool,
     replace_effect: &mut Option<usize>,
 ) {
+    let selection = (track == app.track)
+        .then(|| super::event_selection::range(app))
+        .flatten();
     let marker = crate::play::transport::marker_for(app, track);
     let preparing = crate::play::transport::preparing_row_for(app, track);
     let current_tick = crate::play::playback::location(app).0;
@@ -332,6 +335,7 @@ pub fn show(
                     }
                 }
             });
+            super::event_selection::paint(selection.clone(), ui, &output, stride);
             (repeat, selecting_repeat) = super::event_repeat::rows(
                 ui,
                 &output,

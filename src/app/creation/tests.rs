@@ -194,9 +194,14 @@ fn plus_is_below_tracks_and_click_selects_and_plays_appended_track() {
             modifiers: Modifiers::NONE,
         }],
     );
+    assert!(crate::view::busy::pending(&app));
+    assert_eq!(app.track, 0);
+    assert_eq!(app.loaded.as_ref().unwrap().music.tracks.len(), 1);
+    render(&mut app, vec![]);
     assert_eq!(app.track, 1);
     assert_eq!(app.loaded.as_ref().unwrap().music.tracks.len(), 2);
-    let pending = app.playback.pending.as_ref().unwrap();
-    assert_eq!(pending.parts.len(), 1);
-    assert_eq!(pending.parts[0].0, 1);
+    assert_eq!(app.playback.last, Mode::Track);
+    let parts = playback::parts(&app, Mode::Track);
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].0, 1);
 }

@@ -16,7 +16,7 @@ pub fn channel(track: &Track, selected: Option<usize>) -> u8 {
         .map_or(0, |e| e.status & 15)
 }
 
-/// Returns the tick of the last inserted note event.
+/// Returns the end of the MML phrase, including trailing rests.
 pub fn insert(
     music: &mut Music,
     track: usize,
@@ -25,8 +25,44 @@ pub fn insert(
     input: &str,
 ) -> Result<u64, String> {
     let (bytes, _) = crate::mml::to_smf(input)?;
-    let source = crate::ffi::parse(&bytes)?;
+    let mut source = crate::ffi::parse(&bytes)?;
+    // SMF drops trailing rests. Ask the same converter for each channel's final
+    // clock using non-sounding program markers; these markers are never inserted.
+    let end = phrase_end(input);
+    if let Some(e) = source.tracks[0]
+        .events
+        .last_mut()
+        .filter(|e| e.status == 0xff && e.meta_type == 0x2f)
+    {
+        e.tick = e.tick.max(end);
+    }
     insert_smf(music, track, tick, channel, &source)
+}
+
+fn phrase_end(input: &str) -> u64 {
+    use mmlabc_to_smf::{mml_preprocessor, pass1_parser, pass2_ast, pass3_events, types::AstNote};
+    let resolved = cmrt_chord::resolve_chord_or_mml(input);
+    let preprocessed = mml_preprocessor::extract_embedded_json(&resolved.mml);
+    let tokens = pass1_parser::parse_mml(&preprocessed.remaining_mml);
+    let mut ast = pass2_ast::tokens_to_ast(&tokens);
+    let channels: std::collections::BTreeSet<_> = ast.notes.iter().map(|n| n.channel).collect();
+    for channel in channels {
+        ast.notes.push(AstNote {
+            note_type: "program_change".into(),
+            pitch: 0,
+            name: String::new(),
+            channel,
+            chord_id: None,
+            length: None,
+            dots: None,
+            velocity: None,
+        });
+    }
+    pass3_events::ast_to_events(&ast, true)
+        .iter()
+        .map(|e| u64::from(e.time))
+        .max()
+        .unwrap_or(0)
 }
 
 pub fn insert_smf(
@@ -69,9 +105,41 @@ pub fn insert_smf(
     }
     // Preserve source order for simultaneous events, including zero-length notes.
     notes.sort_by_key(|e| e.tick);
-    let end = notes.last().map_or(tick, |e| e.tick);
+    let source_end = source
+        .tracks
+        .iter()
+        .flat_map(|t| &t.events)
+        .map(|e| e.tick)
+        .max()
+        .unwrap_or(0);
+    let offset = (u128::from(source_end) * u128::from(music.division)
+        + u128::from(source.division) / 2)
+        / u128::from(source.division);
+    let end = tick
+        .checked_add(u64::try_from(offset).map_err(|_| "Tick overflow")?)
+        .ok_or("Tick overflow")?;
     for note in notes {
         super::insert(&mut destination, note);
+    }
+    if let Some(e) = destination
+        .events
+        .last_mut()
+        .filter(|e| e.status == 0xff && e.meta_type == 0x2f)
+    {
+        e.tick = e.tick.max(end);
+    }
+    if !destination
+        .events
+        .last()
+        .is_some_and(|e| e.status == 0xff && e.meta_type == 0x2f)
+    {
+        destination.events.push(Event {
+            tick: end.max(destination.events.last().map_or(0, |e| e.tick)),
+            delta: 0,
+            status: 0xff,
+            meta_type: 0x2f,
+            data: vec![],
+        });
     }
     super::refresh_deltas(&mut destination)?;
     let mut next = music.clone();

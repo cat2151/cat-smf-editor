@@ -48,6 +48,7 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
             ("i / e / .", "MML・コード進行 / 編集menu / 反復"),
             ("r", "ピアノロール / テンポカーブ"),
             ("左ドラッグ", "A-B repeat"),
+            ("s", "範囲選択 / 範囲menu"),
         ],
     ),
     (Color32::from_rgb(0xae, 0x81, 0xff), &[("w", "2列menu")]),
