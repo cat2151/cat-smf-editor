@@ -9,6 +9,7 @@ use score::Staff;
 
 mod beam;
 mod glyphs;
+mod lyrics;
 mod mml;
 mod notation;
 mod score;
@@ -96,6 +97,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         return;
     };
     let track = app.track;
+    let lyrics = crate::view::note_lyrics::read(loaded, track);
     let cursor = crate::play::playback::location(app).0;
     let playing = crate::play::transport::tick_for(app, track);
     let mut following = Follow::new(ui.ctx(), app.playback.follow, playing);
@@ -306,6 +308,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             for notes in &voices {
                 voice(&staff, &painter, notes, x, shown, beat, ppqn, color);
             }
+            lyrics::draw(&staff, &painter, &lyrics, x, palette.ink);
             if let Some(tick) = playing {
                 painter.vline(
                     x(tick),
@@ -327,7 +330,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         sharps,
         &palette,
     );
-    mml::show(
+    let solo = mml::show(
         ui,
         &mml,
         track,
@@ -342,6 +345,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     }
     if let Some(tick) = clicked {
         crate::view::beat_audition::start(app, app.track, tick);
+    }
+    if let (Some(solo), Some(span)) = (solo, measure) {
+        crate::play::transport::timeline::solo(app, solo, span);
     }
     if let Some(action) = repeat_action {
         repeat::apply(app, action);

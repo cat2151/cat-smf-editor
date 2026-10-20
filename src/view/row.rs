@@ -284,6 +284,9 @@ fn preparing_overlay(ui: &egui::Ui, rect: egui::Rect) {
 }
 
 pub(crate) fn raw_preview(event: &Event) -> String {
+    if readable_meta(event) {
+        return cat_smf_editor::score::event_content::decoded(event);
+    }
     let prefix = raw_prefix(event);
     let bytes = hex(&event.data[..event.data.len().min(24)]);
     format!(
@@ -301,7 +304,16 @@ fn raw_prefix(event: &Event) -> String {
 }
 
 fn raw_full(event: &Event) -> String {
+    if readable_meta(event) {
+        return cat_smf_editor::score::event_content::decoded(event);
+    }
     format!("{} {}", raw_prefix(event), hex(&event.data))
+}
+
+fn readable_meta(event: &Event) -> bool {
+    event.status == 0xff
+        && ((1..=9).contains(&event.meta_type)
+            || (event.meta_type == 0x7f && event.data.starts_with(b"\x7dcat-smf-editor\0")))
 }
 
 fn hex(data: &[u8]) -> String {

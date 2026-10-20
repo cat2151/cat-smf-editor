@@ -56,6 +56,11 @@ pub struct Status {
     pub analysis_window: Option<[f32; 4]>,
     #[serde(default)]
     pub analysis_open: bool,
+    /// VOICEVOX engine の `run.exe`。
+    #[serde(default)]
+    pub voicevox_engine: Option<PathBuf>,
+    #[serde(default)]
+    pub mascot_enabled: bool,
 }
 
 pub struct Store {
@@ -75,6 +80,8 @@ pub struct Store {
     pub patch_cursors: std::collections::BTreeMap<String, PatchIdentity>,
     pub analysis_window: Option<[f32; 4]>,
     pub analysis_open: bool,
+    pub voicevox_engine: Option<PathBuf>,
+    pub mascot_enabled: bool,
     pub error: Option<String>,
 }
 
@@ -96,6 +103,8 @@ impl Default for Status {
             patch_cursors: Default::default(),
             analysis_window: None,
             analysis_open: false,
+            voicevox_engine: None,
+            mascot_enabled: false,
         }
     }
 }
@@ -118,6 +127,8 @@ impl Default for Store {
             patch_cursors: Default::default(),
             analysis_window: None,
             analysis_open: false,
+            voicevox_engine: None,
+            mascot_enabled: false,
             error: None,
         }
     }
@@ -170,6 +181,8 @@ impl Store {
                     patch_cursors,
                     analysis_window,
                     analysis_open,
+                    voicevox_engine,
+                    mascot_enabled,
                 }) => {
                     store.navigation = navigation;
                     store.session = session;
@@ -184,6 +197,8 @@ impl Store {
                         window.iter().all(|n| n.is_finite()) && window[2] > 0.0 && window[3] > 0.0
                     });
                     store.analysis_open = analysis_open;
+                    store.voicevox_engine = voicevox_engine;
+                    store.mascot_enabled = mascot_enabled;
                 }
                 Err(error) => {
                     store.error = Some(format!("Cannot read {}: {error}", path.display()))
@@ -274,6 +289,20 @@ impl Store {
         }
     }
 
+    pub fn select_voicevox_engine(&mut self, path: PathBuf) {
+        if self.voicevox_engine.as_ref() != Some(&path) {
+            self.voicevox_engine = Some(path);
+            self.persist();
+        }
+    }
+
+    pub fn select_mascot_enabled(&mut self, enabled: bool) {
+        if self.mascot_enabled != enabled {
+            self.mascot_enabled = enabled;
+            self.persist();
+        }
+    }
+
     pub(crate) fn persist(&mut self) {
         if self.read_failed {
             return;
@@ -307,6 +336,8 @@ impl Store {
                 patch_cursors: self.patch_cursors.clone(),
                 analysis_window: self.analysis_window,
                 analysis_open: self.analysis_open,
+                voicevox_engine: self.voicevox_engine.clone(),
+                mascot_enabled: self.mascot_enabled,
             })?;
             // Keep the previous status intact until the replacement is complete.
             use std::io::Write;

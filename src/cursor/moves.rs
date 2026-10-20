@@ -93,10 +93,13 @@ fn audition(app: &mut App, chord: bool) {
     });
     if pitches.is_empty() {
         app.audition.stop();
-    } else {
-        app.audition
-            .play_track(app.track, &loaded.patches[app.track], &pitches);
+        return;
     }
+    let tick = app.selected_event.map(|i| events[i].tick);
+    let take = tick.and_then(|tick| crate::play::sung::audition::cursor(app, app.track, tick));
+    let loaded = app.loaded.as_ref().unwrap();
+    app.audition
+        .play_track(app.track, &loaded.patches[app.track], &pitches, take);
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {

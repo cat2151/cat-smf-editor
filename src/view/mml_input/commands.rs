@@ -1,6 +1,6 @@
 use super::*;
 use crate::view::commands::{Command, Screen};
-pub(crate) fn collect(_a: &App, s: Screen, out: &mut Vec<Command>) {
+pub(crate) fn collect(_: &App, s: Screen, out: &mut Vec<Command>) {
     if s != Screen::Mml {
         return;
     }

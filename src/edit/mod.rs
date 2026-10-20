@@ -1,5 +1,6 @@
 //! 読み込んだ SMF への編集。どの編集も触れたイベント以外の tick を変えない。
 pub mod event_range;
+pub mod lyric;
 pub mod mml;
 pub mod note_length;
 pub mod note_move;

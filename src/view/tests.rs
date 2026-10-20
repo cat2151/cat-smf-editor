@@ -15,6 +15,7 @@ pub(crate) fn app(music: Music) -> App {
         .map(|(i, t)| format!("Track {} · {} events", i + 1, t.events.len()))
         .collect();
     App {
+        mascot: Default::default(),
         startup: Default::default(),
         opening: Default::default(),
         palette: Default::default(),
@@ -35,6 +36,7 @@ pub(crate) fn app(music: Music) -> App {
         settings_error: None,
         config: crate::store::config::Store::default(),
         comma_menu: crate::view::comma_menu::State::default(),
+        voicevox: Default::default(),
         analysis: crate::view::analysis::State::default(),
         event_selection: Default::default(),
         mml_input: Default::default(),

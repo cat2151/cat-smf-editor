@@ -8,6 +8,7 @@ pub enum Task {
     New,
     AddTrack,
     MmlInput,
+    MmlMeasure,
     MmlConfirm,
     Close,
 }
@@ -53,7 +54,8 @@ pub fn run(app: &mut App, ctx: &egui::Context) {
                 app.load_error = Some(error);
             }
         }
-        Task::MmlInput => super::mml_input::open(app, ctx),
+        Task::MmlInput => super::mml_input::open(app, ctx, false),
+        Task::MmlMeasure => super::mml_input::open(app, ctx, true),
         Task::MmlConfirm => super::mml_input::ready_to_confirm(app),
         Task::Close => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
     }

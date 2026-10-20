@@ -13,6 +13,7 @@ pub mod startup_trace;
 pub mod storage_paths;
 #[path = "../../cat-plugin-player/shared/surge_data_home.rs"]
 pub mod surge_data_home;
+pub mod voicevox;
 
 #[path = "../../cat-plugin-player/shared/smf.rs"]
 pub mod smf;

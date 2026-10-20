@@ -4,7 +4,8 @@ use crate::{
     app::App,
     play::{
         audio_sequence::Sequence,
-        audition::offline::{Instruments, CHANNELS},
+        audition::offline::{without_plugins, Instruments},
+        sung::{audition::stored, Take},
     },
 };
 use cat_smf_editor::{
@@ -46,6 +47,9 @@ struct Known {
 
 struct Range {
     parts: Vec<(usize, Patch, Sequence)>,
+    /// Singers whose song is already sung on disk; other singers keep their instruments.
+    takes: Vec<(usize, Arc<Take>)>,
+    rate: u32,
     gains: Vec<f32>,
     master: master_effects::Settings,
     states: Cache,
@@ -182,6 +186,8 @@ fn load(
     player: Option<PathBuf>,
     roots: crate::player::patch_roots::Cache,
     states: Cache,
+    rate: u32,
+    voices: Option<PathBuf>,
 ) -> Result<Range, String> {
     let mut preview = App::empty();
     preview.player_selection.executable = player;
@@ -193,21 +199,25 @@ fn load(
     }
     let range = first_measure(&preview).ok_or("No notes")?;
     let prepared = crate::play::transport::repeat::prepare(&preview, range).ok_or("No notes")?;
-    let tracks = preview.loaded.as_ref().map_or(0, |l| l.music.tracks.len());
+    let music = &preview.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+    let tracks = music.tracks.len();
+    let takes = voices.map_or_else(Vec::new, |directory| {
+        stored(
+            music,
+            &prepared.parts,
+            prepared.active.start_seconds,
+            rate,
+            &directory,
+        )
+    });
     Ok(Range {
         parts: prepared.parts,
+        takes,
+        rate,
         gains: (0..tracks).map(|t| preview.audition.gain(t)).collect(),
         master: preview.audition.master().clone(),
         states: preview.state_cache,
     })
-}
-
-fn output_rate() -> u32 {
-    use cpal::traits::{DeviceTrait, HostTrait};
-    cpal::default_host()
-        .default_output_device()
-        .and_then(|d| d.default_output_config().ok())
-        .map_or(48000, |c| c.sample_rate().0)
 }
 
 /// Opens the plugins here and renders on a worker thread.
@@ -218,35 +228,48 @@ fn render(
     cancel: Arc<AtomicBool>,
 ) -> Result<Phase, String> {
     app.state_cache.absorb(range.states);
-    let disabled = app.audition.is_disabled();
-    let rate = if disabled { 48000 } else { output_rate() };
-    let instruments = if disabled {
+    let rate = range.rate;
+    let instruments = if app.audition.is_disabled() {
         None
     } else {
         Some(Instruments::open(rate, &range.parts, &range.master)?)
     };
-    let frames = range
-        .parts
-        .iter()
-        .map(|(_, _, s)| s.end)
-        .fold(0.0, f64::max);
-    let silent = (frames * f64::from(rate)).round() as usize * CHANNELS;
-    // SAFETY: Work joins this thread before dropping the instruments.
-    let job = instruments.as_ref().map(|i| unsafe {
-        i.job(
-            rate,
-            range.parts,
-            &range.gains,
-            !app.audition.auto_gain_enabled(),
-        )
-    });
+    let job = match &instruments {
+        // SAFETY: Work joins this thread before dropping the instruments.
+        Some(instruments) => unsafe {
+            instruments.job(
+                rate,
+                range.parts,
+                &range.gains,
+                !app.audition.auto_gain_enabled(),
+                range.takes,
+            )
+        },
+        None => {
+            let mut takes = range.takes;
+            let gains = range
+                .parts
+                .iter()
+                .map(|(track, _, _)| range.gains.get(*track).copied().unwrap_or(1.0))
+                .collect();
+            let parts = range
+                .parts
+                .into_iter()
+                .map(|(track, _, sequence)| {
+                    let take = takes
+                        .iter()
+                        .position(|(t, _)| *t == track)
+                        .map(|i| takes.swap_remove(i).1);
+                    (sequence, take)
+                })
+                .collect();
+            without_plugins(rate, parts, gains)
+        }
+    };
     let thread = std::thread::Builder::new()
         .name("recent-render".into())
         .spawn(move || {
-            let samples = match job {
-                Some(job) => job.run(&cancel)?,
-                None => Ok(vec![0.0; silent]),
-            };
+            let samples = job.run(&cancel)?;
             Some(samples.and_then(|s| crate::play::wav::write(&wav, rate, &s)))
         })
         .map_err(|e| e.to_string())?;
@@ -351,6 +374,12 @@ pub(crate) fn update(app: &mut App, ctx: &egui::Context) {
     };
     let roots = app.patch_roots.detached();
     let states = app.state_cache.clone();
+    let rate = if app.audition.is_disabled() {
+        48000
+    } else {
+        crate::play::audition::output_rate()
+    };
+    let voices = crate::play::sung::prerender::directory(app);
     let (sender, receiver) = mpsc::channel();
     let wake = ctx.clone();
     let worker_path = path.clone();
@@ -358,7 +387,7 @@ pub(crate) fn update(app: &mut App, ctx: &egui::Context) {
     let spawn = std::thread::Builder::new()
         .name("recent-prefetch".into())
         .spawn(move || {
-            let _ = sender.send(load(worker_path, player, roots, states));
+            let _ = sender.send(load(worker_path, player, roots, states, rate, voices));
             wake.request_repaint();
         });
     if spawn.is_ok() {

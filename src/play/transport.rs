@@ -115,11 +115,16 @@ pub fn jump(app: &mut App, tick: u64) {
 
 // Prepare the audio device after the start request's frame can be painted.
 pub fn advance(app: &mut App) {
-    if let Some(prepared) = app.playback.pending.take()
-        && app.audition.sequences(prepared.parts)
-        && prepared.active.end > 0.0
-    {
-        app.playback.active = Some(prepared.active);
+    if let Some(prepared) = app.playback.pending.take() {
+        match crate::play::sung::prerender::takes(app, &prepared) {
+            // Still preparing: the singer's WAV is being made in the background.
+            None => app.playback.pending = Some(prepared),
+            Some(takes) => {
+                if app.audition.sequences(prepared.parts, takes) && prepared.active.end > 0.0 {
+                    app.playback.active = Some(prepared.active);
+                }
+            }
+        }
     }
     if let Some(active) = &app.playback.active
         && app.audition.seconds().is_none_or(|s| s >= active.end)

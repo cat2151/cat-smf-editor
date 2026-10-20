@@ -118,7 +118,7 @@ fn mml_enter_paints_before_confirming_on_the_sixth_track() {
     assert_eq!(app.track, 5);
     app.undo.clear();
     let ctx = egui::Context::default();
-    crate::view::mml_input::open(&mut app, &ctx);
+    crate::view::mml_input::open(&mut app, &ctx, false);
     app.mml_input.buffer = "c1".into();
     press(&mut app, &ctx, Key::ArrowRight, Modifiers::NONE);
     let output = press(&mut app, &ctx, Key::Enter, Modifiers::NONE);
@@ -148,7 +148,7 @@ fn mml_enter_paints_before_confirming_on_the_sixth_track() {
 fn failed_mml_confirmation_removes_waiting_overlay() {
     let mut app = crate::view::tests::app(cat_smf_editor::edit::tracks::new_song());
     let ctx = egui::Context::default();
-    crate::view::mml_input::open(&mut app, &ctx);
+    crate::view::mml_input::open(&mut app, &ctx, false);
     press(&mut app, &ctx, Key::ArrowRight, Modifiers::NONE);
     assert!(waiting(&press(&mut app, &ctx, Key::Enter, Modifiers::NONE)));
     let output = press(&mut app, &ctx, Key::ArrowRight, Modifiers::NONE);

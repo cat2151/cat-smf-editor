@@ -163,6 +163,13 @@ pub(crate) fn seek(app: &mut App, track: usize, tick: u64) {
     replace(app, prepared);
 }
 
+/// Stops everything, then plays `track` alone over `start..end`, timed by the current track.
+pub(crate) fn solo(app: &mut App, track: usize, (start, end): (u64, u64)) {
+    super::stop(app);
+    let prepared = prepare(app, start, end, &[track], Mode::Measure, app.track);
+    replace(app, prepared);
+}
+
 pub(crate) fn audition(app: &mut App, track: usize, tick: u64) {
     let tracks: Vec<_> = (0..app.loaded.as_ref().map_or(0, |l| l.music.tracks.len())).collect();
     let mode = match app.playback.last {

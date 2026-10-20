@@ -1,4 +1,5 @@
 use super::*;
+mod measure;
 mod positioning;
 mod repeat;
 use cat_smf_editor::{
@@ -50,7 +51,7 @@ fn chord_key_prefix_preserves_typing_cursor_preview_confirm_and_cancel() {
         smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap(),
         before
     );
-    open(&mut app, &ctx);
+    open(&mut app, &ctx, false);
     frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![egui::Event::Text("I".into())]);
     frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
@@ -386,7 +387,7 @@ fn whole_note_confirm_advances_to_next_measure_and_next_insertion() {
     frame(&mut app, &ctx, vec![]);
     assert_eq!(crate::play::playback::location(&app).0, 1920);
     assert_eq!(crate::play::playback::location(&app).1.unwrap().measure, 2);
-    open(&mut app, &ctx);
+    open(&mut app, &ctx, false);
     assert_eq!(app.mml_input.tick, 1920);
 }
 

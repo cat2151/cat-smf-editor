@@ -185,3 +185,141 @@ fn first_frame_shortcut_sees_completed_display_indexes() {
     assert!(app.palette.is_open());
     assert!(!app.loaded.as_ref().unwrap().display_rows.is_empty());
 }
+
+#[test]
+fn singer_wait_restores_ui_without_audio_timeout_and_paints_first_frame_progress() {
+    fn slow_sing(_: &str, _: u32) -> Result<Vec<u8>, String> {
+        std::thread::sleep(Duration::from_secs(1));
+        Err("test synthesis failure".into())
+    }
+    let (root, path) = fixture();
+    let mut music = smf_io::load(&path).unwrap();
+    cat_smf_editor::voicevox::make_singer(&mut music.tracks[0]).unwrap();
+    std::fs::write(&path, smf_io::encode(&music).unwrap()).unwrap();
+    let configured = PathBuf::from("X:/VOICEVOX/run.exe");
+    let mut config = Store::open(root.path().join("status.json"));
+    config.voicevox_engine = Some(configured.clone());
+    config.persist();
+    let mut app = App::empty();
+    app.audition = Audition::disabled();
+    app.saved = store::saved::Document::new(Some(root.path().into()));
+    app.voicevox.prerender.target = Some((0, root.path().join("voice")));
+    app.voicevox.prerender.sing = Some(slow_sing);
+    let mut app = App::bootstrap_with(app, None, None, Some(root.path().into()));
+    assert!(crate::play::sung::prerender::running(&app));
+    assert_eq!(app.config.voicevox_engine, Some(configured));
+    app.startup.started = Some(Instant::now() - Duration::from_secs(61));
+    let ctx = egui::Context::default();
+    let output = ctx.run(Default::default(), |ctx| crate::view::show(&mut app, ctx));
+    assert!(!app.startup.pending);
+    assert!(app.playback.pending.is_some());
+    assert!(app.load_error.is_none());
+    assert!(output.shapes.iter().any(|shape| matches!(&shape.shape,
+        egui::epaint::Shape::Text(text) if text.galley.text() == "Preparing VOICEVOX audio…"
+            && text.pos.x < 100.0 && text.pos.y < 100.0)));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while app.playback.pending.is_some() {
+        assert!(Instant::now() < deadline);
+        transport::advance(&mut app);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(crate::play::sung::prerender::progress(&app).is_none());
+    assert!(app.playback.active.is_some());
+}
+
+#[test]
+fn mascot_toggle_restores_on_and_off_after_restart_and_explicit_file_open() {
+    let (root, path) = fixture();
+    let mut app = boot(root.path(), None);
+    app.audition.set_test_seconds(0.1);
+    app.startup_pending(&egui::Context::default());
+    assert!(!app.mascot.enabled);
+    crate::play::mascot::toggle(&mut app);
+    assert!(app.mascot.enabled);
+    assert!(app.config.error.is_none());
+    drop(app);
+    for mid in [None, Some(path.clone())] {
+        let mut restarted = boot(root.path(), mid);
+        restarted.audition.set_test_seconds(0.1);
+        restarted.startup_pending(&egui::Context::default());
+        assert!(restarted.mascot.enabled);
+        assert!(restarted.config.mascot_enabled);
+        assert_eq!(restarted.config.browser_queries["kept"], "organ");
+        assert!(restarted.config.error.is_none());
+    }
+    let mut app = boot(root.path(), None);
+    app.audition.set_test_seconds(0.1);
+    app.startup_pending(&egui::Context::default());
+    crate::play::mascot::toggle(&mut app);
+    assert!(!app.mascot.enabled);
+    drop(app);
+    let mut restarted = boot(root.path(), None);
+    restarted.audition.set_test_seconds(0.1);
+    restarted.startup_pending(&egui::Context::default());
+    assert!(!restarted.mascot.enabled);
+    assert!(!restarted.config.mascot_enabled);
+}
+
+#[test]
+#[ignore = "requires REAL_MASCOT_STATUS_PATH; checks real settings without audio or windows"]
+fn real_mascot_status_preserves_settings_across_on_off_and_restarts() {
+    let path = PathBuf::from(std::env::var_os("REAL_MASCOT_STATUS_PATH").unwrap());
+    let original = std::fs::read(&path).unwrap();
+    struct Restore(Vec<(PathBuf, Option<Vec<u8>>)>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            for (path, bytes) in &self.0 {
+                if let Some(bytes) = bytes {
+                    std::fs::write(path, bytes).expect("restore original real settings bytes");
+                } else if path.exists() {
+                    std::fs::remove_file(path).expect("remove test-created history file");
+                }
+            }
+        }
+    }
+    let recent_path = path.with_file_name("recent-files.json");
+    let _restore = Restore(vec![
+        (path.clone(), Some(original.clone())),
+        (recent_path.clone(), std::fs::read(recent_path).ok()),
+    ]);
+    let baseline: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    let startup_path = path.with_file_name("startup.json");
+    let startup_bytes = std::fs::read(&startup_path).unwrap();
+    let mid = PathBuf::from(baseline["navigation"]["last_mid"].as_str().unwrap());
+    let midi_bytes = std::fs::read(&mid).unwrap();
+    let restore_app = || {
+        let mut app = crate::view::tests::app(smf_io::load(&mid).unwrap());
+        app.loaded.as_mut().unwrap().original = mid.clone();
+        app.loaded.as_mut().unwrap().name = baseline["session"]["file"].as_str().unwrap().into();
+        app.config.path = Some(path.clone());
+        app.startup.pending = true;
+        app.startup.restore_position = true;
+        assert!(!app.startup_pending(&egui::Context::default()));
+        assert!(app.config.error.is_none());
+        app
+    };
+    let mut app = restore_app();
+    assert_eq!(
+        app.mascot.enabled,
+        baseline["mascot_enabled"].as_bool().unwrap()
+    );
+    for desired in [false, true] {
+        if app.mascot.enabled != desired {
+            crate::play::mascot::toggle(&mut app);
+        }
+        assert!(app.config.error.is_none());
+        drop(app);
+        app = restore_app();
+        assert_eq!(app.mascot.enabled, desired);
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        for (key, value) in baseline.as_object().unwrap() {
+            if key != "mascot_enabled" {
+                assert_eq!(&saved[key], value, "unrelated setting changed: {key}");
+            }
+        }
+    }
+    drop(app);
+    assert_eq!(std::fs::read(startup_path).unwrap(), startup_bytes);
+    assert_eq!(std::fs::read(mid).unwrap(), midi_bytes);
+}

@@ -3,6 +3,18 @@ use crate::app::Loaded;
 use cat_smf_editor::score::instrument::ResolvedLayer;
 use eframe::egui::{self, Color32, RichText};
 
+pub(super) fn open(app: &mut crate::app::App) {
+    let singer = app
+        .loaded
+        .as_ref()
+        .is_some_and(|loaded| cat_smf_editor::voicevox::is_singer(&loaded.music.tracks[app.track]));
+    if singer {
+        crate::view::voicevox::singer::open(app);
+    } else {
+        crate::view::layers::open(app);
+    }
+}
+
 pub(super) fn show(loaded: &Loaded, parent: &mut egui::Ui, track: usize) -> (bool, Option<usize>) {
     let mut patch = false;
     let mut effect = None;
@@ -20,13 +32,28 @@ pub(super) fn show(loaded: &Loaded, parent: &mut egui::Ui, track: usize) -> (boo
     ui.set_clip_rect(line.intersect(ui.clip_rect()));
     ui.label(RichText::new(&loaded.track_titles[track]).strong());
     let layers = &loaded.patches[track].layers;
-    let hover = layers
-        .iter()
-        .map(|l| l.label())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let voice = cat_smf_editor::voicevox::Voice::read(&loaded.music.tracks[track]);
+    let hover = voice.as_ref().map_or_else(
+        || {
+            layers
+                .iter()
+                .map(|l| l.label())
+                .collect::<Vec<_>>()
+                .join("\n")
+        },
+        |v| v.label(),
+    );
+    let names = if voice.is_some() {
+        egui::text::LayoutJob::simple_singleline(
+            hover.clone(),
+            egui::TextStyle::Button.resolve(ui.style()),
+            ui.visuals().text_color(),
+        )
+    } else {
+        layer_names(ui, layers)
+    };
     if ui
-        .button(layer_names(ui, layers))
+        .button(names)
         .on_hover_text(if hover.is_empty() { "—" } else { &hover })
         .clicked()
     {

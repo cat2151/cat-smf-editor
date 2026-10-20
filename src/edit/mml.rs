@@ -24,6 +24,88 @@ pub fn insert(
     channel: u8,
     input: &str,
 ) -> Result<u64, String> {
+    insert_smf(music, track, tick, channel, &source(input)?)
+}
+
+/// Like [`insert`], but the phrase overwrites the track's notes under it, rests
+/// included: a note starting inside the phrase is removed, and a note sounding
+/// into it from earlier ends where the phrase starts.
+pub fn replace(
+    music: &mut Music,
+    track: usize,
+    tick: u64,
+    channel: u8,
+    input: &str,
+) -> Result<u64, String> {
+    let source = source(input)?;
+    let end = phrase_tick(music, tick, &source)?;
+    let mut next = music.clone();
+    let destination = next.tracks.get_mut(track).ok_or("Invalid track")?;
+    clear(destination, tick, end)?;
+    if source.tracks.iter().flat_map(|t| &t.events).any(note_on) {
+        insert_smf(&mut next, track, tick, channel, &source)?;
+    } else {
+        crate::smf_io::encode(&next)?;
+    }
+    *music = next;
+    Ok(end)
+}
+
+/// Overwrite exactly one measure, preserving notes and events outside it.
+pub fn replace_measure(
+    music: &mut Music,
+    track: usize,
+    range: (u64, u64),
+    channel: u8,
+    input: &str,
+) -> Result<(), String> {
+    let source = source(input)?;
+    if phrase_tick(music, range.0, &source)? > range.1 {
+        return Err("MMLが1小節を超えています".into());
+    }
+    let mut next = music.clone();
+    clear(
+        next.tracks.get_mut(track).ok_or("Invalid track")?,
+        range.0,
+        range.1,
+    )?;
+    if source.tracks.iter().flat_map(|t| &t.events).any(note_on) {
+        insert_smf(&mut next, track, range.0, channel, &source)?;
+    }
+    *music = next;
+    Ok(())
+}
+
+fn clear(track: &mut Track, start: u64, end: u64) -> Result<(), String> {
+    let pairs = super::relocate::pairs(track.events.iter());
+    let mut remove = vec![false; track.events.len()];
+    for (on, off) in pairs.iter().enumerate() {
+        if note_on(&track.events[on]) && (start..end).contains(&track.events[on].tick) {
+            remove[on] = true;
+            if let Some(off) = *off {
+                remove[off] = true;
+            }
+        }
+    }
+    let mut i = 0;
+    track.events.retain(|_| {
+        let keep = !remove[i];
+        i += 1;
+        keep
+    });
+    // Each move reorders events, so pair again after every one.
+    while let Some(off) = super::relocate::pairs(track.events.iter())
+        .into_iter()
+        .enumerate()
+        .filter(|&(on, _)| note_on(&track.events[on]) && track.events[on].tick < start)
+        .find_map(|(_, off)| off.filter(|&off| track.events[off].tick > start))
+    {
+        super::relocate::relocate(track, off, start)?;
+    }
+    super::refresh_deltas(track)
+}
+
+fn source(input: &str) -> Result<Music, String> {
     let (bytes, _) = crate::mml::to_smf(input)?;
     let mut source = crate::ffi::parse(&bytes)?;
     // SMF drops trailing rests. Ask the same converter for each channel's final
@@ -36,7 +118,30 @@ pub fn insert(
     {
         e.tick = e.tick.max(end);
     }
-    insert_smf(music, track, tick, channel, &source)
+    Ok(source)
+}
+
+/// The tick in `music` where `source` placed at `tick` ends.
+fn phrase_tick(music: &Music, tick: u64, source: &Music) -> Result<u64, String> {
+    if music.division == 0
+        || source.division == 0
+        || music.division & 0x8000 != 0
+        || source.division & 0x8000 != 0
+    {
+        return Err("MML insertion requires ticks per quarter note".into());
+    }
+    let source_end = source
+        .tracks
+        .iter()
+        .flat_map(|t| &t.events)
+        .map(|e| e.tick)
+        .max()
+        .unwrap_or(0);
+    let offset = (u128::from(source_end) * u128::from(music.division)
+        + u128::from(source.division) / 2)
+        / u128::from(source.division);
+    tick.checked_add(u64::try_from(offset).map_err(|_| "Tick overflow")?)
+        .ok_or_else(|| "Tick overflow".into())
 }
 
 fn phrase_end(input: &str) -> u64 {
@@ -75,13 +180,7 @@ pub fn insert_smf(
     if channel > 15 {
         return Err("Invalid MIDI channel".into());
     }
-    if music.division == 0
-        || source.division == 0
-        || music.division & 0x8000 != 0
-        || source.division & 0x8000 != 0
-    {
-        return Err("MML insertion requires ticks per quarter note".into());
-    }
+    let end = phrase_tick(music, tick, source)?;
     let mut destination = music.tracks.get(track).ok_or("Invalid track")?.clone();
     let mut notes = Vec::new();
     for event in source.tracks.iter().flat_map(|t| &t.events) {
@@ -105,19 +204,6 @@ pub fn insert_smf(
     }
     // Preserve source order for simultaneous events, including zero-length notes.
     notes.sort_by_key(|e| e.tick);
-    let source_end = source
-        .tracks
-        .iter()
-        .flat_map(|t| &t.events)
-        .map(|e| e.tick)
-        .max()
-        .unwrap_or(0);
-    let offset = (u128::from(source_end) * u128::from(music.division)
-        + u128::from(source.division) / 2)
-        / u128::from(source.division);
-    let end = tick
-        .checked_add(u64::try_from(offset).map_err(|_| "Tick overflow")?)
-        .ok_or("Tick overflow")?;
     for note in notes {
         super::insert(&mut destination, note);
     }

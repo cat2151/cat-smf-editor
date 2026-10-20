@@ -93,7 +93,8 @@ impl crate::app::App {
             return;
         };
         // Let input commits, pointer gestures, confirmations and native browsers finish first.
-        let busy = self.mml_input.open
+        let busy = self.voicevox.singer.is_some()
+            || self.mml_input.open
             || ctx.wants_keyboard_input()
             || ctx.input(|i| {
                 i.pointer.any_down() || i.pointer.any_released() || i.viewport().close_requested()

@@ -117,6 +117,7 @@ fn owner_definitions_have_unique_bindings_and_dynamic_track_choices() {
         Screen::Recent,
         Screen::Confirm,
         Screen::Note,
+        Screen::Lyrics,
         Screen::Mml,
         Screen::Trill,
         Screen::Timeline,

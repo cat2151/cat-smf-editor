@@ -57,6 +57,7 @@ impl crate::app::App {
             ("player", self.player_selection.error.as_deref()),
             ("audio", self.audition.error()),
             ("save", self.saved.error.as_deref()),
+            ("voicevox", self.voicevox.error.as_deref()),
         ] {
             self.error_log.observe(category, error);
         }

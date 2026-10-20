@@ -1,4 +1,4 @@
-//! Note insertion overlay. Input changes paint a preparation message before
+//! Note insertion overlay for MML and chord progressions. Input changes paint a preparation message before
 //! updating the song and opening plugins for cursor audition or A–B playback.
 use crate::app::App;
 use cat_smf_editor::{
@@ -29,13 +29,15 @@ pub struct State {
     cursor_tick: Option<u64>,
     /// A repeat editing session never replaces transport audio with cursor audition.
     repeat_session: bool,
+    /// The measure whose notes the phrase overwrites; without one, it pushes them later.
+    pub(crate) measure: Option<(u64, u64)>,
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
     crate::view::commands::route(app, ctx);
 }
 
-pub fn open(app: &mut App, ctx: &egui::Context) {
+pub fn open(app: &mut App, ctx: &egui::Context, overwrite: bool) {
     let Some(loaded) = app.loaded.as_ref() else {
         return;
     };
@@ -63,6 +65,7 @@ pub fn open(app: &mut App, ctx: &egui::Context) {
         cursor_tick: app.track_view.cursor_tick,
         repeat_session: app.playback.repeat.is_some()
             && crate::play::transport::timeline::running(app),
+        measure: overwrite.then(|| app.mml_input.measure.take()).flatten(),
         ..Default::default()
     };
     if !app.mml_input.repeat_session {
@@ -199,8 +202,12 @@ fn audition(app: &mut App, state: &State, request: Option<Option<cat_smf_editor:
                     )
                 })
                 .collect();
+            // A singer sings only the top note, as in playback.
+            let take = notes.last().and_then(|&(pitch, _, seconds)| {
+                crate::play::sung::audition::note(app, state.track, pitch, seconds?)
+            });
             let patch = &app.loaded.as_ref().unwrap().patches[state.track];
-            app.audition.play_track(state.track, patch, &notes);
+            app.audition.play_track(state.track, patch, &notes, take);
         } else {
             app.audition.stop();
         }
@@ -211,7 +218,12 @@ fn audition(app: &mut App, state: &State, request: Option<Option<cat_smf_editor:
 /// and the tick where the insertion ends.
 fn inserted(state: &State) -> Result<(Music, u64), String> {
     let mut music = state.base.clone().ok_or("No SMF is loaded")?;
-    let end = cat_smf_editor::edit::mml::insert(
+    let edit = if state.measure.is_some() {
+        cat_smf_editor::edit::mml::replace
+    } else {
+        cat_smf_editor::edit::mml::insert
+    };
+    let end = edit(
         &mut music,
         state.track,
         state.tick,
@@ -232,13 +244,15 @@ fn preview(app: &mut App, state: &mut State) {
     if cat_smf_editor::smf_io::encode(current) == cat_smf_editor::smf_io::encode(&music) {
         return;
     }
-    if let Err(error) = app.apply_music(music) {
-        state.error = Some(error);
+    match app.apply_music(music) {
+        Ok(()) => measure::follow(app, state),
+        Err(error) => state.error = Some(error),
     }
 }
 
 pub(crate) mod commands;
 mod editor;
 mod key_prefix;
+pub(crate) mod measure;
 #[cfg(test)]
 mod tests;

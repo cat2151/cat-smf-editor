@@ -4,6 +4,33 @@ use cat_smf_editor::{
     smf_io,
 };
 
+#[cfg(windows)]
+#[test]
+fn path_cells_simplify_safe_paths_without_changing_history() {
+    let long = format!(r"\\?\X:\{}\{}\song.mid", "a".repeat(150), "b".repeat(150));
+    for (stored, displayed) in [
+        (r"\\?\X:\音楽\song.mid", r"X:\音楽\song.mid"),
+        (r"X:\music\song.mid", r"X:\music\song.mid"),
+        (long.as_str(), long.as_str()),
+        (r"\\?\X:\music.\song.mid", r"\\?\X:\music.\song.mid"),
+        (r"\\?\X:\NUL.mid", r"\\?\X:\NUL.mid"),
+        (
+            r"\\?\UNC\server\share\song.mid",
+            r"\\?\UNC\server\share\song.mid",
+        ),
+    ] {
+        let entry = Entry {
+            path: stored.into(),
+            opened: 0,
+            title: String::new(),
+            seconds: 0.0,
+            tracks: 1,
+        };
+        assert_eq!(cells(&entry, 0, 0)[6], displayed);
+        assert_eq!(entry.path, std::path::Path::new(stored));
+    }
+}
+
 pub(super) fn music() -> Music {
     Music {
         format: 0,

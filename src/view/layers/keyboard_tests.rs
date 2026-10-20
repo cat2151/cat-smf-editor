@@ -233,6 +233,61 @@ fn header_click_opens_layers_for_the_clicked_split_pane_without_top_button() {
 }
 
 #[test]
+fn singer_header_click_opens_voice_picker_for_the_clicked_pane() {
+    use cat_smf_editor::voicevox::Voice;
+    for split in [false, true] {
+        let mut app = fixture();
+        let target = usize::from(split);
+        Voice::write(
+            &mut app.loaded.as_mut().unwrap().music.tracks[target],
+            Some(&Voice::default()),
+        )
+        .unwrap();
+        app.voicevox.catalog.fixture = Some(vec![Voice::default()]);
+        app.track_view.split = split.then_some([0, 1]);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let output = frame(&mut app, &ctx, vec![]);
+        let label = Voice::default().label();
+        let pos = output
+            .shapes
+            .iter()
+            .find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text() == label => {
+                    Some(t.pos + t.galley.size() * 0.5)
+                }
+                _ => None,
+            })
+            .expect("singer header");
+        for pressed in [true, false] {
+            frame(
+                &mut app,
+                &ctx,
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    },
+                ],
+            );
+        }
+        assert_eq!(app.track, target);
+        assert_eq!(app.track_view.active, target);
+        assert!(app.voicevox.singer.is_some());
+        assert!(!app.layer_editor.open);
+        press(&mut app, &ctx, egui::Key::Escape);
+        assert!(app.voicevox.singer.is_none());
+        assert_eq!(
+            Voice::read(&app.loaded.as_ref().unwrap().music.tracks[target]),
+            Some(Voice::default())
+        );
+    }
+}
+
+#[test]
 fn shift_t_does_not_escape_other_overlays_or_text_input() {
     let mut app = fixture();
     let ctx = egui::Context::default();

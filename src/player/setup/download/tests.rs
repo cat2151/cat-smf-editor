@@ -43,6 +43,10 @@ fn desktop_license_keeps_existing_content_and_reuses_identical_notice() {
     let first = preserve_license(source.path(), desktop.path()).unwrap();
     assert_eq!(first.file_name().unwrap(), LICENSE_NAME);
     assert_eq!(
+        first.parent().unwrap(),
+        desktop.path().join(LICENSE_DIRECTORY)
+    );
+    assert_eq!(
         preserve_license(source.path(), desktop.path()).unwrap(),
         first
     );
@@ -61,7 +65,8 @@ fn desktop_license_keeps_existing_content_and_reuses_identical_notice() {
         preserve_license(source.path(), desktop.path()).unwrap(),
         other
     );
-    assert_eq!(fs::read_dir(desktop.path()).unwrap().count(), 2);
+    assert_eq!(fs::read_dir(desktop.path()).unwrap().count(), 1);
+    assert_eq!(fs::read_dir(first.parent().unwrap()).unwrap().count(), 2);
 }
 
 #[test]
@@ -80,7 +85,7 @@ fn compatible_local_release_extracts_publishes_and_preserves_editor_license() {
     validate_player(&installed).unwrap();
     assert_eq!(fs::read(installed).unwrap(), executable);
     assert_eq!(
-        fs::read(desktop.path().join(LICENSE_NAME)).unwrap(),
+        fs::read(desktop.path().join(LICENSE_DIRECTORY).join(LICENSE_NAME)).unwrap(),
         license
     );
     assert_eq!(
@@ -112,7 +117,11 @@ fn published_release_is_checked_before_installing() {
         fs::read(temp.path().join("LICENSE")).unwrap(),
         b"editor license"
     );
-    assert!(desktop.path().join(LICENSE_NAME).is_file());
+    assert!(desktop
+        .path()
+        .join(LICENSE_DIRECTORY)
+        .join(LICENSE_NAME)
+        .is_file());
     assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 2);
     let output = std::process::Command::new(exe)
         .arg("--help")

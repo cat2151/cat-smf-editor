@@ -13,6 +13,7 @@ pub(crate) mod layers;
 mod meta_text;
 pub(crate) mod mml_input;
 pub(crate) mod note_edit;
+mod note_lyrics;
 pub(crate) mod opening;
 pub(crate) mod palette;
 pub(crate) mod piano_roll;
@@ -35,6 +36,7 @@ mod track_map;
 mod track_pane;
 pub(crate) mod trill_edit;
 mod undo;
+pub(crate) mod voicevox;
 
 use crate::app::App;
 use eframe::egui::{self, Color32, ScrollArea};
@@ -47,10 +49,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     opening::advance(app, ctx);
+    crate::play::sung::prerender::poll(app, ctx);
+    voicevox::singer::poll(app, ctx);
     let opening_input = opening::suspend_input(app, ctx);
     let palette_input = palette::begin(app, ctx);
     if crate::player::setup::show(app, ctx) {
         crate::play::transport::advance(app);
+        crate::play::mascot::update(app);
         app.audition.pump();
         palette::end(app, ctx, palette_input);
         return;
@@ -65,6 +70,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     {
         crate::play::transport::advance(app);
     }
+    crate::play::mascot::update(app);
     show_contents(app, ctx);
     if app.palette.is_open() {
         app.audition.pump();
@@ -77,6 +83,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     title::update(app, ctx);
     palette::end(app, ctx, palette_input);
     opening::show(app, ctx, opening_input);
+    voicevox::progress::show(app, ctx);
 }
 
 fn show_contents(app: &mut App, ctx: &egui::Context) {
@@ -254,6 +261,9 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         if let Some(error) = app.audition.error() {
             ui.colored_label(Color32::LIGHT_RED, error);
         }
+        if let Some(error) = &app.voicevox.error {
+            ui.colored_label(Color32::LIGHT_RED, error);
+        }
     });
     if let Some((slot, track, tick)) = map_click {
         crate::view::track_map::go(app, slot, track, tick);
@@ -273,9 +283,12 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
     crate::view::event_selection::show(app, ctx);
     crate::view::edit_menu::show(app, ctx);
     crate::view::note_edit::show(app, ctx);
+    crate::view::voicevox::lyrics::show(app, ctx);
     crate::view::piano_roll::show(app, ctx);
     crate::view::tempo_curve::show(app, ctx);
     crate::view::comma_menu::show(app, ctx);
+    crate::view::voicevox::show(app, ctx);
+    crate::view::voicevox::singer::show(app, ctx);
     crate::play::playback::show(app, ctx);
     crate::cursor::split::show(app, ctx);
     crate::view::trill_edit::show(app, ctx);

@@ -251,11 +251,17 @@ impl Job {
                 if app.audition.is_disabled() || !crate::play::transport::preparing(app) {
                     return Ok(false);
                 }
-                if started.elapsed() > std::time::Duration::from_secs(10) {
+                // The singer's WAV may take a while; the device wait starts after it.
+                if crate::play::sung::prerender::running(app) {
+                    self.title = crate::play::sung::prerender::progress(app)
+                        .unwrap_or("Preparing VOICEVOX audio…");
+                    Phase::AwaitAudio(std::time::Instant::now())
+                } else if started.elapsed() > std::time::Duration::from_secs(10) {
                     crate::play::transport::stop(app);
                     return Err("Audio device did not start playback".into());
+                } else {
+                    Phase::AwaitAudio(started)
                 }
-                Phase::AwaitAudio(started)
             }
         };
         Ok(true)

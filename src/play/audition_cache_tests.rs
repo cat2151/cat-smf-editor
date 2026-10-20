@@ -76,7 +76,7 @@ fn native_round_trips_reuse_chains_and_idle_expiry_keeps_active_audio() {
     for (index, patch) in [&a, &b, &a, &b, &a].into_iter().enumerate() {
         let start = Instant::now();
         assert!(
-            audition.play_track(0, patch, &[(60, 64, Some(0.05))]),
+            audition.play_track(0, patch, &[(60, 64, Some(0.05))], None),
             "{:?}",
             audition.error()
         );
@@ -94,7 +94,7 @@ fn native_round_trips_reuse_chains_and_idle_expiry_keeps_active_audio() {
     audition.expire_cached(last + Duration::from_secs(300));
     assert_eq!(audition.voice.as_ref().unwrap().cached_count(), 0);
     assert_eq!(audition.voice.as_ref().unwrap().natives.len(), 1);
-    assert!(audition.play_track(0, &a, &[(67, 64, Some(0.05))]));
+    assert!(audition.play_track(0, &a, &[(67, 64, Some(0.05))], None));
     audition.pump();
     assert!(audition.error().is_none());
     audition.reset();

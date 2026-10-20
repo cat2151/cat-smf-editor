@@ -23,6 +23,7 @@ pub struct App {
     pub settings_error: Option<String>,
     pub config: crate::store::config::Store,
     pub comma_menu: crate::view::comma_menu::State,
+    pub voicevox: crate::view::voicevox::State,
     pub analysis: crate::view::analysis::State,
     pub event_selection: crate::view::event_selection::State,
     pub mml_input: crate::view::mml_input::State,
@@ -52,6 +53,7 @@ pub struct App {
     pub cursor_position: Option<cat_smf_editor::score::musical_time::Position>,
     pub reveal_cursor: bool,
     pub audition: crate::play::audition::Audition,
+    pub mascot: crate::play::mascot::State,
     pub playback: crate::play::playback::Playback,
 }
 pub struct Loaded {
@@ -87,6 +89,7 @@ impl App {
             settings_error: None,
             config: Default::default(),
             comma_menu: crate::view::comma_menu::State::default(),
+            voicevox: Default::default(),
             analysis: crate::view::analysis::State::default(),
             event_selection: Default::default(),
             mml_input: Default::default(),
@@ -115,6 +118,7 @@ impl App {
             reveal_cursor: false,
             audition: crate::play::audition::Audition::default(),
             playback: crate::play::playback::Playback::default(),
+            mascot: Default::default(),
         }
     }
     /// Applies an edit in memory and keeps the cursor position.
@@ -213,6 +217,7 @@ impl eframe::App for App {
         crate::view::show(self, ctx);
         if !self.player_selection.setup.is_active() {
             crate::view::files::open_dialog(self, ctx, frame);
+            crate::view::voicevox::pick_dialog(self, ctx, frame);
         }
         self.save_session();
         self.close(ctx);
@@ -220,6 +225,11 @@ impl eframe::App for App {
         self.log_errors();
         #[cfg(windows)]
         crate::player::resident_link::trace_frame(self, started);
+    }
+
+    /// editor が起動した VOICEVOX engine を落とす。
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        crate::play::sung::prerender::shut_down(self);
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {

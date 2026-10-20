@@ -2,6 +2,7 @@ use super::*;
 use cat_smf_editor::model::{Event, Music, Track};
 mod feedback;
 mod migemo;
+mod ranking;
 fn app() -> App {
     crate::view::tests::app(Music {
         format: 1,
@@ -83,6 +84,18 @@ pub(crate) fn query(a: &mut App, c: &egui::Context, q: &str) {
     frame(a, c, vec![egui::Event::Text(q.into())]);
     assert_eq!(a.palette.query, q);
 }
+/// The labels the palette lists for its current query.
+pub(crate) fn listed(a: &mut App) -> Vec<String> {
+    filter(
+        &a.palette.commands,
+        &a.palette.query,
+        &mut a.palette.search,
+        &a.palette.history,
+    )
+    .into_iter()
+    .map(|i| a.palette.commands[i].label())
+    .collect()
+}
 pub(crate) fn press(a: &mut App, c: &egui::Context, k: Key) {
     frame(a, c, vec![key(k, Modifiers::NONE)]);
 }
@@ -148,7 +161,13 @@ fn empty_result_and_stale_generation_never_execute_and_search_matches_keys() {
     open(&mut a, &c);
     query(&mut a, &c, "ctrl+shift+n");
     assert_eq!(
-        filter(&a.palette.commands, &a.palette.query, &mut a.palette.search).len(),
+        filter(
+            &a.palette.commands,
+            &a.palette.query,
+            &mut a.palette.search,
+            &a.palette.history
+        )
+        .len(),
         1
     );
     a.generation += 1;
@@ -165,7 +184,7 @@ fn empty_result_and_stale_generation_never_execute_and_search_matches_keys() {
 fn mml_buffer_focus_selection_cancel_and_context_confirm_are_preserved() {
     let mut a = app();
     let c = egui::Context::default();
-    super::super::mml_input::open(&mut a, &c);
+    super::super::mml_input::open(&mut a, &c, false);
     frame(&mut a, &c, vec![]);
     frame(&mut a, &c, vec![egui::Event::Text("cde".into())]);
     frame(&mut a, &c, vec![]);

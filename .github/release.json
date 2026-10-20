@@ -20,6 +20,11 @@
       "repository": "cat2151/clap-mml-render-tui",
       "ref": "refs/heads/main",
       "path": "clap-mml-render-tui"
+    },
+    {
+      "repository": "cat2151/cat-music-patterns",
+      "ref": "refs/heads/main",
+      "path": "cat-music-patterns"
     }
   ],
   "build_script": "scripts/release.ps1",

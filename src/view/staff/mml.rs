@@ -210,6 +210,7 @@ fn track_color(track: usize) -> Color32 {
 }
 
 /// Fixed below the staff. Scrolling the score must not move or change the MML measure.
+/// Returns the track of a clicked row.
 pub(super) fn show(
     ui: &mut egui::Ui,
     rows: &[Row],
@@ -217,7 +218,7 @@ pub(super) fn show(
     playing: Option<u64>,
     reveal: bool,
     reset: bool,
-) {
+) -> Option<usize> {
     // Rows retain tracks that have notes elsewhere, even in a silent measure.
     let all_colored = !rows.iter().any(|row| row.track == current);
     let colored = |row: &Row| all_colored || row.track == current;
@@ -287,43 +288,52 @@ pub(super) fn show(
     if reset {
         scroll = scroll.vertical_scroll_offset(0.0);
     }
-    scroll.show(ui, |ui| {
-        let (rect, _) =
-            ui.allocate_exact_size(egui::vec2(width, height(rows)), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 0.0, ui.visuals().panel_fill);
-        for beat in 0..=count {
-            ui.painter().vline(
-                rect.left() + label_width + beat as f32 * beat_width,
-                rect.y_range(),
-                egui::Stroke::new(
-                    if beat == 0 { 1.5_f32 } else { 1.0_f32 },
-                    crate::view::beat_color((beat % count + 1) as u128),
-                ),
-            );
-        }
-        let first = rows.iter().position(|row| row.track == current);
-        for (i, (label, cells)) in labels.into_iter().zip(galleys).enumerate() {
-            let pos = rect.min + egui::vec2(PAD, i as f32 * LINE);
-            if reveal && !reset && Some(i) == first {
-                ui.scroll_to_rect(
-                    egui::Rect::from_min_size(pos, egui::vec2(1.0, LINE)),
-                    Some(egui::Align::Center),
+    scroll
+        .show(ui, |ui| {
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(width, height(rows)), egui::Sense::click());
+            let clicked = response
+                .clicked()
+                .then(|| response.interact_pointer_pos())
+                .flatten()
+                .and_then(|pos| rows.get(((pos.y - rect.top()) / LINE) as usize))
+                .map(|row| row.track);
+            ui.painter().rect_filled(rect, 0.0, ui.visuals().panel_fill);
+            for beat in 0..=count {
+                ui.painter().vline(
+                    rect.left() + label_width + beat as f32 * beat_width,
+                    rect.y_range(),
+                    egui::Stroke::new(
+                        if beat == 0 { 1.5_f32 } else { 1.0_f32 },
+                        crate::view::beat_color((beat % count + 1) as u128),
+                    ),
                 );
             }
-            if !label.job.text.is_empty() {
-                ui.painter().galley(pos, label, Color32::WHITE);
-            }
-            for (beat, galley) in cells.into_iter().enumerate() {
-                if !galley.job.text.is_empty() {
-                    ui.painter().galley(
-                        pos + egui::vec2(label_width + beat as f32 * beat_width, 0.0),
-                        galley,
-                        Color32::WHITE,
+            let first = rows.iter().position(|row| row.track == current);
+            for (i, (label, cells)) in labels.into_iter().zip(galleys).enumerate() {
+                let pos = rect.min + egui::vec2(PAD, i as f32 * LINE);
+                if reveal && !reset && Some(i) == first {
+                    ui.scroll_to_rect(
+                        egui::Rect::from_min_size(pos, egui::vec2(1.0, LINE)),
+                        Some(egui::Align::Center),
                     );
                 }
+                if !label.job.text.is_empty() {
+                    ui.painter().galley(pos, label, Color32::WHITE);
+                }
+                for (beat, galley) in cells.into_iter().enumerate() {
+                    if !galley.job.text.is_empty() {
+                        ui.painter().galley(
+                            pos + egui::vec2(label_width + beat as f32 * beat_width, 0.0),
+                            galley,
+                            Color32::WHITE,
+                        );
+                    }
+                }
             }
-        }
-    });
+            clicked
+        })
+        .inner
 }
 
 #[cfg(test)]

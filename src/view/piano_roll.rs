@@ -39,7 +39,14 @@ pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
 }
 
 pub(crate) fn open(app: &mut App) {
-    if app.track == 0 && app.loaded.as_ref().is_some_and(|l| l.music.format == 1) {
+    let conductor = app.track == 0
+        && app.loaded.as_ref().is_some_and(|l| {
+            l.music
+                .tracks
+                .first()
+                .is_some_and(|t| !t.events.iter().any(note_on))
+        });
+    if conductor && app.loaded.as_ref().is_some_and(|l| l.music.format == 1) {
         app.tempo_curve = crate::view::tempo_curve::State::opened();
     } else {
         app.piano_roll = State {
@@ -62,6 +69,8 @@ pub(crate) struct Layout {
     /// Note On index within its track and its rectangle from Note On to Note Off.
     pub(crate) notes: Vec<(usize, egui::Rect)>,
     pub(crate) colors: Vec<Color32>,
+    /// Lyric at each editable note's onset, in the same order as `notes`.
+    lyrics: Vec<Option<String>>,
     /// Other tracks' notes, drawn behind the editable notes and never hit-tested.
     pub(crate) references: Vec<egui::Rect>,
     /// x where the measure holding `cursor_tick` begins.
@@ -161,6 +170,20 @@ pub(crate) fn layout_of(
             f32::from(high - low + 1) * ROW_HEIGHT,
         ),
         beats,
+        lyrics: tracks
+            .iter()
+            .flat_map(|&t| {
+                let lyrics = super::note_lyrics::read(loaded, t);
+                music.tracks[t]
+                    .events
+                    .iter()
+                    .enumerate()
+                    .filter(move |(i, e)| {
+                        note_on(e) && loaded.note_views[t].durations[*i].is_some()
+                    })
+                    .map(move |(_, e)| lyrics.get(&e.tick).cloned())
+            })
+            .collect(),
         staff: STAFF
             .into_iter()
             .filter(|p| (low..=high).contains(p))
@@ -278,10 +301,13 @@ fn draw(
             egui::StrokeKind::Inside,
         );
     }
+    // Paint after the hover highlight so the mora stays readable while editing.
+    lyrics::draw(painter, layout, |i| note(i).translate(origin));
 }
 
 mod drag;
 mod hover;
+pub(super) mod lyrics;
 #[cfg(test)]
 pub(crate) mod tests;
 

@@ -74,6 +74,9 @@ impl Mixer {
         let (scratch, mixed) = (&mut self.scratch[..len], &mut self.mixed[..len]);
         mixed.fill(0.0);
         for (i, (render, state)) in renders.iter_mut().zip(&mut self.states).enumerate() {
+            if fresh {
+                render.cue(command.parts.get(i).and_then(|part| part.take.clone()));
+            }
             let changed = if let Some(part) = command.parts.get(i) {
                 if let Some(sequence) = &part.sequence {
                     let (_, changed) = state.cursor.block(

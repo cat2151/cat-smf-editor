@@ -1,4 +1,5 @@
-//! Typing over a Note On's MBT or Duration cell moves only that note's start or end.
+//! Typing over a Note On's MBT or Duration cell moves only that note's start or end;
+//! its lyric is typed over the Note cell.
 use crate::app::App;
 use eframe::egui;
 
@@ -6,6 +7,7 @@ use eframe::egui;
 pub enum Field {
     Mbt,
     Duration,
+    Lyrics,
 }
 
 impl Field {
@@ -13,10 +15,12 @@ impl Field {
     pub fn column(self) -> usize {
         match self {
             Field::Mbt => 0,
+            Field::Lyrics => 1,
             Field::Duration => 2,
         }
     }
 
+    /// The field a click on `column` opens; the lyric opens only from the edit menu.
     pub fn at(column: usize) -> Option<Self> {
         [Field::Mbt, Field::Duration]
             .into_iter()
@@ -49,7 +53,11 @@ pub fn begin(
         event,
         generation: app.generation,
         rect,
-        text: text.split_whitespace().collect(),
+        text: if field == Field::Lyrics {
+            text.to_owned()
+        } else {
+            text.split_whitespace().collect()
+        },
         error: None,
         focus: true,
     });
@@ -81,6 +89,59 @@ fn apply(app: &mut App, editing: &Editing) -> Result<(), String> {
                 )
             })
         }
+        Field::Lyrics => {
+            let note = &loaded.music.tracks[track].events[event];
+            let (tick, identity) = (note.tick, (note.status, note.data.clone()));
+            let occurrence = same_notes(&loaded.music.tracks[track].events, tick, &identity)
+                .position(|i| i == event)
+                .unwrap_or(0);
+            app.edit_music(|music| {
+                cat_smf_editor::edit::lyric::set(
+                    &mut music.tracks[track],
+                    event,
+                    editing.text.trim(),
+                )
+            })?;
+            keep_cursor_on(app, track, tick, &identity, occurrence);
+            crate::play::sung::prerender::ahead(app, track);
+            Ok(())
+        }
+    }
+}
+
+fn same_notes<'a>(
+    events: &'a [cat_smf_editor::model::Event],
+    tick: u64,
+    identity: &'a (u8, Vec<u8>),
+) -> impl Iterator<Item = usize> + 'a {
+    (0..events.len()).filter(move |&i| {
+        let e = &events[i];
+        e.tick == tick && e.status == identity.0 && e.data == identity.1
+    })
+}
+
+/// Adding or removing the lyric row shifts the note's row; keep the cursor on the note so `j` leaves it.
+fn keep_cursor_on(
+    app: &mut App,
+    track: usize,
+    tick: u64,
+    identity: &(u8, Vec<u8>),
+    occurrence: usize,
+) {
+    let Some(loaded) = &app.loaded else {
+        return;
+    };
+    if app.track != track || !app.note_mode {
+        return;
+    }
+    let Some(event) =
+        same_notes(&loaded.music.tracks[track].events, tick, identity).nth(occurrence)
+    else {
+        return;
+    };
+    if let Some(row) = loaded.display_rows[track].event_row(event) {
+        app.cursor_row = Some(row);
+        app.selected_event = Some(event);
     }
 }
 

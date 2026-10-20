@@ -12,7 +12,8 @@ package名とexe名が一致する、Windows MSVC向けの単一バイナリア�
 リポジトリ依存の設定は `.github/release.json` に集約する。
 
 - `dependencies`: 公開GitHubリポジトリ、解決するref、兄弟checkoutのディレクトリ名。
-  各refを一度だけSHAに解決し、ビルドとnotesで同じSHAを使う。editorにはUAPMD、cat-plugin-playerの共有ソース、clap-mml-play-server内の`core-lib`（`cmrt-core`）、clap-mml-render-tui内の`chord`と`midi-filter`が必要。
+  各refを一度だけSHAに解決し、ビルドとnotesで同じSHAを使う。editorにはUAPMD、cat-plugin-playerの共有ソース、clap-mml-play-server内の`core-lib`（`cmrt-core`）、clap-mml-render-tui内の`chord`と`midi-filter`、integration testの実素材としてcat-music-patternsが必要。
+  素材も`refs/heads/main`を一度SHA解決し、他依存と同じcheckout・notes・再ビルド判定へ渡す。素材はZIPへ同梱しない。
   MML・コード入力はplayerのshared入力UI・変換経路を使い、TUIのchord変換とGit依存のMML変換器を利用する。
   `cmrt-core`はpath identity用に`default-features = false`で参照し、MMLアプリ本体やhost機能はビルドしない。
 - `verified_sha`: 任意の、手元で確認した依存版の基準。上流mainを固定する値ではない。
@@ -25,6 +26,11 @@ package名とexe名が一致する、Windows MSVC向けの単一バイナリア�
 既定の `target/shim` のconfigure/buildは `build.rs` から参照するplayerの共有driverだけが担当する。
 adapterは二度目のconfigureを追加せず、実行後に環境変数の元の値を復元する。
 既存cacheでは共有driverのstampと既存generator/platformを使用する。
+共有hostはUAPMDを読む前に[stb revision補修](../../cat-plugin-player/patches/uapmd/stb-revision-pin/README.md)を読み、
+rtlogが使うstbを`2c980bb59875b0d32144a71867fbdebb2f77cd20`へ固定する。
+取得先overrideや既存cacheのSHA・変更・rootヘッダを取得前に検査し、不一致なら保全・復旧の診断を出して停止する。
+既知のclean cacheでは共有driverのv4 stampで一度再configureし、既存CPM_SOURCE_CACHEを再利用する。
+この固定はplayer/editor共通で、依存checkoutの直接編集や別target-dirは行わない。
 UAPMD付属patchの二重適用を避けるため、単にReleaseビルドを試す目的で既存cacheを再configureしない。
 既存のCMake設定を使い、editorのRust/C++のDLL CRTは変更しない。Release exeとそのbuildの埋込みhost DLLへのdebug CRT混入をdumpbinで検査する。
 playerの静的CRT配布方針はeditorへ適用しない。clap-mml-play-serverのcheckoutは`cmrt-core`のソース取得用で、MMLアプリ本体のビルド用ではない。editorのDLLはeditor自身のtargetで生成し、exeに埋め込む。
@@ -89,8 +95,15 @@ UAPMDの補修、plugin固有処理、音声エンジンまで今回の共通wor
 
 検証用にPyYAMLが必要（実際のActions実行では不要）。
 `python -m unittest discover -s scripts -p 'test_release_workflow.py'` で、workflow内のPython処理を
-mockしたGitHub/git応答で検証する。初回公開、入力一致時の省略、依存変更（`cmrt-core`・`cmrt-chord`の取得元だけの変更を含む）、engine変更、手動再ビルド、
+mockしたGitHub/git応答で検証する。初回公開、入力一致時の省略、依存変更（`cmrt-core`・`cmrt-chord`・素材の取得元だけの変更を含む）、engine変更、手動再ビルド、
 通信失敗、Cargoの`cmrt-core`・`cmrt-chord` pathと取得先の整合、兄弟checkoutのSHA、ZIPの内容を対象にする。
 Actions YAMLはactionlint、adapterは実際のローカルReleaseビルドとdumpbinで検証する。
+素材テストは`cargo test --release --locked --test catalog_and_corpus --test smf_io`で有効なまま確認する。
+共有補修の実FetchContent回帰、両アプリのRelease/test、playerの静的CRT検査はそれぞれ必要で、
+editorのDLL CRT検査をplayerの検査に代用しない。
 GitHub runnerの新規checkoutでの完走は別途必要で、既存ローカルcacheでの成功とは区別する。
+共有playerの修正を先にGitHubへ反映し、素材設定を含むeditorを反映してから、明示許可された
+両repoの`publish=false`を新規runnerで実行する。run ID、app/依存/stb SHAとbuild/CRT/test/ZIPを確認する。
+ZIPの起動・既存SMFの読込と試聴は人間が確認する。実際のRelease公開成功、ZIPとnotesのrevisionは
+別の確認であり、非公開runの成功を公開成功として扱わない。commit/push・Actions起動・公開は別途明示許可を要する。
 

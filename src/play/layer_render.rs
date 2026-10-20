@@ -2,7 +2,9 @@
 #[cfg(test)]
 #[path = "layer_audibility_tests.rs"]
 mod audibility_tests;
+use crate::play::sung::{Player, Take};
 use cat_smf_editor::{host::ProcessorRef, instrument_layers::Layer, note_render};
+use std::sync::Arc;
 
 pub(crate) trait Instrument {
     fn render(
@@ -39,6 +41,9 @@ pub struct Render<R = note_render::Render, E = ProcessorRef> {
     layers: Vec<(R, Layer)>,
     effects: Option<E>,
     scratch: Vec<f32>,
+    /// While it has a take, it silences the instruments and sounds in the first layer's place.
+    sung: Player,
+    sung_scratch: Vec<f32>,
 }
 
 impl<R: Instrument, E: Effect> Render<R, E> {
@@ -47,7 +52,14 @@ impl<R: Instrument, E: Effect> Render<R, E> {
             layers,
             effects,
             scratch: vec![0.0; 1024 * 64],
+            sung: Player::default(),
+            sung_scratch: vec![0.0; 1024 * 64],
         }
+    }
+
+    /// At the start of each playback; `None` gives the notes back to the instruments.
+    pub fn cue(&mut self, take: Option<Arc<Take>>) {
+        self.sung.cue(take);
     }
 
     pub fn process(
@@ -62,9 +74,16 @@ impl<R: Instrument, E: Effect> Render<R, E> {
             return false;
         }
         out.fill(0.0);
+        let sung = self.sung.active();
+        let sung_out = &mut self.sung_scratch[..out.len()];
+        self.sung.render(velocities, changed, sung_out, channels);
         let any_solo = self.layers.iter().any(|(_, layer)| layer.solo);
-        for (render, layer) in &mut self.layers {
-            let (shifted, lengths) = transpose(layer, velocities, durations);
+        for (index, (render, layer)) in self.layers.iter_mut().enumerate() {
+            let (shifted, lengths) = if sung {
+                ([0; 128], [0; 128])
+            } else {
+                transpose(layer, velocities, durations)
+            };
             let scratch = &mut self.scratch[..out.len()];
             if !render.render(&shifted, &lengths, changed, scratch, channels) {
                 return false;
@@ -75,9 +94,17 @@ impl<R: Instrument, E: Effect> Render<R, E> {
             if layer.mute || (any_solo && !layer.solo) {
                 continue;
             }
-            for (sum, sample) in out.iter_mut().zip(scratch) {
+            let source: &[f32] = match (sung, index) {
+                (false, _) => scratch,
+                (true, 0) => sung_out,
+                (true, _) => continue,
+            };
+            for (sum, sample) in out.iter_mut().zip(source) {
                 *sum += *sample * gain;
             }
+        }
+        if sung && self.layers.is_empty() {
+            out.copy_from_slice(sung_out);
         }
         if !out.iter().all(|v| v.is_finite())
             || !self

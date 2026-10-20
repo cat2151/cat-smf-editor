@@ -2,7 +2,14 @@
 use super::*;
 
 impl Audition {
-    pub fn play_key(&mut self, track: usize, patch: &Patch, pitch: u8) -> bool {
+    /// With a `take`, its first piece sounds in place of the track's instruments.
+    pub fn play_key(
+        &mut self,
+        track: usize,
+        patch: &Patch,
+        pitch: u8,
+        take: Option<Arc<crate::play::sung::Take>>,
+    ) -> bool {
         let disabled = self.disabled;
         let master = self.master.clone();
         let gains = self.gains.clone();
@@ -19,8 +26,9 @@ impl Audition {
         #[cfg(test)]
         {
             self.auditioned = vec![pitch];
+            self.sung = take.clone();
         }
-        self.key_active = voice.play_track(track, patch, &[(pitch, 80, None)]);
+        self.key_active = voice.play_track(track, patch, &[(pitch, 80, None)], take);
         self.key_active
     }
 
@@ -48,19 +56,22 @@ mod tests {
         let _library = cat_smf_editor::native_library::load_at(&cache).unwrap();
         let mut audition = Audition::default();
         assert!(
-            audition.sequences(vec![(
-                0,
-                Patch::default(),
-                Sequence {
-                    notes: vec![crate::play::audio_sequence::Note {
-                        start: 0.0,
-                        duration: 1.0,
-                        pitch: 60,
-                        velocity: 64,
-                    }],
-                    end: 2.0,
-                }
-            )]),
+            audition.sequences(
+                vec![(
+                    0,
+                    Patch::default(),
+                    Sequence {
+                        notes: vec![crate::play::audio_sequence::Note {
+                            start: 0.0,
+                            duration: 1.0,
+                            pitch: 60,
+                            velocity: 64,
+                        }],
+                        end: 2.0,
+                    }
+                )],
+                Vec::new()
+            ),
             "{:?}",
             audition.error()
         );
@@ -74,7 +85,7 @@ mod tests {
             .unwrap()
             .generation;
         assert!(
-            audition.play_key(0, &Patch::default(), 67),
+            audition.play_key(0, &Patch::default(), 67, None),
             "{:?}",
             audition.error()
         );

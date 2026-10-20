@@ -19,6 +19,8 @@ pub(super) struct Part {
     velocities: [u8; 128],
     durations: [u64; 128],
     sequence: Option<Arc<Sequence>>,
+    /// The sung voice that replaces this track's instruments for this playback.
+    take: Option<Arc<crate::play::sung::Take>>,
 }
 impl Default for Part {
     fn default() -> Self {
@@ -26,6 +28,7 @@ impl Default for Part {
             velocities: [0; 128],
             durations: [0; 128],
             sequence: None,
+            take: None,
         }
     }
 }
@@ -53,6 +56,12 @@ pub struct Audition {
     /// Pitches of the last `play_track`, observable without an audio device.
     #[cfg(test)]
     pub auditioned: Vec<u8>,
+    /// Takes handed to the last playback, observable without an audio device.
+    #[cfg(test)]
+    pub takes: Vec<(usize, Arc<crate::play::sung::Take>)>,
+    /// The sung piece of the last audition; `None` when the instruments sounded.
+    #[cfg(test)]
+    pub sung: Option<Arc<crate::play::sung::Take>>,
 }
 impl Audition {
     pub fn master(&self) -> &cat_smf_editor::master_effects::Settings {
@@ -194,11 +203,13 @@ impl Audition {
             );
         }
     }
+    /// With a `take`, its first piece sounds in place of the track's instruments.
     pub fn play_track(
         &mut self,
         track: usize,
         patch: &Patch,
         notes: &[(u8, u8, Option<f64>)],
+        take: Option<Arc<crate::play::sung::Take>>,
     ) -> bool {
         if !self.prepare(&[(track, patch.clone())]) {
             return false;
@@ -206,9 +217,13 @@ impl Audition {
         #[cfg(test)]
         {
             self.auditioned = notes.iter().map(|&(pitch, _, _)| pitch).collect();
+            self.sung = take.clone();
         }
         let rate = self.voice.as_ref().map_or(48000, |v| v.rate);
-        let mut part = Part::default();
+        let mut part = Part {
+            take,
+            ..Part::default()
+        };
         for &(pitch, velocity, seconds) in notes {
             let i = usize::from(pitch);
             if i >= 128 {
@@ -221,7 +236,16 @@ impl Audition {
         self.send(vec![(track, part)]);
         true
     }
-    pub fn sequences(&mut self, parts: Vec<(usize, Patch, Sequence)>) -> bool {
+    /// `takes` give tracks a sung voice in place of their instruments.
+    pub fn sequences(
+        &mut self,
+        parts: Vec<(usize, Patch, Sequence)>,
+        mut takes: Vec<(usize, Arc<crate::play::sung::Take>)>,
+    ) -> bool {
+        #[cfg(test)]
+        {
+            self.takes = takes.clone();
+        }
         if parts.is_empty() {
             self.stop();
             return true;
@@ -239,10 +263,15 @@ impl Audition {
             parts
                 .into_iter()
                 .map(|(track, _, sequence)| {
+                    let take = takes
+                        .iter()
+                        .position(|(t, _)| *t == track)
+                        .map(|i| takes.swap_remove(i).1);
                     (
                         track,
                         Part {
                             sequence: Some(Arc::new(sequence)),
+                            take,
                             ..Part::default()
                         },
                     )
@@ -263,6 +292,14 @@ impl Audition {
             p.load(Ordering::Relaxed) as f64
                 / f64::from(self.voice.as_ref().map_or(48000, |v| v.rate))
         })
+    }
+    /// The rate the next playback renders at: the open stream's, else the device's default.
+    pub fn rate(&self) -> u32 {
+        match &self.voice {
+            Some(voice) => voice.rate,
+            None if self.disabled => 48000,
+            None => output_rate(),
+        }
     }
     pub fn gain(&self, track: usize) -> f32 {
         self.gains.get(&track).copied().unwrap_or(1.0)
@@ -338,6 +375,14 @@ impl Audition {
             voice.clear_cached();
         }
     }
+}
+
+pub fn output_rate() -> u32 {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    cpal::default_host()
+        .default_output_device()
+        .and_then(|d| d.default_output_config().ok())
+        .map_or(48000, |c| c.sample_rate().0)
 }
 
 #[path = "audition_key.rs"]

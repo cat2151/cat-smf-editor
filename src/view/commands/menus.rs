@@ -39,6 +39,12 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 ("program-target", "Program change target", Key::T, |a, _| {
                     a.comma_menu.program = true
                 }),
+                (
+                    "mascot-playback",
+                    "ずんだもん演奏連動",
+                    Key::B,
+                    |a, _| crate::play::mascot::toggle(a),
+                ),
                 ("spectrum", "Spectrum / Lissajous", Key::F, |a, _| {
                     super::super::analysis::toggle(a)
                 }),
@@ -121,6 +127,13 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                     "Duration",
                     &[Key::D],
                     |a, _| edit_menu::choose(a, Field::Duration),
+                ));
+                out.push(Command::plain(
+                    s,
+                    "edit-lyrics",
+                    "Lyrics",
+                    &[Key::L],
+                    |a, _| edit_menu::choose(a, Field::Lyrics),
                 ));
             }
         }

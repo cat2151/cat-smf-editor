@@ -112,6 +112,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     app.comma_menu.program = true;
                 }
                 ui.separator();
+                let mut mascot = app.mascot.enabled;
+                if ui.checkbox(&mut mascot, "b: ずんだもん演奏連動").changed() {
+                    crate::play::mascot::toggle(app);
+                }
                 let mut analysis = app.analysis.is_open();
                 if ui
                     .checkbox(&mut analysis, "f: Spectrum / Lissajous")
@@ -126,6 +130,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     .clicked()
                 {
                     crate::view::analysis::reset_window(app);
+                }
+                ui.separator();
+                if ui
+                    .button("v: VOICEVOX engine")
+                    .on_hover_text("歌声trackを歌わせるVOICEVOX engineのrun.exeを選びます。")
+                    .clicked()
+                {
+                    crate::view::voicevox::open(app);
                 }
             }
         });

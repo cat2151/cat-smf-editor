@@ -66,6 +66,7 @@ pub fn show(
     let mut selecting_repeat = false;
     let mut selected = None;
     let mut begin_edit = None;
+    let mut cursor_cell = None;
     let mut trill_click = None;
     let horizontal_input = ui.input(|i| i.smooth_scroll_delta.x != 0.0 || i.pointer.any_down());
     let horizontal = ScrollArea::horizontal()
@@ -168,7 +169,7 @@ pub fn show(
                             DisplayRow::Beat(position) => {
                                 let mbt = columns
                                     .rest_position(&position, display.is_measure(visible_index));
-                                if row(
+                                let response = row(
                                     ui,
                                     &[&mbt, ""],
                                     RowStyle {
@@ -190,10 +191,11 @@ pub fn show(
                                         caution: None,
                                         spans: None,
                                     },
-                                )
-                                .clicked
-                                .is_some()
-                                {
+                                );
+                                if active && app.cursor_row == Some(visible_index) {
+                                    cursor_cell = response.cells.get(1).copied();
+                                }
+                                if response.clicked.is_some() {
                                     selected = Some(visible_index);
                                 }
                                 continue;
@@ -306,6 +308,9 @@ pub fn show(
                             spans: Some((content, spans)),
                         },
                     );
+                    if active && app.cursor_row == Some(visible_index) {
+                        cursor_cell = response.cells.get(1).copied();
+                    }
                     let editable = app.note_mode && note_on(event);
                     if let Some(column) = response.clicked {
                         selected = Some(visible_index);
@@ -326,12 +331,13 @@ pub fn show(
                         && app.selected_event == Some(index)
                     {
                         let column = field.column();
-                        begin_edit = Some((
-                            field,
-                            index,
-                            response.cells[column],
-                            refs[column].to_owned(),
-                        ));
+                        let text = if field == Field::Lyrics {
+                            cat_smf_editor::edit::lyric::text_at(events, event.tick)
+                                .unwrap_or_default()
+                        } else {
+                            refs[column].to_owned()
+                        };
+                        begin_edit = Some((field, index, response.cells[column], text));
                     }
                 }
             });
@@ -409,9 +415,12 @@ pub fn show(
         crate::cursor::split::focus(app, 1 - app.track_view.active);
     }
     if patch {
-        crate::view::layers::open(app);
+        header::open(app);
     }
     *replace_effect = replace_effect.or(effect);
+    if let Some(rect) = cursor_cell {
+        crate::view::voicevox::lyrics::place(app, rect);
+    }
     if let Some((field, event, rect, text)) = begin_edit {
         crate::view::note_edit::begin(app, field, track, event, rect, &text);
     }

@@ -85,3 +85,29 @@ fn timeline_track_steps_wrap_preserve_tick_and_switch_overlay() {
     press(&mut a, &c, Key::Escape, Modifiers::NONE);
     assert!(!a.piano_roll.open && !a.tempo_curve.open);
 }
+
+#[test]
+fn timeline_track_steps_keep_piano_roll_on_first_track_with_notes() {
+    let mut music = app().loaded.unwrap().music;
+    music.tracks[0].events.push(cat_smf_editor::model::Event {
+        tick: 0,
+        delta: 0,
+        status: 0x90,
+        meta_type: 0,
+        data: vec![60, 80],
+    });
+    let mut a = crate::view::tests::app(music);
+    let c = egui::Context::default();
+    let ctrl = Modifiers::CTRL | Modifiers::COMMAND;
+    press(&mut a, &c, Key::R, Modifiers::NONE);
+    assert!(a.piano_roll.open);
+    assert!(!a.tempo_curve.open);
+    for (key, expected) in [(Key::ArrowRight, 1), (Key::ArrowLeft, 0)] {
+        press(&mut a, &c, key, ctrl);
+        assert_eq!(a.track, expected);
+        assert!(a.piano_roll.open);
+        assert!(!a.tempo_curve.open);
+    }
+    press(&mut a, &c, Key::Escape, Modifiers::NONE);
+    assert!(!a.piano_roll.open && !a.tempo_curve.open);
+}

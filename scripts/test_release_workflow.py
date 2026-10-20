@@ -72,7 +72,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertNotIn('cat-plugin-player-2.3.4-windows-x64.zip', notes)
             dependencies = json.loads(out['dependencies'])
             self.assertEqual([dep['path'] for dep in dependencies],
-                             ['uapmd', 'cat-plugin-player', 'clap-mml-play-server', 'clap-mml-render-tui'])
+                             ['uapmd', 'cat-plugin-player', 'clap-mml-play-server', 'clap-mml-render-tui', 'cat-music-patterns'])
             self.assertTrue(all(dep['sha'] == SHA for dep in dependencies))
             self.assertIn('cat2151/cat-plugin-player', notes)
             self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {SHA}', notes)
@@ -103,6 +103,22 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertEqual(out['build'], 'true')
             self.assertIn(f'cat2151/clap-mml-render-tui (refs/heads/main): {OTHER_SHA}', notes)
 
+    def test_corpus_checkout_and_corpus_only_change_rebuilds(self):
+        config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
+        corpus = next(dep for dep in config['dependencies'] if dep['path'] == 'cat-music-patterns')
+        self.assertEqual(corpus['repository'], 'cat2151/cat-music-patterns')
+        self.assertEqual(corpus['ref'], 'refs/heads/main')
+        with workspace():
+            _, body = self.resolve(missing=True)
+            changed = {'https://github.com/cat2151/cat-music-patterns': OTHER_SHA}
+            out, notes = self.resolve(body=body, dependency_shas=changed)
+            self.assertEqual(out['build'], 'true')
+            self.assertEqual([dep['sha'] for dep in json.loads(out['dependencies'])],
+                             [SHA, SHA, SHA, SHA, OTHER_SHA])
+            self.assertIn(f'cat2151/cat-music-patterns (refs/heads/main): {OTHER_SHA}', notes)
+            out, _ = self.resolve(body=notes, dependency_shas=changed)
+            self.assertEqual(out['build'], 'false')
+
     def test_unchanged_schedule_skips_but_manual_rebuilds(self):
         with workspace():
             _, body = self.resolve(missing=True)
@@ -132,7 +148,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})
             self.assertEqual(out['build'], 'true')
             dependencies = json.loads(out['dependencies'])
-            self.assertEqual([dep['sha'] for dep in dependencies], [SHA, SHA, OTHER_SHA, SHA])
+            self.assertEqual([dep['sha'] for dep in dependencies], [SHA, SHA, OTHER_SHA, SHA, SHA])
             self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {OTHER_SHA}', notes)
             out, _ = self.resolve(body=notes, dependency_shas={
                 'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})
@@ -142,7 +158,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         dependencies = [{'repository': 'example/dependency', 'path': 'uapmd', 'sha': OTHER_SHA},
                         {'repository': 'example/shared-host', 'path': 'cat-plugin-player', 'sha': SHA},
                         {'repository': 'cat2151/clap-mml-play-server',
-                         'path': 'clap-mml-play-server', 'sha': OTHER_SHA}]
+                         'path': 'clap-mml-play-server', 'sha': OTHER_SHA},
+                        {'repository': 'cat2151/cat-music-patterns',
+                         'path': 'cat-music-patterns', 'sha': OTHER_SHA}]
         with patch.dict(os.environ, {'DEPENDENCIES': json.dumps(dependencies)}), patch('subprocess.run') as run:
             exec(compile(step('build', 'Checkout resolved sibling commits'), '<checkout>', 'exec'), {})
         commands = [call.args[0] for call in run.call_args_list]
@@ -152,6 +170,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn(['git', '-C', 'cat-plugin-player', 'checkout', '--detach', 'FETCH_HEAD'], commands)
         self.assertIn(['git', '-C', 'clap-mml-play-server', 'fetch', '--depth=1', 'origin', OTHER_SHA], commands)
         self.assertIn(['git', '-C', 'clap-mml-play-server', 'checkout', '--detach', 'FETCH_HEAD'], commands)
+        self.assertIn(['git', '-C', 'cat-music-patterns', 'fetch', '--depth=1', 'origin', OTHER_SHA], commands)
+        self.assertIn(['git', '-C', 'cat-music-patterns', 'checkout', '--detach', 'FETCH_HEAD'], commands)
 
     def package(self, files):
         env = {'PACKAGE': 'another-app', 'VERSION': '2.3.4', 'PACKAGE_FILES': json.dumps(files)}

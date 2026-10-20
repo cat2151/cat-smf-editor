@@ -195,6 +195,15 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 add("mml-open", "MML / コード進行", &[Key::I], |a, c| {
                     busy::request(a, c, busy::Task::MmlInput)
                 });
+                add(
+                    "mml-measure",
+                    "MML / コード進行: 1小節を上書き",
+                    &[],
+                    |a, c| {
+                        use crate::view::mml_input::measure;
+                        measure::begin(a, c)
+                    },
+                );
                 add("patch", "音色選択", &[Key::T], |a, _| {
                     crate::player::bulk::request(a)
                 });

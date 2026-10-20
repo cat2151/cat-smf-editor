@@ -713,9 +713,12 @@ dependencies = [
  "cmrt-core",
  "cpal",
  "dirs",
+ "dunce",
  "eframe",
  "image",
  "libloading",
+ "mascot-render-client",
+ "mascot-render-protocol",
  "mmlabc-to-smf",
  "regex",
  "rfd",
@@ -1180,6 +1183,12 @@ name = "dpi"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
+
+[[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "ecolor"
@@ -2167,6 +2176,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "mascot-render-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mascot-render-protocol",
+ "serde_json",
+]
+
+[[package]]
+name = "mascot-render-protocol"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
 ]
 
 [[package]]

@@ -197,3 +197,74 @@ fn held_keys_use_the_existing_twelve_pitch_colors_including_unused_black_keys() 
         );
     }
 }
+
+#[test]
+fn a_singer_key_sounds_the_instrument_first_then_one_beat_of_voice_rendered_meanwhile() {
+    use std::sync::Mutex;
+    static SUNG: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    fn sing(json: &str, rate: u32) -> Result<Vec<u8>, String> {
+        SUNG.lock().unwrap().push(json.to_owned());
+        Ok(crate::view::edit_menu::lyric_tests::wav(rate))
+    }
+    /// Requests that sing one note: its key and frame length.
+    fn one_notes() -> Vec<(u64, u64)> {
+        SUNG.lock()
+            .unwrap()
+            .iter()
+            .filter_map(|json| {
+                let body: serde_json::Value = serde_json::from_str(json).unwrap();
+                let sung: Vec<_> = body["notes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|n| n["key"].is_u64())
+                    .map(|n| {
+                        (
+                            n["key"].as_u64().unwrap(),
+                            n["frame_length"].as_u64().unwrap(),
+                        )
+                    })
+                    .collect();
+                (sung.len() == 1).then(|| sung[0])
+            })
+            .collect()
+    }
+    for singer in [true, false] {
+        let mut music = arpeggio().loaded.unwrap().music;
+        if singer {
+            cat_smf_editor::voicevox::make_singer(&mut music.tracks[0]).unwrap();
+        }
+        let mut app = crate::view::tests::app(music);
+        let root = tempfile::tempdir().unwrap();
+        app.voicevox.prerender.target = Some((50126, root.path().into()));
+        app.voicevox.prerender.sing = Some(sing);
+        SUNG.lock().unwrap().clear();
+        let (ctx, output) = opened_in(&mut app);
+        let c = key(&app, all_notes(&output)[0]);
+        at(
+            &mut app,
+            &ctx,
+            11.0,
+            vec![egui::Event::PointerMoved(c), button(c, true)],
+        );
+        assert_eq!(sounding(&app), Some((0, 60)));
+        assert!(app.audition.sung.is_none(), "the instrument sounds first");
+        at(&mut app, &ctx, 11.1, vec![button(c, false)]);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while crate::play::sung::prerender::running(&app) {
+            assert!(std::time::Instant::now() < deadline);
+            at(&mut app, &ctx, 11.2, vec![]);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        // One beat at 120 BPM is 0.5 s = 46.875 score frames.
+        let expected: &[(u64, u64)] = if singer { &[(60, 47)] } else { &[] };
+        assert_eq!(one_notes(), expected);
+        at(&mut app, &ctx, 11.3, vec![button(c, true)]);
+        assert_eq!(sounding(&app), Some((0, 60)));
+        assert_eq!(app.audition.sung.is_some(), singer);
+        assert!(!crate::play::sung::prerender::running(&app));
+        assert_eq!(one_notes(), expected);
+        at(&mut app, &ctx, 11.4, vec![button(c, false)]);
+        assert_eq!(sounding(&app), None);
+    }
+}

@@ -44,7 +44,7 @@ fn with_notes(notes: &[(u64, u64, u8)]) -> crate::app::App {
     events.push(event(15360, 0xff, vec![]));
     let mut track = Track { events };
     cat_smf_editor::edit::refresh_deltas(&mut track).unwrap();
-    // Format 0: `r` on track 0 of format 1 opens the tempo curve instead.
+    // Use a single-track SMF for piano-roll tests.
     app(Music {
         format: 0,
         division: 480,
@@ -403,6 +403,7 @@ mod seek;
 mod gestures;
 
 mod colors;
+mod lyrics;
 
 mod keyboard;
 mod references;

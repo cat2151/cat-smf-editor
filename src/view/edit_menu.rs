@@ -2,9 +2,10 @@
 use crate::{app::App, view::note_edit::Field};
 use eframe::egui;
 
-const CHOICES: [(egui::Key, Field, &str); 2] = [
+const CHOICES: [(egui::Key, Field, &str); 3] = [
     (egui::Key::M, Field::Mbt, "m: MBT"),
     (egui::Key::D, Field::Duration, "d: Duration"),
+    (egui::Key::L, Field::Lyrics, "l: Lyrics"),
 ];
 
 /// A command remembered up to its number field; the number itself is typed again.
@@ -30,8 +31,37 @@ pub(crate) fn choose(app: &mut App, field: Field) {
 
 /// The row drawing the cursor's note opens the field, so the field sits on its cell.
 fn edit_cursor_note(app: &mut App, field: Field) {
+    if field == Field::Lyrics {
+        step_off_lyric_row(app);
+    }
     app.note_edit_request = Some(field);
     app.reveal_cursor = true;
+}
+
+/// A lyric row sits just above its note, so `j` from the previous note stops on it;
+/// the lyric there belongs to the next Note On at that tick.
+fn step_off_lyric_row(app: &mut App) {
+    let (Some(loaded), Some(selected)) = (&app.loaded, app.selected_event) else {
+        return;
+    };
+    let events = &loaded.music.tracks[app.track].events;
+    let lyric = events
+        .get(selected)
+        .is_some_and(|e| e.status == 0xff && e.meta_type == cat_smf_editor::edit::lyric::LYRIC);
+    if !lyric || !app.note_mode {
+        return;
+    }
+    let tick = events[selected].tick;
+    let Some(note) = (selected + 1..events.len())
+        .take_while(|&i| events[i].tick == tick)
+        .find(|&i| cat_smf_editor::score::note_view::note_on(&events[i]))
+    else {
+        return;
+    };
+    if let Some(row) = loaded.display_rows[app.track].event_row(note) {
+        app.cursor_row = Some(row);
+        app.selected_event = Some(note);
+    }
 }
 
 pub(crate) fn repeat(app: &mut App) {
@@ -70,5 +100,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
 }
 
+#[cfg(test)]
+pub(crate) mod lyric_tests;
 #[cfg(test)]
 mod tests;

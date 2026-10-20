@@ -70,6 +70,25 @@ impl TempoMap {
         }
         tick.saturating_add(((seconds - time) / slope).floor().max(0.0) as u64)
     }
+    /// Quarter-note clock; SMPTE and zero division have no defined beat here.
+    pub fn beat_clock(&self, seconds: f64, division: u16) -> Option<(f64, f64)> {
+        if division == 0 || division & 0x8000 != 0 || !seconds.is_finite() {
+            return None;
+        }
+        let i = self
+            .segments
+            .partition_point(|s| s.1 <= seconds)
+            .saturating_sub(1);
+        let (tick, start, slope) = self.segments[i];
+        if slope <= 0.0 {
+            return None;
+        }
+        let ticks = f64::from(division);
+        Some((
+            (tick as f64 + (seconds - start).max(0.0) / slope) / ticks,
+            1.0 / (slope * ticks),
+        ))
+    }
     pub fn duration(&self, start: u64, duration: u64) -> f64 {
         self.at(start.saturating_add(duration)) - self.at(start)
     }

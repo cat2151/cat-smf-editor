@@ -59,20 +59,37 @@ impl App {
             .is_none_or(|p| p.is_file());
         if valid_player && app.startup.read_error.is_none() {
             app.open_initial(mid);
+            if app.loaded.as_ref().is_some_and(|loaded| {
+                loaded
+                    .music
+                    .tracks
+                    .iter()
+                    .any(cat_smf_editor::voicevox::is_singer)
+            }) {
+                // The singer may need the configured executable before deferred restore.
+                app.config.voicevox_engine = app
+                    .config
+                    .path
+                    .clone()
+                    .map(store::config::Store::open)
+                    .and_then(|config| config.voicevox_engine);
+            }
             if app.loaded.is_some() {
                 playback::start(&mut app, playback::Mode::AllTracks);
                 transport::advance(&mut app);
                 // A started stream can still be waiting for its first callback.
                 // Do not compete with it by starting GUI/font/status I/O yet.
                 let waiting = Instant::now();
+                let singing = crate::play::sung::prerender::running(&app);
                 while !app.audition.is_disabled()
+                    && !singing
                     && transport::preparing(&app)
                     && waiting.elapsed() < Duration::from_secs(10)
                 {
                     app.audition.pump();
                     std::thread::sleep(Duration::from_millis(1));
                 }
-                if !app.audition.is_disabled() && transport::preparing(&app) {
+                if !app.audition.is_disabled() && !singing && transport::preparing(&app) {
                     app.audition.stop();
                     app.playback.active = None;
                     app.playback.pending = None;
@@ -110,6 +127,12 @@ impl App {
         if !self.startup.pending {
             return false;
         }
+        // A singer can take longer than the audio-device deadline. Restore the
+        // UI now so its progress is visible and normal polling can finish the job.
+        if crate::play::sung::prerender::running(self) {
+            self.finish_startup(ctx);
+            return false;
+        }
         let stopped = ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Space));
         let closing = ctx.input(|i| i.viewport().close_requested());
         if !stopped
@@ -142,6 +165,7 @@ impl App {
             .path
             .clone()
             .map_or_else(store::config::Store::local, store::config::Store::open);
+        self.mascot.enabled = self.config.mascot_enabled;
         drop(status_span);
         if let Some(error) = startup.read_error {
             self.config.error = Some(error);

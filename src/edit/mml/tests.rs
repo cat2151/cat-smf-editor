@@ -103,3 +103,77 @@ fn phrase_end_includes_trailing_rest_and_survives_smf_roundtrip() {
     let decoded = crate::ffi::parse(&crate::smf_io::encode(&m).unwrap()).unwrap();
     assert_eq!(decoded.tracks[0].events.last().unwrap().tick, end);
 }
+
+fn notes(music: &Music) -> Vec<(u64, u8, u64)> {
+    let events = &music.tracks[0].events;
+    let pairs = crate::edit::relocate::pairs(events.iter());
+    events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| note_on(e))
+        .map(|(i, e)| (e.tick, e.data[0], events[pairs[i].unwrap()].tick - e.tick))
+        .collect()
+}
+
+fn with_notes(list: &[(u64, u8, u64)]) -> Music {
+    let mut m = music(480);
+    for &(tick, key, length) in list {
+        for (at, status, velocity) in [(tick, 0x90, 100), (tick + length, 0x80, 0)] {
+            crate::edit::insert(
+                &mut m.tracks[0],
+                Event {
+                    delta: 0,
+                    tick: at,
+                    status,
+                    meta_type: 0,
+                    data: vec![key, velocity],
+                },
+            );
+        }
+    }
+    crate::edit::refresh_deltas(&mut m.tracks[0]).unwrap();
+    m
+}
+
+#[test]
+fn replace_overwrites_the_notes_under_the_phrase_and_keeps_the_rest() {
+    // Measure 2 of 4/4 at 480: 1920..3840. A note from measure 1 sounds into it.
+    let original = [
+        (960, 50, 1440),
+        (1920, 60, 480),
+        (2400, 62, 480),
+        (2880, 64, 480),
+        (3360, 65, 480),
+        (3840, 67, 480),
+    ];
+    let mut m = with_notes(&original);
+    let end = replace(&mut m, 0, 1920, 0, "o5 l4 g a").unwrap();
+    assert_eq!(end, 2880);
+    assert_eq!(
+        notes(&m),
+        [
+            (960, 50, 960),
+            (1920, 67, 480),
+            (2400, 69, 480),
+            (2880, 64, 480),
+            (3360, 65, 480),
+            (3840, 67, 480),
+        ]
+    );
+    let encoded = crate::smf_io::encode(&m).unwrap();
+    assert_eq!(
+        crate::smf_io::encode(&crate::ffi::parse(&encoded).unwrap()).unwrap(),
+        encoded
+    );
+}
+
+#[test]
+fn a_rest_in_the_phrase_removes_the_notes_under_it() {
+    let mut m = with_notes(&[(1920, 61, 240), (2400, 62, 480), (2880, 64, 480)]);
+    let end = replace(&mut m, 0, 1920, 0, "o5 l4 c r").unwrap();
+    assert_eq!(end, 2880);
+    assert_eq!(notes(&m), [(1920, 60, 480), (2880, 64, 480)]);
+    let mut only_rests = with_notes(&[(1920, 60, 480), (2400, 62, 480), (2880, 64, 480)]);
+    assert_eq!(replace(&mut only_rests, 0, 1920, 0, "r2").unwrap(), 2880);
+    assert_eq!(notes(&only_rests), [(2880, 64, 480)]);
+}

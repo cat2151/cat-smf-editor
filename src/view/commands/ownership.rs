@@ -20,6 +20,7 @@ pub enum Screen {
     SelectionMenu,
     Mml,
     Note,
+    Lyrics,
     Trill,
     Timeline,
     Help,
@@ -29,6 +30,8 @@ pub enum Screen {
     Waiting,
     Browser,
     Analysis,
+    Voicevox,
+    Singer,
 }
 impl Screen {
     pub fn label(self) -> &'static str {
@@ -47,6 +50,7 @@ impl Screen {
             Self::Selection | Self::SelectionMenu => "Selection",
             Self::Mml => "MML",
             Self::Note => "Note",
+            Self::Lyrics => "Lyrics",
             Self::Trill => "Trill",
             Self::Timeline => "Timeline",
             Self::Help => "Help",
@@ -56,6 +60,8 @@ impl Screen {
             Self::Waiting => "Waiting",
             Self::Browser => "Browser",
             Self::Analysis => "Spectrum",
+            Self::Voicevox => "VOICEVOX",
+            Self::Singer => "VOICEVOX voice",
         }
     }
     pub fn owns_keys(self) -> bool {
@@ -65,6 +71,8 @@ impl Screen {
                 | Self::Mml
                 | Self::LayerInput
                 | Self::Note
+                | Self::Singer
+                | Self::Lyrics
                 | Self::Trill
                 | Self::Waiting
                 | Self::Browser
@@ -88,6 +96,12 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     if a.config.navigation.departure.is_some() {
         return Screen::Confirm;
     }
+    if a.voicevox.wizard {
+        return Screen::Voicevox;
+    }
+    if a.voicevox.singer.is_some() {
+        return Screen::Singer;
+    }
     if a.recent.open {
         return Screen::Recent;
     }
@@ -96,6 +110,9 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     }
     if a.note_edit.is_some() {
         return Screen::Note;
+    }
+    if a.voicevox.lyrics.is_some() {
+        return Screen::Lyrics;
     }
     if a.mml_input.open {
         return Screen::Mml;

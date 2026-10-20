@@ -17,6 +17,13 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
             "invalid"
         };
         ("Auto save", state.into())
+    } else if let Some(json) = data.strip_prefix(crate::voicevox::voice::PREFIX) {
+        (
+            "VOICEVOX voice",
+            serde_json::from_slice::<crate::voicevox::Voice>(json)
+                .map(|v| v.label())
+                .unwrap_or_else(|_| "invalid".into()),
+        )
     } else if let Some(json) = data.strip_prefix(tempo_curve::PREFIX) {
         ("Tempo curve", tempo(json))
     } else if let Some(json) = data.strip_prefix(instrument_layers::PREFIX) {

@@ -110,6 +110,56 @@ fn conductor_renders_all_tracks_colored_and_only_one_measure_in_visible_bottom_p
     assert_eq!(mml(&scrolled)[0].pos.x, texts[0].pos.x);
 }
 
+/// A click stops playback and A–B, then plays only the clicked row's track in the
+/// shown measure, without leaving the current track.
+#[test]
+fn clicking_a_row_plays_only_that_track_in_the_shown_measure() {
+    let mut app = fixture();
+    app.track = 1;
+    let ctx = egui::Context::default();
+    render(&mut app, &ctx);
+    let output = render(&mut app, &ctx);
+    let row = mml(&output)[0];
+    assert_eq!(row.galley.job.text, "e1");
+    let pos = row.pos + row.galley.size() / 2.0;
+    crate::play::playback::start(&mut app, crate::play::playback::Mode::AllTracks);
+    app.playback.repeat = Some((0, 3840));
+    for pressed in [true, false] {
+        crate::view::note_edit::tests::render(
+            &mut app,
+            &ctx,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+    }
+    assert_eq!(app.track, 1);
+    assert_eq!(app.playback.repeat, None);
+    let active = &app
+        .playback
+        .pending
+        .as_ref()
+        .expect("measure audition")
+        .active;
+    assert_eq!(active.mode, crate::play::playback::Mode::Measure);
+    assert_eq!(active.start_seconds, 0.0);
+    assert_eq!(active.end, active.tempos[1].duration(0, 1920));
+    assert_eq!(
+        active
+            .sources
+            .iter()
+            .map(|(track, s)| (*track, s.notes.iter().map(|n| n.pitch).collect::<Vec<_>>()))
+            .collect::<Vec<_>>(),
+        [(2, vec![64])]
+    );
+}
+
 #[test]
 fn keyboard_track_and_measure_navigation_updates_colors_and_the_single_measure() {
     use crate::cursor::split::tests::press;

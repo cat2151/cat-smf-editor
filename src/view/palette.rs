@@ -2,6 +2,7 @@
 use super::commands::{self, Command, Screen};
 use crate::app::App;
 use eframe::egui::{self, Key, Modifiers};
+mod history;
 mod origin;
 use origin::Origin;
 #[cfg(test)]
@@ -9,6 +10,7 @@ pub(crate) mod tests;
 
 #[derive(Default)]
 pub struct State {
+    history: history::History,
     origin: Option<Origin>,
     query: String,
     search: commands::SearchQuery,
@@ -46,6 +48,7 @@ pub(crate) fn begin(a: &mut App, ctx: &egui::Context) -> Option<egui::InputState
     if !a.palette.is_open() && opening && a.palette.handled != Some(token) {
         let origin = Origin::capture(a, ctx);
         a.palette = State {
+            history: history::History::load(a),
             origin: Some(origin),
             commands: commands::candidates(a, ctx),
             reveal: true,
@@ -168,7 +171,12 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     if !fresh {
         clear(ctx);
     }
-    let mut filtered = filter(&palette.commands, &palette.query, &mut palette.search);
+    let mut filtered = filter(
+        &palette.commands,
+        &palette.query,
+        &mut palette.search,
+        &palette.history,
+    );
     palette.selected = palette.selected.min(filtered.len().saturating_sub(1));
     let search_input = events.iter().any(|e| {
         matches!(
@@ -187,6 +195,14 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
         let completed = cancel
             || chosen.is_some_and(|index| commands::execute(a, ctx, &palette.commands[index]));
         if completed {
+            if !cancel && let Some(index) = chosen {
+                palette
+                    .history
+                    .record(&palette.query, &palette.commands[index]);
+                if let Err(error) = palette.history.save(a) {
+                    a.config.error = Some(error);
+                }
+            }
             palette.origin = None;
             palette.commands.clear();
             a.palette = palette;
@@ -196,7 +212,12 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
         palette.commands = commands::candidates(a, ctx);
         palette.selected = 0;
         palette.reveal = true;
-        filtered = filter(&palette.commands, &palette.query, &mut palette.search);
+        filtered = filter(
+            &palette.commands,
+            &palette.query,
+            &mut palette.search,
+            &palette.history,
+        );
     }
     let id = egui::Id::new("command-palette");
     let (width, left) = *palette.geometry.get_or_insert_with(|| {
@@ -243,7 +264,12 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
         if response.changed() {
             palette.selected = 0;
             palette.reveal = true;
-            filtered = filter(&palette.commands, &palette.query, &mut palette.search);
+            filtered = filter(
+                &palette.commands,
+                &palette.query,
+                &mut palette.search,
+                &palette.history,
+            );
         }
         egui::ScrollArea::vertical()
             .id_salt("palette-results")
@@ -276,11 +302,18 @@ fn row_text(command: &Command) -> String {
     )
 }
 
-fn filter(commands: &[Command], query: &str, search: &mut commands::SearchQuery) -> Vec<usize> {
+fn filter(
+    commands: &[Command],
+    query: &str,
+    search: &mut commands::SearchQuery,
+    history: &history::History,
+) -> Vec<usize> {
     search.update(query);
-    commands
+    let mut result: Vec<_> = commands
         .iter()
         .enumerate()
         .filter_map(|(i, c)| c.matches_query(search).then_some(i))
-        .collect()
+        .collect();
+    result.sort_by_key(|&i| history.rank(query, &commands[i]));
+    result
 }

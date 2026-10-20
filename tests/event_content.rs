@@ -196,7 +196,51 @@ fn own_sequencer_specific_payloads_read_as_their_purpose() {
     assert!(decoded(&event(0xff, 0x7f, &broken)).starts_with("Instrument layers: invalid ("));
 }
 
-/// Every `b"\x7dcat-…"` prefix in the sources must decode as text, not fall back to hex.
+// Namespace-only literals classify ownership; only concrete payload prefixes need decoders.
+fn own_payload_prefixes(source: &str) -> Vec<Vec<u8>> {
+    source
+        .match_indices(r#"b"\x7dcat-"#)
+        .filter_map(|(start, _)| {
+            let literal = &source[start + 2..];
+            let literal = &literal[..literal.find('"').unwrap()];
+            if literal
+                .split_once(r"\0")
+                .is_some_and(|(_, kind)| kind.is_empty())
+            {
+                return None;
+            }
+            Some(
+                literal
+                    .replace(r"\x7d", "\x7d")
+                    .replace(r"\0", "\0")
+                    .into_bytes(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn prefix_discovery_excludes_namespaces_but_keeps_unknown_payload_kinds() {
+    let source = r#"
+        data.starts_with(b"\x7dcat-smf-editor\0");
+        data.starts_with(b"\x7dcat-plugin-player\0");
+        const VOLUME: &[u8] = b"\x7dcat-smf-editor\0volume\0";
+        const FUTURE: &[u8] = b"\x7dcat-smf-editor\0unknown-future-kind\0";
+    "#;
+    let prefixes = own_payload_prefixes(source);
+    assert_eq!(
+        prefixes,
+        [
+            cat_smf_editor::app_meta::TRACK_VOLUME.to_vec(),
+            b"\x7dcat-smf-editor\0unknown-future-kind\0".to_vec(),
+        ]
+    );
+    // An unimplemented kind still reaches and fails the decoder coverage check.
+    assert!(!decoded(&event(0xff, 0x7f, &prefixes[0])).starts_with("Sequencer-specific"));
+    assert!(decoded(&event(0xff, 0x7f, &prefixes[1])).starts_with("Sequencer-specific"));
+}
+
+/// Every concrete own payload prefix in the sources must have a named decoder.
 #[test]
 fn every_own_sequencer_specific_prefix_has_a_decoder() {
     fn sources(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
@@ -216,12 +260,11 @@ fn every_own_sequencer_specific_prefix_has_a_decoder() {
     let mut prefixes = Vec::new();
     for file in files {
         let text = std::fs::read_to_string(&file).unwrap();
-        for (start, _) in text.match_indices(r#"b"\x7dcat-"#) {
-            let literal = &text[start + 2..];
-            let literal = &literal[..literal.find('"').unwrap()];
-            let bytes = literal.replace(r"\x7d", "\x7d").replace(r"\0", "\0");
-            prefixes.push((file.clone(), bytes.into_bytes()));
-        }
+        prefixes.extend(
+            own_payload_prefixes(&text)
+                .into_iter()
+                .map(|prefix| (file.clone(), prefix)),
+        );
     }
     assert!(prefixes.len() >= 7, "{prefixes:?}");
     for (file, prefix) in prefixes {

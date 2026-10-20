@@ -10,6 +10,7 @@ fn basic_english_finds_help_play_and_quit_without_bypassing_confirmation() {
             &a.palette.commands,
             q,
             &mut commands::SearchQuery::default(),
+            &history::History::default(),
         )
         .into_iter()
         .map(|i| a.palette.commands[i].id.clone())
@@ -37,7 +38,13 @@ fn basic_english_finds_help_play_and_quit_without_bypassing_confirmation() {
     assert!(!a.config.navigation.close_approved);
     assert!(a.loaded.is_some());
     open(&mut a, &c);
-    assert!(filter(&a.palette.commands, "quit", &mut a.palette.search).is_empty());
+    assert!(filter(
+        &a.palette.commands,
+        "quit",
+        &mut a.palette.search,
+        &a.palette.history
+    )
+    .is_empty());
     press(&mut a, &c, Key::Escape);
     press(&mut a, &c, Key::Escape);
     assert!(a.config.navigation.departure.is_none());

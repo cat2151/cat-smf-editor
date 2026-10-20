@@ -92,8 +92,12 @@ pub(super) fn finish(app: &mut App, ctx: &egui::Context, target: Option<(usize, 
     }
     let previous = state.sounding.take();
     if let Some((track, pitch)) = target {
+        let take = crate::play::sung::audition::key(app, track, pitch);
         let loaded = app.loaded.as_ref().unwrap();
-        if app.audition.play_key(track, &loaded.patches[track], pitch) {
+        if app
+            .audition
+            .play_key(track, &loaded.patches[track], pitch, take)
+        {
             app.piano_roll.keyboard.sounding = target;
         }
     } else if previous.is_some() {

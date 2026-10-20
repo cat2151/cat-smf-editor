@@ -52,7 +52,8 @@ impl Instruments {
         }
     }
 
-    /// `parts` and `gains` must be those given to [`Self::open`].
+    /// `parts` and `gains` must be those given to [`Self::open`]. `takes` give tracks a sung
+    /// voice in place of their instruments.
     ///
     /// # Safety
     /// The returned job must finish before these instruments are dropped.
@@ -62,6 +63,7 @@ impl Instruments {
         parts: Vec<(usize, Patch, Sequence)>,
         gains: &[f32],
         auto_gain_disabled: bool,
+        mut takes: Vec<(usize, Arc<crate::play::sung::Take>)>,
     ) -> Job {
         let end = parts.iter().map(|(_, _, s)| s.end).fold(0.0, f64::max);
         let (parts, gains): (Vec<_>, Vec<_>) = parts
@@ -71,6 +73,10 @@ impl Instruments {
                 (
                     Part {
                         sequence: Some(Arc::new(sequence)),
+                        take: takes
+                            .iter()
+                            .position(|(t, _)| *t == track)
+                            .map(|i| takes.swap_remove(i).1),
                         ..Part::default()
                     },
                     gains.get(track).copied().unwrap_or(1.0),
@@ -90,6 +96,40 @@ impl Instruments {
             rate,
             frames: (end * f64::from(rate)).round().max(0.0) as u64,
         }
+    }
+}
+
+/// The mixer path of [`Instruments::job`] with plugin-free tracks; each part may sing.
+pub(crate) fn without_plugins(
+    rate: u32,
+    parts: Vec<(Sequence, Option<Arc<crate::play::sung::Take>>)>,
+    gains: Vec<f32>,
+) -> Job {
+    let end = parts.iter().map(|(s, _)| s.end).fold(0.0, f64::max);
+    Job {
+        renders: parts
+            .iter()
+            .map(|_| Render::new(Vec::new(), None))
+            .collect(),
+        master: None,
+        command: Command {
+            generation: 1,
+            parts: Arc::new(
+                parts
+                    .into_iter()
+                    .map(|(sequence, take)| Part {
+                        sequence: Some(Arc::new(sequence)),
+                        take,
+                        ..Part::default()
+                    })
+                    .collect(),
+            ),
+            gains: Arc::new(gains),
+            auto_gain_disabled: true,
+            ..Command::default()
+        },
+        rate,
+        frames: (end * f64::from(rate)).round().max(0.0) as u64,
     }
 }
 

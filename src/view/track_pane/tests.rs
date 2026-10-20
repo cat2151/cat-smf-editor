@@ -110,3 +110,50 @@ fn header_names_every_layer_and_rows_color_contents_and_notes() {
         crate::view::pitch_keyboard::note_color(60, keys.map(0).and_then(|k| k.at(0)))
     );
 }
+
+#[test]
+fn singer_header_uses_character_and_style_without_hiding_effects() {
+    use cat_smf_editor::voicevox::Voice;
+    let mut app = fixture();
+    let loaded = app.loaded.as_mut().unwrap();
+    let mut effect = loaded.patches[0].layers[0].instrument.clone().unwrap();
+    effect.preset_name = Some("Hall".into());
+    loaded.patches[0].effects.push(effect);
+    let ctx = egui::Context::default();
+    for voice in [
+        Some(Voice::default()),
+        Some(Voice {
+            name: "四国めたん".into(),
+            style_name: "あまあま".into(),
+            style_id: 3000,
+            ..Voice::default()
+        }),
+        None,
+    ] {
+        Voice::write(&mut loaded.music.tracks[0], voice.as_ref()).unwrap();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                super::header::show(loaded, ui, 0);
+            });
+        });
+        let text: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) => Some(t.galley.text()),
+                _ => None,
+            })
+            .collect();
+        assert!(text.contains(&"Hall"));
+        if let Some(voice) = voice {
+            assert!(text.contains(&voice.label().as_str()), "{text:?}");
+            assert!(!text
+                .iter()
+                .any(|s| s.contains("Organ") || s.contains("Flute")));
+        } else {
+            assert!(text
+                .iter()
+                .any(|s| s.contains("Organ") && s.contains("Flute")));
+        }
+    }
+}

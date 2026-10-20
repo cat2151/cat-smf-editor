@@ -151,6 +151,7 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     super::recent::commands::collect(app, screen, &mut result);
     super::event_selection::commands::collect(app, screen, &mut result);
     super::mml_input::commands::collect(app, screen, &mut result);
+    super::voicevox::collect(app, screen, &mut result);
     for c in &mut result {
         c.target = Some(Target::of(app));
     }
@@ -226,6 +227,12 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
     }
     ctx.data_mut(|d| d.insert_temp(guard, token));
     let mut screen = owner(app, ctx);
+    if screen == Screen::Lyrics {
+        crate::view::voicevox::lyrics::keep_ime_enter(app, ctx);
+    }
+    if screen == Screen::Singer {
+        crate::view::voicevox::singer::keep_ime(app, ctx);
+    }
     let events = ctx.input(|i| i.events.clone());
     let question_repeat = events
         .iter()
@@ -252,6 +259,7 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
         };
         if let Some(command) = command {
             (command.run)(app, ctx);
+            ctx.request_repaint();
             ctx.input_mut(|i| i.events.retain(|e| e != &event));
             let next = owner(app, ctx);
             if next != screen {

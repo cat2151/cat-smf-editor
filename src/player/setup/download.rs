@@ -8,6 +8,7 @@ use std::{
 
 pub const URL: &str = "https://github.com/cat2151/cat-plugin-player/releases/download/v0.1.0/cat-plugin-player-0.1.0-windows-x64.zip";
 const LICENSE_NAME: &str = "cat-plugin-player-LICENSE.txt";
+const LICENSE_DIRECTORY: &str = "cat-smf-editor-licenses";
 const EXE: &str = "cat-plugin-player.exe";
 const MAX_ZIP: u64 = 256 * 1024 * 1024;
 
@@ -70,21 +71,23 @@ fn publish(
     Ok(target)
 }
 
-/// Preserve a different existing Desktop notice rather than overwriting it.
+/// Group notices in one Desktop folder without overwriting different content.
 fn preserve_license(source: &Path, desktop: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
     use sha2::{Digest, Sha256};
     let bytes = fs::read(source)?;
-    let mut target = desktop.join(LICENSE_NAME);
+    let directory = desktop.join(LICENSE_DIRECTORY);
+    fs::create_dir_all(&directory)?;
+    let mut target = directory.join(LICENSE_NAME);
     match fs::read(&target) {
         Ok(existing) if existing == bytes => return Ok(target),
         Ok(_) => {
             let hash = format!("{:x}", Sha256::digest(&bytes));
-            target = desktop.join(format!("cat-plugin-player-LICENSE-{}.txt", &hash[..16]));
+            target = directory.join(format!("cat-plugin-player-LICENSE-{}.txt", &hash[..16]));
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    let mut notice = tempfile::NamedTempFile::new_in(desktop)?;
+    let mut notice = tempfile::NamedTempFile::new_in(&directory)?;
     notice.write_all(&bytes)?;
     notice.flush()?;
     match notice.persist_noclobber(&target) {

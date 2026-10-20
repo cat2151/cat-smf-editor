@@ -119,7 +119,7 @@ fn cells(entry: &Entry, index: usize, now: u64) -> [String; 7] {
             seconds % 60
         ),
         format!("{}tracks", entry.tracks),
-        entry.path.display().to_string(),
+        dunce::simplified(&entry.path).display().to_string(),
     ]
 }
 

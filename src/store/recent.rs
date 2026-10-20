@@ -44,7 +44,12 @@ impl History {
         };
         match std::fs::read(&path) {
             Ok(bytes) => match serde_json::from_slice::<Vec<Entry>>(&bytes) {
-                Ok(entries) => history.entries = entries,
+                Ok(mut entries) => {
+                    entries.sort_by_key(|entry| std::cmp::Reverse(entry.opened));
+                    let mut seen = std::collections::HashSet::new();
+                    entries.retain(|entry| seen.insert(identity(&entry.path)));
+                    history.entries = entries;
+                }
                 Err(e) => history.error = Some(format!("{}: {e}", path.display())),
             },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -66,7 +71,8 @@ impl History {
                 TempoMap::new(music, i).duration(0, track.events.last().map_or(0, |e| e.tick))
             })
             .fold(0.0, f64::max);
-        self.entries.retain(|entry| entry.path != path);
+        let key = identity(path);
+        self.entries.retain(|entry| identity(&entry.path) != key);
         self.entries.insert(
             0,
             Entry {
@@ -102,3 +108,24 @@ impl History {
         self.error = result.err().map(|e| format!("{}: {e}", path.display()));
     }
 }
+
+// Canonicalize existing files, including relative paths and symbolic links. For
+// missing Windows files, still equate ordinary and verbatim path spellings.
+fn identity(path: &Path) -> PathBuf {
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+    #[cfg(windows)]
+    {
+        let text = path.to_string_lossy().replace('/', "\\");
+        let text = if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{unc}")
+        } else {
+            text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned()
+        };
+        PathBuf::from(text.to_lowercase())
+    }
+    #[cfg(not(windows))]
+    path
+}
+
+#[cfg(test)]
+mod tests;
