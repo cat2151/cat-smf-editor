@@ -109,7 +109,8 @@ fn unsent_states_coalesce_without_waiting_for_network() {
     let (wake, _rx) = mpsc::sync_channel(1);
     let worker = Worker {
         latest: Arc::new(Mutex::new(None)),
-        wake,
+        wake: Some(wake),
+        thread: None,
     };
     let mut request = stopped();
     request.playing = true;
@@ -118,6 +119,23 @@ fn unsent_states_coalesce_without_waiting_for_network() {
     }
     worker.publish(stopped());
     assert!(!worker.latest.lock().unwrap().as_ref().unwrap().playing);
+}
+
+#[test]
+fn app_exit_sends_stop_and_waits_for_worker_cleanup() {
+    let (music, _) = fixture();
+    let mut app = crate::view::tests::app(music);
+    let (sent, received) = mpsc::channel();
+    app.mascot.worker = Some(Worker::spawn(move |request| {
+        sent.send(request.playing).unwrap();
+    }));
+    eframe::App::on_exit(&mut app, None);
+    assert!(app.mascot.worker.is_none());
+    assert!(!received.try_recv().unwrap());
+    assert!(matches!(
+        received.try_recv(),
+        Err(mpsc::TryRecvError::Disconnected)
+    ));
 }
 
 #[test]

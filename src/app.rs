@@ -227,8 +227,9 @@ impl eframe::App for App {
         crate::player::resident_link::trace_frame(self, started);
     }
 
-    /// editor が起動した VOICEVOX engine を落とす。
+    /// editor が起動した外部プロセスを落とす。
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        crate::play::mascot::shut_down(self);
         crate::play::sung::prerender::shut_down(self);
     }
 

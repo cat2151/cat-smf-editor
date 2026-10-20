@@ -3,6 +3,7 @@ use crate::app::App;
 use mascot_render_protocol::{now_unix_ms, PlaybackRequest};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
+mod server;
 
 #[derive(Default)]
 pub struct State {
@@ -12,20 +13,19 @@ pub struct State {
 }
 struct Worker {
     latest: Arc<Mutex<Option<PlaybackRequest>>>,
-    wake: mpsc::SyncSender<()>,
+    wake: Option<mpsc::SyncSender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
 }
 impl Worker {
     fn start() -> Self {
         let mut failed = false;
+        let mut server = server::Server::default();
         Self::spawn(move |request| {
-            let result = mascot_render_client::sync_playback_at(
-                mascot_render_client::mascot_render_server_address(),
-                &request,
-            );
-            if let Err(error) = &result {
-                if !failed {
-                    crate::store::error_log::write("mascot", &format!("{error:#}"));
-                }
+            let result = server.sync(&request);
+            if let Err(error) = &result
+                && !failed
+            {
+                crate::store::error_log::write("mascot", &format!("{error:#}"));
             }
             failed = result.is_err();
         })
@@ -34,7 +34,7 @@ impl Worker {
         let (wake, rx) = mpsc::sync_channel(1);
         let latest = Arc::new(Mutex::new(None::<PlaybackRequest>));
         let pending = Arc::clone(&latest);
-        std::thread::spawn(move || {
+        let thread = std::thread::spawn(move || {
             while rx.recv().is_ok() {
                 let request = pending.lock().unwrap().take();
                 if let Some(request) = request {
@@ -42,17 +42,30 @@ impl Worker {
                 }
             }
         });
-        Self { latest, wake }
+        Self {
+            latest,
+            wake: Some(wake),
+            thread: Some(thread),
+        }
     }
     fn publish(&self, request: PlaybackRequest) {
         *self.latest.lock().unwrap() = Some(request);
-        let _ = self.wake.try_send(());
+        if let Some(wake) = &self.wake {
+            let _ = wake.try_send(());
+        }
     }
 }
 impl Drop for Worker {
     fn drop(&mut self) {
         self.publish(stopped());
+        self.wake.take();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
     }
+}
+pub fn shut_down(app: &mut App) {
+    app.mascot.worker.take();
 }
 fn stopped() -> PlaybackRequest {
     PlaybackRequest {
