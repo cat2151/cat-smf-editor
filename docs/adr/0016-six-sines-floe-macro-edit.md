@@ -1,6 +1,7 @@
 # ADR 0016: Six SinesとFloeのMacroをMacro editの対象に加える
 
 - 状態: 採用
+- 決定者: user（editorではCC1割り当て済みのMacroも対象とし、playerの除外規則は維持すること）
 - 関連: [0014](0014-surge-macro-edit.md)、[0015](0015-vaporizer2-macro-edit.md)、[player 0039](../../../cat-plugin-player/docs/adr/0039-parameter-macro-sweep.md)
 
 ## 決定
@@ -11,7 +12,12 @@ Six Sines CLAP（`org.baconpaul.six-sines`）のMacro 1～6と、Floe CLAP（`co
 
 - 動かすparameter: Six Sinesは`Macro N Level`（値域-1～1）、Floeは`Macro N`（0～1）。
 - Six Sinesは常にbipolar（中央0）で表示する。Surge XTと違い、API値もそのまま-1～1である。
-- FloeのMacroのうち、patchのstateがCC1を割り当てているもの（工場出荷時はMacro 1）は対象にしない。SMFのCC1 eventとMacro editのcurveが同じMacroを取り合うため。playerのMacro欄と同じ規則を`Instrument::movable`で共有する。
+
+## CC1による対象除外の撤回
+
+当初はSMFのCC1 eventとMacro editのcurveが同じMacroを取り合うと考え、playerのCC1欄との競合を避ける`Instrument::movable`をeditorにも適用した。その結果、Floeの工場出荷時のMacro 1は使用中でも編集できず、Macro 1だけを使うpatchではMacro editを開けなかった。
+
+editorの再生経路を確認すると、SMFから音源へ送るのはNote On / Offで、CC1は送っていない。このためeditorにもCC1との競合回避が必要という前提を撤回し、userは使用中のMacroをそのまま編集対象にする方針を選んだ。使用判定・名前・値域は引き続き共有し、editorは`Instrument::routed`を使う。playerはCC1の自動操作があるため`Instrument::movable`による除外を維持する。editorが将来CC1の再生に対応する場合は、その機能でMacroとの優先関係を決める。
 
 ## 値の持ち方
 
@@ -29,9 +35,8 @@ Macro editの行の値（音声callbackが読む値）は、API値で持つ。�
 
 - Six Sines・Floe用の判定をeditor側に持つ：playerのMacro欄と判定が二重になり、片方だけ直す不整合が起きるため採らない。
 - 値域0～1を前提にしたまま、Six Sinesだけ送る直前に-1～1へ写す：保存meta・Variation・curveが位置とAPI値を混同したままになり、0014で区別したmacro値・操作位置・API値の関係が崩れるため採らない。
-- FloeのCC1で動くMacroも対象にする：上の取り合いのため採らない。
 
 ## 制限
 
-- コマンドパレットの「… Macro edit」は、patchのMacro使用を見ずに対象音源のlayerごとに出る。FloeのMacro 1（CC1）しか使わないpatchでも「Floe Macro edit」が出て、選ぶと「This patch has no routed macros」になる。
+- コマンドパレットの「… Macro edit」は、patchのMacro使用を見ずに対象音源のlayerごとに出る。使用中のMacroがないpatchでも候補に出て、選ぶと「This patch has no routed macros」になる。
 - 読込直後に実時間を待たないoffline render（Ctrl+Pの試聴の書き出しなど）では、FloeのMacroの値が反映されないことがある（未確認）。

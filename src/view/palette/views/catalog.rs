@@ -108,7 +108,7 @@ fn list(
                 &slot.plugin.format,
                 &slot.plugin.id,
             )
-            .and_then(|i| i.movable(&slot.plugin.format, &slot.state))
+            .and_then(|i| i.routed(&slot.plugin.format, &slot.state))
             .is_some_and(|m| !m.is_empty());
             if macros {
                 view("Macros", View::Macros(track, layer));

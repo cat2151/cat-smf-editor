@@ -30,7 +30,7 @@ fn session(app: &App, layer: u64) -> Result<Session, String> {
         cat_smf_editor::instrument_macros::Instrument::of(&slot.plugin.format, &slot.plugin.id)
             .ok_or(UNSUPPORTED)?;
     let macros = instrument
-        .movable(&slot.plugin.format, &slot.state)
+        .routed(&slot.plugin.format, &slot.state)
         .ok_or_else(|| format!("Cannot inspect {} macro routing", instrument.name()))?;
     let saved = macro_values::read(&loaded.music.tracks[app.track])?;
     let mut rows = vec![];

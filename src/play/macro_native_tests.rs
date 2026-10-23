@@ -30,9 +30,7 @@ fn macro_native_live_values_and_restoration() {
         &reference.plugin.id,
     )
     .unwrap();
-    let macros = instrument
-        .movable(&reference.plugin.format, &state)
-        .unwrap();
+    let macros = instrument.routed(&reference.plugin.format, &state).unwrap();
     assert!(!macros.is_empty());
     let patch = Patch::from(Settings {
         instrument: Some(PluginState {

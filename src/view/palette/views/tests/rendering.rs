@@ -209,3 +209,67 @@ fn six_sines_macros_draw_levels_as_bipolar_positions() {
         "{labels:?}"
     );
 }
+
+#[test]
+fn floe_cc1_macro_is_listed_and_previewed_while_unused_macros_are_hidden() {
+    use cat_smf_editor::{
+        chain_settings::PluginState, host::PluginKey, instrument_macros::Instrument,
+    };
+    // Floe v30: only Macro 1 has a destination, and CC1 maps to it.
+    let mut state = Vec::new();
+    state.extend(0x2a491f93u32.to_le_bytes());
+    state.extend(30u16.to_le_bytes());
+    state.extend(0x00020002u32.to_le_bytes());
+    state.extend([0; 3 * (2 + 16 + 64 * 8 + 2)]);
+    state.extend([0; 7]); // Tags and three empty strings.
+    state.extend(4u16.to_le_bytes());
+    for id in 101u32..=104 {
+        state.extend(id.to_le_bytes());
+        state.extend(0.25f32.to_le_bytes());
+    }
+    state.push(4);
+    for i in 0..4 {
+        state.extend(0u32.to_le_bytes()); // Default name.
+        state.push(u8::from(i == 0));
+        if i == 0 {
+            state.extend(0u32.to_le_bytes());
+            state.extend(0.5f32.to_le_bytes());
+        }
+    }
+    state.extend([0; 9]); // IR, integrity, FX counts.
+    state.extend(1u32.to_le_bytes());
+    state.push(1);
+    state.extend(101u32.to_le_bytes());
+    state.extend([0; 21]); // Config, display strings, UUID, dirty flag.
+    assert!(Instrument::Floe.movable("CLAP", &state).unwrap().is_empty());
+    let mut a = fixture();
+    a.loaded.as_mut().unwrap().patches[1].layers[0].instrument = Some(PluginState {
+        plugin: PluginKey {
+            format: "CLAP".into(),
+            id: "com.floe-audio.floe".into(),
+            name: "Floe".into(),
+            vendor: "Floe".into(),
+            bundle_path: "X:/floe.clap".into(),
+        },
+        state,
+        reference: None,
+        preset_name: None,
+        bypass: false,
+    });
+    let entries = catalog::entries(&a, Level::Layer(1, 1));
+    assert!(entries
+        .iter()
+        .any(|e| e.target == Target::View(View::Macros(1, 1))));
+    let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
+    let labels = draw(&mut a, &egui::Context::default(), View::Macros(1, 1));
+    assert!(labels.iter().any(|s| s == "Macro 1"), "{labels:?}");
+    for unused in ["Macro 2", "Macro 3", "Macro 4"] {
+        assert!(!labels.iter().any(|s| s == unused), "{labels:?}");
+    }
+    assert_eq!(
+        cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap(),
+        before
+    );
+    assert!(!a.macro_editor.open());
+    assert!(!crate::play::transport::timeline::running(&a));
+}
