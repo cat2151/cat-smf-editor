@@ -12,11 +12,11 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             return;
         }
         for layer in &patch.layers {
-            if !layer.instrument.as_ref().is_some_and(|p| {
-                cat_smf_editor::surge_macros::supports(&p.plugin.format, &p.plugin.id)
-            }) {
+            let Some(instrument) = layer.instrument.as_ref().and_then(|p| {
+                cat_smf_editor::instrument_macros::Instrument::of(&p.plugin.format, &p.plugin.id)
+            }) else {
                 continue;
-            }
+            };
             let id = layer.settings.id;
             out.push(Command::plain(
                 screen,
@@ -34,7 +34,8 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
                 screen,
                 format!("macro-edit-{id}"),
                 format!(
-                    "Surge XT Macro edit · {}",
+                    "{} Macro edit · {}",
+                    instrument.name(),
                     super::super::parameter_editor::layer_label(patch, id)
                 ),
                 &[],

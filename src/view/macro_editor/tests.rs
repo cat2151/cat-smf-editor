@@ -397,4 +397,7 @@ mod variation_tests;
 #[path = "tests/randomize.rs"]
 mod randomize_tests;
 
+#[path = "tests/levels.rs"]
+mod level_tests;
+
 mod keyboard;

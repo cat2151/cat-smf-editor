@@ -70,10 +70,11 @@ fn validate_parameters(parameters: &[Curve]) -> Result<(), String> {
     let mut targets = std::collections::HashSet::new();
     for c in parameters {
         c.validate()?;
-        if !crate::surge_macros::supports(&c.target.plugin_format, &c.target.plugin_id)
+        let range =
+            crate::instrument_macros::Instrument::of(&c.target.plugin_format, &c.target.plugin_id)
+                .map(|i| i.range());
+        if range != Some((c.minimum, c.maximum))
             || c.target.group != 1
-            || c.minimum != 0.0
-            || c.maximum != 1.0
             || c.points.len() != 1
             || c.points[0].tick != 0
             || !targets.insert(c.target.clone())

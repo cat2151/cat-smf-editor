@@ -74,15 +74,18 @@ fn dragging_controls_above_and_below_variation_range_preserves_values() {
             frame(&mut app, &ctx, vec![]);
         }
         let output = frame(&mut app, &ctx, vec![]);
+        // The track map behind the editor draws the same curve.
+        let rect = app.parameter_editor.viewport.tempo_rect.unwrap();
         let from = output
             .shapes
             .iter()
             .find_map(|s| match &s.shape {
-                egui::epaint::Shape::QuadraticBezier(b) => Some(b.points[1]),
+                egui::epaint::Shape::QuadraticBezier(b) if rect.contains(b.points[0]) => {
+                    Some(b.points[1])
+                }
                 _ => None,
             })
             .unwrap();
-        let rect = app.parameter_editor.viewport.tempo_rect.unwrap();
         let axis = app.parameter_editor.viewport.axis.unwrap();
         let to = egui::pos2(
             from.x,

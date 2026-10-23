@@ -176,3 +176,36 @@ fn score_confirmation_leaves_the_double_column_view() {
     assert_eq!(a.track_view.split, None);
     assert_eq!(a.track, 1);
 }
+
+#[test]
+fn six_sines_macros_draw_levels_as_bipolar_positions() {
+    use cat_smf_editor::{chain_settings::PluginState, host::PluginKey};
+    let mut a = fixture();
+    // Op 3 Source slot 0 routes Macro 1 (Mod Source 400) to a nonzero Mod Target.
+    let xml = r#"<patch id="org.baconpaul.six-sines" version="12"><params><p id="2150" v="400" /><p id="2160" v="2" /><p id="40000" v="0.5" /></params><macroNames><macroName idx="0"><![CDATA[Drive]]></macroName></macroNames></patch>"#;
+    let mut state = xml.as_bytes().to_vec();
+    state.push(0);
+    a.loaded.as_mut().unwrap().patches[1].layers[0].instrument = Some(PluginState {
+        plugin: PluginKey {
+            format: "CLAP".into(),
+            id: "org.baconpaul.six-sines".into(),
+            name: "Six Sines".into(),
+            vendor: "BaconPaul".into(),
+            bundle_path: "X:/six-sines.clap".into(),
+        },
+        state,
+        reference: None,
+        preset_name: None,
+        bypass: false,
+    });
+    let labels = draw(&mut a, &egui::Context::default(), View::Macros(1, 1));
+    for control in ["Macro 1 · Drive", "Macro +0.500  ·  pos 0.750"] {
+        assert!(labels.iter().any(|s| s == control), "{control}: {labels:?}");
+    }
+    assert!(
+        labels
+            .iter()
+            .any(|s| s.contains("bipolar [-1, 1]") && s.contains("send CLAP plain 0.5")),
+        "{labels:?}"
+    );
+}

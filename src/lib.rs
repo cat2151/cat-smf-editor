@@ -60,5 +60,7 @@ pub mod spectrum_ui;
 #[path = "../../cat-plugin-player/shared/mml.rs"]
 pub mod mml;
 
+#[path = "../../cat-plugin-player/shared/instrument_macros.rs"]
+pub mod instrument_macros;
 #[path = "../../cat-plugin-player/shared/surge_macros.rs"]
 pub mod surge_macros;

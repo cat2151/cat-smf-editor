@@ -1,10 +1,11 @@
-//! Minimal Surge macro editing, with an isolated draft and a fixed measure loop.
+//! Minimal instrument macro editing, with an isolated draft and a fixed measure loop.
 use crate::{
     app::App,
     play::{audio_sequence::Sequence, transport},
 };
 use cat_smf_editor::{
     edit::parameter_curve::{Curve, Point, Target, ValueSpace},
+    host::parameters::domain::{Domain, Position},
     score::{instrument::Patch, macro_values},
 };
 use eframe::egui;
@@ -45,33 +46,54 @@ struct Session {
 }
 struct Row {
     curve: Curve,
+    /// The API value the audio callback sends; the editor works in 0-1 positions.
     value: Arc<AtomicU64>,
     bipolar: bool,
     readback: Option<(f64, Result<String, String>)>,
 }
 impl Row {
-    fn get(&self) -> f64 {
-        f64::from_bits(self.value.load(Ordering::Relaxed))
+    fn domain(&self) -> Domain {
+        self.curve.domain().expect("validated macro curve")
     }
-    fn set(&self, value: f64) {
-        self.value
-            .store(value.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+    fn get(&self) -> f64 {
+        let d = self.domain();
+        d.value(f64::from_bits(self.value.load(Ordering::Relaxed)))
+            .and_then(|v| d.position(v))
+            .map_or(0.0, |p| p.get())
+    }
+    fn set(&self, position: f64) {
+        if let Ok(p) = Position::new(position.clamp(0.0, 1.0)) {
+            self.set_value(self.domain().api(p).get());
+        }
+    }
+    fn set_value(&self, value: f64) {
+        self.value.store(value.to_bits(), Ordering::Relaxed);
     }
     fn saved(&self) -> Curve {
         let mut c = self.curve.clone();
-        c.points[0].value = c
-            .domain()
-            .unwrap()
-            .api(cat_smf_editor::host::parameters::domain::Position::new(self.get()).unwrap())
-            .get();
+        c.points[0].value = f64::from_bits(self.value.load(Ordering::Relaxed));
         c
     }
+}
+/// The saved API value, else the patch's own 0-1 position mapped onto the curve's range.
+fn initial(curve: &Curve, saved: Option<f64>, position: Option<f64>) -> Option<f64> {
+    saved.or_else(|| {
+        Some(
+            curve
+                .domain()
+                .ok()?
+                .api(Position::new(position?).ok()?)
+                .get(),
+        )
+    })
 }
 impl State {
     pub fn open(&self) -> bool {
         self.session.is_some()
     }
 }
+
+const UNSUPPORTED: &str = "Select Surge XT, Vaporizer2, Six Sines or Floe";
 
 fn begin(app: &mut App, layer: u64) -> Result<(), String> {
     let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
@@ -86,13 +108,14 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
         .iter()
         .find(|l| l.settings.id == layer)
         .and_then(|l| l.instrument.as_ref())
-        .ok_or("No routed Surge XT macros")?;
-    if !cat_smf_editor::surge_macros::supports(&slot.plugin.format, &slot.plugin.id) {
-        return Err("Select Surge XT".into());
-    }
-    let controls = cat_smf_editor::surge_macros::parse(&slot.state, slot.plugin.format == "VST3")
-        .ok_or("Cannot inspect Surge XT macro routing")?;
-    if !controls.routed.iter().any(|active| *active) {
+        .ok_or("No routed macros")?;
+    let instrument =
+        cat_smf_editor::instrument_macros::Instrument::of(&slot.plugin.format, &slot.plugin.id)
+            .ok_or(UNSUPPORTED)?;
+    let macros = instrument
+        .movable(&slot.plugin.format, &slot.state)
+        .ok_or_else(|| format!("Cannot inspect {} macro routing", instrument.name()))?;
+    if macros.is_empty() {
         return Err("This patch has no routed macros".into());
     }
     let key = slot.plugin.clone();
@@ -114,20 +137,18 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
     app.audition.restore_automated_baselines();
     let catalog = app.audition.parameter_catalog(app.track, &patch, layer)?;
     let mut rows = vec![];
-    for (i, routed) in controls.routed.into_iter().enumerate() {
-        if !routed {
-            continue;
-        }
-        // Surge's own adapter exposes M1: <patch label> through M8: <patch label>.
-        let prefix = format!("M{}:", i + 1);
+    for m in macros {
+        let n = m.number;
         let mut matching = catalog.iter().filter(|p| {
-            p.name.starts_with(&prefix) && p.eligible && p.minimum == 0.0 && p.maximum == 1.0
+            instrument.parameter(n, &p.name)
+                && p.eligible
+                && (p.minimum, p.maximum) == instrument.range()
         });
         let parameter = matching
             .next()
-            .ok_or_else(|| format!("Missing Macro {} parameter", i + 1))?;
+            .ok_or_else(|| format!("Missing Macro {n} parameter"))?;
         if matching.next().is_some() {
-            return Err(format!("Ambiguous Macro {}", i + 1));
+            return Err(format!("Ambiguous Macro {n}"));
         }
         let target = Target {
             group: 1,
@@ -136,22 +157,20 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
             plugin_id: key.id.clone(),
             parameter_id: parameter.stable_id.clone(),
         };
-        let value = saved
+        let stored = saved
             .parameters
             .iter()
             .find(|c| c.target == target)
-            .map(|c| c.points[0].value)
-            .or(controls.positions[i])
-            .ok_or_else(|| format!("Missing Macro {} saved position", i + 1))?;
-        let name = controls.names[i].as_ref().map_or_else(
-            || format!("Macro {}", i + 1),
-            |name| format!("Macro {} · {name}", i + 1),
+            .map(|c| c.points[0].value);
+        let name = m.name.as_ref().map_or_else(
+            || format!("Macro {n}"),
+            |name| format!("Macro {n} · {name}"),
         );
-        let curve = Curve {
+        let mut curve = Curve {
             version: 1,
             target,
-            minimum: 0.0,
-            maximum: 1.0,
+            minimum: parameter.minimum,
+            maximum: parameter.maximum,
             value_space: if parameter.normalized {
                 ValueSpace::Normalized
             } else {
@@ -159,14 +178,20 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
             },
             name,
             path: parameter.path.clone(),
-            points: vec![Point { tick: 0, value }],
+            points: vec![Point {
+                tick: 0,
+                value: 0.0,
+            }],
             controls: vec![],
         };
+        let value = initial(&curve, stored, m.position)
+            .ok_or_else(|| format!("Missing Macro {n} saved position"))?;
+        curve.points[0].value = value;
         curve.validate()?;
         rows.push(Row {
             curve,
             value: Arc::new(AtomicU64::new(value.to_bits())),
-            bipolar: controls.bipolar[i],
+            bipolar: m.bipolar,
             readback: Some((
                 parameter.current,
                 app.audition

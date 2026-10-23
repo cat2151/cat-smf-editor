@@ -26,25 +26,22 @@ fn session(app: &App, layer: u64) -> Result<Session, String> {
         .find(|l| l.settings.id == layer)
         .and_then(|l| l.instrument.as_ref())
         .ok_or("No instrument")?;
-    let controls = cat_smf_editor::surge_macros::parse(&slot.state, slot.plugin.format == "VST3")
-        .ok_or("Cannot inspect Surge XT macro routing")?;
+    let instrument =
+        cat_smf_editor::instrument_macros::Instrument::of(&slot.plugin.format, &slot.plugin.id)
+            .ok_or(UNSUPPORTED)?;
+    let macros = instrument
+        .movable(&slot.plugin.format, &slot.state)
+        .ok_or_else(|| format!("Cannot inspect {} macro routing", instrument.name()))?;
     let saved = macro_values::read(&loaded.music.tracks[app.track])?;
     let mut rows = vec![];
-    for (i, routed) in controls.routed.iter().enumerate() {
-        if !routed {
-            continue;
-        }
-        let prefix = format!("Macro {}", i + 1);
+    for m in macros {
+        let prefix = format!("Macro {}", m.number);
         let existing = saved.parameters.iter().find(|c| {
             c.target.layer == layer
                 && c.target.plugin_format == slot.plugin.format
                 && c.target.plugin_id == slot.plugin.id
                 && (c.name == prefix || c.name.starts_with(&format!("{prefix} · ")))
         });
-        let value = existing
-            .map(|c| c.points[0].value)
-            .or(controls.positions[i])
-            .ok_or_else(|| format!("Missing Macro {} saved position", i + 1))?;
         // No host parameter is fabricated or queried. Only the saved display data is
         // used; the temporary curve never leaves this inert rendering session.
         let mut curve = existing.cloned().unwrap_or_else(|| Curve {
@@ -61,22 +58,30 @@ fn session(app: &App, layer: u64) -> Result<Session, String> {
             } else {
                 ValueSpace::Plain
             },
-            minimum: 0.0,
-            maximum: 1.0,
-            name: controls.names[i]
+            minimum: instrument.range().0,
+            maximum: instrument.range().1,
+            name: m
+                .name
                 .as_ref()
                 .map_or_else(|| prefix.clone(), |n| format!("{prefix} · {n}")),
             path: String::new(),
-            points: vec![Point { tick: 0, value }],
+            points: vec![Point {
+                tick: 0,
+                value: 0.0,
+            }],
             controls: vec![],
         });
-        curve.name = controls.names[i]
+        let value = initial(&curve, existing.map(|c| c.points[0].value), m.position)
+            .ok_or_else(|| format!("Missing {prefix} saved position"))?;
+        curve.points[0].value = value;
+        curve.name = m
+            .name
             .as_ref()
             .map_or_else(|| prefix.clone(), |name| format!("{prefix} · {name}"));
         rows.push(Row {
             curve,
             value: Arc::new(AtomicU64::new(value.to_bits())),
-            bipolar: controls.bipolar[i],
+            bipolar: m.bipolar,
             readback: None,
         });
     }

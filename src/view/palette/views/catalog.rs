@@ -104,13 +104,12 @@ fn list(
                 return parameter_entries(collection, track, layer, &valid_parameter);
             };
             let values = macro_values::read(source).ok();
-            let macros =
-                cat_smf_editor::surge_macros::supports(&slot.plugin.format, &slot.plugin.id)
-                    && cat_smf_editor::surge_macros::parse(
-                        &slot.state,
-                        slot.plugin.format == "VST3",
-                    )
-                    .is_some_and(|c| c.routed.iter().any(|v| *v));
+            let macros = cat_smf_editor::instrument_macros::Instrument::of(
+                &slot.plugin.format,
+                &slot.plugin.id,
+            )
+            .and_then(|i| i.movable(&slot.plugin.format, &slot.state))
+            .is_some_and(|m| !m.is_empty());
             if macros {
                 view("Macros", View::Macros(track, layer));
             }

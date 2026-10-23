@@ -2,6 +2,7 @@
 use super::audio_sequence::Sequence;
 use cat_smf_editor::{
     edit::parameter_curve::{Curve, Point, Target, ValueSpace},
+    host::parameters::domain::{Domain, Position},
     score::instrument::Patch,
 };
 use std::{
@@ -12,8 +13,8 @@ use std::{
     },
 };
 #[test]
-#[ignore = "requires MACRO_NATIVE_CACHE pointing to an existing Surge XT patch cache entry"]
-fn surge_macro_native_live_values_and_restoration() {
+#[ignore = "requires MACRO_NATIVE_CACHE pointing to an existing Surge XT, Vaporizer2, Six Sines or Floe patch cache entry"]
+fn macro_native_live_values_and_restoration() {
     use crate::play::{audition_native::Native, automation::OwnerPlan};
     use cat_smf_editor::{
         chain_settings::{PluginState, Settings},
@@ -24,10 +25,15 @@ fn surge_macro_native_live_values_and_restoration() {
     let json: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     let reference: PatchReference = serde_json::from_value(json["reference"].clone()).unwrap();
     let state: Vec<u8> = serde_json::from_value(json["state"].clone()).unwrap();
-    let controls =
-        cat_smf_editor::surge_macros::parse(&state, reference.plugin.format == "VST3").unwrap();
-    let routed = controls.routed;
-    assert!(routed.iter().any(|v| *v));
+    let instrument = cat_smf_editor::instrument_macros::Instrument::of(
+        &reference.plugin.format,
+        &reference.plugin.id,
+    )
+    .unwrap();
+    let macros = instrument
+        .movable(&reference.plugin.format, &state)
+        .unwrap();
+    assert!(!macros.is_empty());
     let patch = Patch::from(Settings {
         instrument: Some(PluginState {
             reference: Some(reference.clone()),
@@ -41,29 +47,19 @@ fn surge_macro_native_live_values_and_restoration() {
     let work = tempfile::tempdir().unwrap();
     let _dll = cat_smf_editor::native_library::load_at(work.path()).unwrap();
     let mut native = Native::open(48000, &patch).unwrap();
+    settle(&native);
     let catalog = native.parameters(1).unwrap();
     let mut curves = vec![];
     let mut live = BTreeMap::new();
     let mut originals = vec![];
-    for (i, active) in routed.into_iter().enumerate() {
-        if !active {
-            continue;
-        }
+    let mut senders = vec![];
+    for m in &macros {
         let p = catalog
             .iter()
-            .find(|p| p.name.starts_with(&format!("M{}:", i + 1)))
-            .unwrap_or_else(|| {
-                panic!(
-                    "Macro {} missing in {:?}",
-                    i + 1,
-                    catalog
-                        .iter()
-                        .filter(|p| p.name.starts_with('M'))
-                        .collect::<Vec<_>>()
-                )
-            });
+            .find(|p| instrument.parameter(m.number, &p.name))
+            .unwrap_or_else(|| panic!("Macro {} missing", m.number));
         assert!(p.eligible);
-        assert_eq!((p.minimum, p.maximum), (0.0, 1.0));
+        assert_eq!((p.minimum, p.maximum), instrument.range());
         let target = Target {
             group: 1,
             layer: 1,
@@ -72,34 +68,37 @@ fn surge_macro_native_live_values_and_restoration() {
             parameter_id: p.stable_id.clone(),
         };
         eprintln!(
-            "macro {} current={} range={}..{} normalized={} name={}",
-            i + 1,
-            p.current,
-            p.minimum,
-            p.maximum,
-            p.normalized,
-            p.name
+            "macro {} saved={:?} current={} range={}..{} normalized={} name={}",
+            m.number, m.position, p.current, p.minimum, p.maximum, p.normalized, p.name
         );
-        originals.push((p.stable_id.clone(), p.current, controls.bipolar[i]));
-        live.insert(target.clone(), Arc::new(AtomicU64::new(0.2f64.to_bits())));
-        curves.push(Arc::new(Curve {
+        // Surge reads a bipolar macro back as -1-1 although its host range is 0-1.
+        let reads_signal =
+            instrument == cat_smf_editor::instrument_macros::Instrument::SurgeXt && m.bipolar;
+        let mut curve = Curve {
             version: 1,
-            target,
+            target: target.clone(),
             value_space: if p.normalized {
                 ValueSpace::Normalized
             } else {
                 ValueSpace::Plain
             },
-            minimum: 0.0,
-            maximum: 1.0,
+            minimum: p.minimum,
+            maximum: p.maximum,
             name: p.name.clone(),
             path: p.path.clone(),
             points: vec![Point {
                 tick: 0,
-                value: controls.positions[i].unwrap(),
+                value: 0.0,
             }],
             controls: vec![],
-        }));
+        };
+        let domain = curve.domain().unwrap();
+        curve.points[0].value = api(domain, m.position.unwrap());
+        let value = Arc::new(AtomicU64::new(api(domain, 0.2).to_bits()));
+        live.insert(target, value.clone());
+        senders.push((value, domain));
+        originals.push((p.stable_id.clone(), p.current, reads_signal, domain));
+        curves.push(Arc::new(curve));
     }
     let music = cat_smf_editor::edit::tracks::new_song();
     let owner = Arc::new(OwnerPlan {
@@ -109,37 +108,27 @@ fn surge_macro_native_live_values_and_restoration() {
         tempo: Arc::new(TempoMap::new(&music, 0)),
         boundaries: vec![],
     });
-    let bindings = native.prepare_automation(&owner).unwrap();
     let runtime =
         crate::play::automation::RuntimePlan::new(owner, &Sequence::new(vec![], 1.0), 0.0, 48000);
-    {
-        let mut render = unsafe { native.render() };
-        render.set_automation(bindings);
-        let mut out = [0.0; 128];
-        for (frame, expected) in [(0, 0.2_f64), (64, 0.85_f64)] {
-            for value in live.values() {
-                value.store(expected.to_bits(), Ordering::Relaxed);
-            }
-            assert!(render.automate(Some(&runtime), frame));
-            assert!(render.process(&[0; 128], &[0; 128], 0, &mut out, 2));
-            let catalog = native.parameters(1).unwrap();
-            for (id, _, bipolar) in &originals {
-                let current = catalog.iter().find(|p| &p.stable_id == id).unwrap().current;
-                let current = if *bipolar {
-                    (current + 1.0) / 2.0
-                } else {
-                    current
-                };
-                assert!(
-                    (current - expected).abs() < 0.002,
-                    "{id}: {current} != {expected}"
-                );
-            }
+    let mut frame = 0;
+    for expected in [0.2_f64, 0.85_f64] {
+        for (value, domain) in &senders {
+            value.store(api(*domain, expected).to_bits(), Ordering::Relaxed);
+        }
+        drive(&mut native, &runtime, &mut frame);
+        let catalog = native.parameters(1).unwrap();
+        for (id, _, bipolar, domain) in &originals {
+            let current = catalog.iter().find(|p| &p.stable_id == id).unwrap().current;
+            let current = position(*domain, *bipolar, current);
+            assert!(
+                (current - expected).abs() < 0.002,
+                "{id}: {current} != {expected}"
+            );
         }
     }
     let restored = native.restore_baseline(48000).unwrap();
     let catalog = restored.parameters(1).unwrap();
-    for (id, value, _) in &originals {
+    for (id, value, _, _) in &originals {
         assert!(
             (catalog.iter().find(|p| &p.stable_id == id).unwrap().current - value).abs() < 0.002
         );
@@ -158,7 +147,7 @@ fn surge_macro_native_live_values_and_restoration() {
                 .iter()
                 .map(|c| {
                     let mut c = c.as_ref().clone();
-                    c.points[0].value = 0.65;
+                    c.points[0].value = api(c.domain().unwrap(), 0.65);
                     c
                 })
                 .collect(),
@@ -197,23 +186,67 @@ fn surge_macro_native_live_values_and_restoration() {
         let owner = prepared.active.automation.owner(0).unwrap();
         drop(restored);
         let mut restarted = Native::open(48000, &patch).unwrap();
-        let bindings = restarted.prepare_automation(&owner).unwrap();
+        settle(&restarted);
         let plan = super::automation::RuntimePlan::new(owner, &prepared.parts[0].2, 0.0, 48000);
-        {
-            let mut render = unsafe { restarted.render() };
-            render.set_automation(bindings);
-            assert!(render.automate(Some(&plan), 0));
-            let mut out = [0.0; 128];
-            assert!(render.process(&[0; 128], &[0; 128], 0, &mut out, 2));
-        }
+        drive(&mut restarted, &plan, &mut 0);
         let current = restarted.parameters(1).unwrap();
-        for (id, _, bipolar) in &originals {
+        for (id, _, bipolar, domain) in &originals {
             let v = current.iter().find(|p| &p.stable_id == id).unwrap().current;
-            let p = cat_smf_editor::surge_macros::Polarity::from_bipolar(*bipolar)
-                .position(v)
-                .unwrap();
-            assert!((p - 0.65).abs() < 0.002);
+            assert!((position(*domain, *bipolar, v) - 0.65).abs() < 0.002);
         }
         assert_eq!(std::fs::read(source).unwrap(), original_bytes);
+    }
+}
+const SETTLE_BLOCKS: usize = 20;
+/// Sends `plan` for `SETTLE_BLOCKS` blocks from `frame`, then pumps the main thread.
+/// Six Sines reads back its smoothed level, which settles within a few blocks; Floe
+/// reports a new value only after a pump.
+fn drive(
+    native: &mut crate::play::audition_native::Native,
+    plan: &crate::play::automation::RuntimePlan,
+    frame: &mut u64,
+) {
+    let mut out = [0.0; 128];
+    let mut blocks = 0;
+    let mut rebinds = 0;
+    while blocks < SETTLE_BLOCKS {
+        let bindings = native.prepare_automation(&plan.owner).unwrap();
+        let mut render = unsafe { native.render() };
+        render.set_automation(bindings);
+        while blocks < SETTLE_BLOCKS {
+            if !render.automate(Some(plan), *frame) {
+                // Surge rescans its metadata once a macro moves, which stales the
+                // bindings; the editor binds afresh, and so does this probe.
+                assert_eq!(render.parameter_error, Some(-6));
+                rebinds += 1;
+                assert!(rebinds <= 3);
+                break;
+            }
+            assert!(render.process(&[0; 128], &[0; 128], 0, &mut out, 2));
+            *frame += 64;
+            blocks += 1;
+        }
+    }
+    native.pump();
+}
+/// Floe drops parameter events until real time has passed since its state loaded.
+fn settle(native: &crate::play::audition_native::Native) {
+    for _ in 0..10 {
+        native.pump();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+fn api(domain: Domain, position: f64) -> f64 {
+    domain.api(Position::new(position).unwrap()).get()
+}
+/// The 0-1 position of a read value; `signal` marks Surge's -1-1 read of a bipolar macro.
+fn position(domain: Domain, signal: bool, current: f64) -> f64 {
+    if signal {
+        (current + 1.0) / 2.0
+    } else {
+        domain
+            .position(domain.value(current).unwrap())
+            .unwrap()
+            .get()
     }
 }

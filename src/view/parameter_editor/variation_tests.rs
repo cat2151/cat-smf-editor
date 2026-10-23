@@ -190,11 +190,13 @@ fn canvas_empty_click_opens_choice_without_committing() {
     let ctx = egui::Context::default();
     frame(&mut app, &ctx, vec![]);
     let output = frame(&mut app, &ctx, vec![]);
+    // The track map behind the editor draws the same curve.
+    let rect = app.parameter_editor.viewport.tempo_rect.unwrap();
     let segment = output
         .shapes
         .iter()
         .find_map(|s| match &s.shape {
-            egui::epaint::Shape::QuadraticBezier(b) => Some(b.points),
+            egui::epaint::Shape::QuadraticBezier(b) if rect.contains(b.points[0]) => Some(b.points),
             _ => None,
         })
         .unwrap();

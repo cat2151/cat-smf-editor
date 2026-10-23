@@ -63,7 +63,7 @@ impl Session {
                 .iter()
                 .find(|c| c.target == row.curve.target)
             {
-                row.set(curve.points[0].value);
+                row.set_value(curve.points[0].value);
                 row.readback = None;
             }
         }
