@@ -9,7 +9,7 @@ use cat_smf_editor::voicevox::is_singer;
 use eframe::egui::{self, Key, Modifiers};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const LABEL: &str = "Score: VOICEVOX: 現在のtrackの歌声を選ぶ";
+const LABEL: &str = "Event list: VOICEVOX: 現在のtrackの歌声を選ぶ";
 
 fn event(tick: u64, status: u8, meta_type: u8, data: &[u8]) -> Event {
     Event {

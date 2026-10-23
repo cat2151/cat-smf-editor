@@ -297,3 +297,81 @@ fn query_changes_reprioritize_waiting_styles_without_duplicating_the_running_one
     press(&mut app, &ctx, Key::Escape);
     finish_preview(&mut app, &ctx);
 }
+
+#[test]
+fn recent_and_query_choices_survive_restart_and_cancel_does_not_record() {
+    let (mut a, ctx, root) = fixture();
+    let config = root.path().join("status.json");
+    a.config = crate::store::config::Store::open(config.clone());
+    // Choose the second character with no query.
+    press(&mut a, &ctx, Key::ArrowDown);
+    press(&mut a, &ctx, Key::Enter);
+    super::open(&mut a);
+    assert_eq!(super::filtered(&mut a), vec![1, 0]);
+    // A short query learns a different choice from global recency.
+    a.voicevox.singer.as_mut().unwrap().query = "n".into();
+    let rows = super::filtered(&mut a);
+    a.voicevox.singer.as_mut().unwrap().selected = rows.iter().position(|&i| i == 0).unwrap();
+    super::confirm(&mut a, &ctx);
+    super::open(&mut a);
+    a.voicevox.singer.as_mut().unwrap().query = "metan".into();
+    super::confirm(&mut a, &ctx);
+    let file = root.path().join(crate::view::selection_history::SINGER);
+    let bytes = std::fs::read(&file).unwrap();
+    let (mut b, ctx, _other) = fixture();
+    b.config = crate::store::config::Store::open(config);
+    super::open(&mut b);
+    assert_eq!(super::filtered(&mut b), vec![1, 0]);
+    b.voicevox.singer.as_mut().unwrap().query = "n".into();
+    assert_eq!(super::filtered(&mut b), vec![0, 1]);
+    press(&mut b, &ctx, Key::Escape);
+    assert_eq!(std::fs::read(&file).unwrap(), bytes);
+    // Confirming the current voice also refreshes its recency.
+    super::open(&mut a);
+    a.voicevox.singer.as_mut().unwrap().query = "metan".into();
+    super::confirm(&mut a, &ctx);
+    assert_eq!(
+        a.selection_history.singer.rank(
+            "metan",
+            &super::history::identity(&a.voicevox.catalog.voices[1])
+        ),
+        (0, 0)
+    );
+}
+
+#[test]
+fn singer_navigation_repeats_clamps_and_respects_filter() {
+    let (mut a, c, _root) = fixture();
+    a.voicevox.catalog.voices = (0..25)
+        .map(|i| Voice {
+            name: format!("Voice {i}"),
+            speaker_uuid: i.to_string(),
+            ..Voice::default()
+        })
+        .collect();
+    for (key, modifiers, expected) in [
+        (Key::PageDown, egui::Modifiers::NONE, 10),
+        (Key::PageDown, egui::Modifiers::NONE, 20),
+        (Key::End, egui::Modifiers::CTRL, 24),
+        (Key::PageUp, egui::Modifiers::NONE, 14),
+        (Key::Home, egui::Modifiers::CTRL, 0),
+    ] {
+        frame(
+            &mut a,
+            &c,
+            vec![egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: true,
+                modifiers,
+            }],
+        );
+        assert_eq!(a.voicevox.singer.as_ref().unwrap().selected, expected);
+    }
+    frame(&mut a, &c, vec![egui::Event::Text("no-match".into())]);
+    press(&mut a, &c, Key::PageDown);
+    assert_eq!(a.voicevox.singer.as_ref().unwrap().selected, 0);
+    press(&mut a, &c, Key::Escape);
+    assert!(a.voicevox.singer.is_none());
+}

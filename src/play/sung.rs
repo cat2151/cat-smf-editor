@@ -93,15 +93,15 @@ pub fn take(
 
 /// 試聴の1音: 曲の `seconds` 秒に始まる note の片だけを鳴らす take。そこが歌う note でなければ `None`。
 pub fn piece(score: &Score, samples: Arc<Vec<f32>>, rate: u32, seconds: f64) -> Option<Take> {
-    let whole = Sequence {
-        notes: vec![crate::play::audio_sequence::Note {
+    let whole = Sequence::new(
+        vec![crate::play::audio_sequence::Note {
             start: 0.0,
             duration: f64::from(u32::MAX),
             pitch: 0,
             velocity: 1,
         }],
-        end: 0.0,
-    };
+        0.0,
+    );
     let made = take(score, samples, rate, &whole, seconds);
     made.cues.first()?.as_ref()?;
     Some(made)

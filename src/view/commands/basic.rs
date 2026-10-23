@@ -24,6 +24,13 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             |a, c| a.new_smf(c),
         ));
         if a.loaded.is_some() {
+            out.push(Command::plain(
+                s,
+                "insert-event",
+                "Insert event…",
+                &[],
+                |_, _| {},
+            ));
             out.push(
                 Command::new(s, "save", "保存", &[(Key::S, Modifiers::CTRL)], |a, _| {
                     a.allow_departure(files::Action::Save);
@@ -68,6 +75,14 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             .repeating(),
         );
     }
+    if a.loaded.is_some()
+        && matches!(
+            s,
+            Screen::Main | Screen::Timeline | Screen::Mixer | Screen::Layers | Screen::Effects
+        )
+    {
+        out.push(Command::plain(s, "browse-views", "Views…", &[], |_, _| {}));
+    }
     let mut add = |id, name, keys: &[Key], run: fn(&mut App, &egui::Context)| {
         let mut command = Command::plain(s, id, name, keys, run);
         command.repeat = matches!(s, Screen::Confirm | Screen::Invalid)
@@ -97,6 +112,14 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 a.load_error = None;
             },
         ),
+        Screen::Missing => {
+            add("missing-new", "新規SMF", &[Key::N], |a, _| {
+                files::create_new_song(a)
+            });
+            add("missing-quit", "終了", &[Key::Q], |a, c| {
+                a.request_close(c)
+            });
+        }
         Screen::Confirm => {
             add("save-confirm", "保存", &[Key::Y], |a, c| {
                 a.finish_departure(true, c)
@@ -119,6 +142,15 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             if a.config.navigation.backup_tip_visible && a.saved.directory.is_some() {
                 add("backup", "Backup directory", &[Key::O], files::open_backup);
             }
+        }
+        Screen::Backup => {
+            add(
+                "backup-close",
+                "閉じる",
+                &[Key::Enter, Key::Escape],
+                |a, _| files::close_backup_notice(a),
+            );
+            add("backup", "Backup directory", &[Key::O], files::open_backup);
         }
         Screen::Help => {
             add("help", "ヘルプ", &[Key::F1], |a, _| a.help_open = false);
@@ -162,7 +194,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             if a.loaded.is_none() {
                 return;
             }
-            if s == Screen::Timeline {
+            if s == Screen::Timeline && !a.parameter_editor.open {
                 add("mml-open", "MML / コード進行", &[Key::I], |a, c| {
                     busy::request(a, c, busy::Task::MmlInput)
                 });
@@ -205,10 +237,18 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                     },
                 );
                 add("patch", "音色選択", &[Key::T], |a, _| {
-                    crate::player::bulk::request(a)
+                    if super::super::parameter_editor::is_track(a) {
+                        super::super::parameter_editor::open(a);
+                    } else {
+                        crate::player::bulk::request(a);
+                    }
                 });
                 add("effects", "エフェクト", &[Key::X], |a, _| {
-                    mixer::open_effects(a, false)
+                    if super::super::parameter_editor::is_track(a) {
+                        super::super::parameter_editor::open(a);
+                    } else {
+                        mixer::open_effects(a, false);
+                    }
                 });
             }
             if s == Screen::Timeline {
@@ -219,6 +259,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                     |a, _| {
                         a.piano_roll.open = false;
                         a.tempo_curve.open = false;
+                        a.parameter_editor.close();
                     },
                 );
             }
@@ -278,6 +319,8 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             | Screen::Note
             | Screen::Trill
             | Screen::LayerInput
+            | Screen::ParameterInput
+            | Screen::ParameterPicker
             | Screen::LayerHelp
             | Screen::EffectHelp
             | Screen::Help
@@ -306,7 +349,7 @@ fn mixer_commands(a: &App, s: Screen, out: &mut Vec<Command>) {
     out.push(Command::plain(
         s,
         "mixer-unfocus",
-        "Scoreへ戻る",
+        "Event listへ戻る",
         &[Key::Escape],
         mixer::unfocus,
     ));
@@ -341,7 +384,7 @@ fn mixer_commands(a: &App, s: Screen, out: &mut Vec<Command>) {
             mixer::apply(a, key);
         }));
     }
-    // When reached from Score, enter() explicitly selects this track, not master.
+    // When reached from Event list, enter() explicitly selects this track, not master.
     if !a.playback.mixer_focused() || !a.playback.mixer_master {
         for (id, name, keys, key) in [
             (

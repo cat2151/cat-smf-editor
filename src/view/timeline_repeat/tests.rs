@@ -152,3 +152,51 @@ fn pending_drag_change_is_applied_when_pointer_stops_and_duplicate_release_does_
     assert!(frame(&ctx, &mut state, range, 0.29, vec![button(next, false)]).is_none());
     assert!(state.is_none());
 }
+
+#[test]
+fn completed_primary_gesture_starts_once_and_ignores_an_outside_origin() {
+    let ctx = egui::Context::default();
+    let mut state = State::default();
+    let press = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let start = egui::pos2(100.0, 32.0);
+    let end = egui::pos2(400.0, 32.0);
+    frame(
+        &ctx,
+        &mut state,
+        None,
+        0.0,
+        vec![egui::Event::PointerMoved(start)],
+    );
+    let action = frame(
+        &ctx,
+        &mut state,
+        None,
+        0.1,
+        vec![
+            press(start, true),
+            egui::Event::PointerMoved(end),
+            press(end, false),
+        ],
+    );
+    assert!(matches!(action, Some(Action::Start((90, 390)))));
+    assert!(state.is_none());
+    assert!(frame(&ctx, &mut state, Some((90, 390)), 0.2, vec![]).is_none());
+    let outside = egui::pos2(100.0, 80.0);
+    assert!(frame(
+        &ctx,
+        &mut state,
+        Some((90, 390)),
+        0.3,
+        vec![
+            press(outside, true),
+            egui::Event::PointerMoved(end),
+            press(end, false)
+        ]
+    )
+    .is_none());
+}

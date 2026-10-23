@@ -2,7 +2,7 @@ use crate::app::App;
 use cat_smf_editor::score::display_rows::DisplayRow;
 use eframe::egui;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct State {
     pub split: Option<[usize; 2]>,
     /// Slot of `split` that `App::track` edits; both slots may show the same track.

@@ -147,6 +147,8 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     menus::collect(app, screen, &mut result);
     navigation::collect(app, screen, &mut result);
     super::layers::commands::collect(app, screen, &mut result);
+    super::macro_editor::collect(app, screen, &mut result);
+    super::parameter_editor::collect(app, screen, &mut result);
     super::effects::commands::collect(app, screen, &mut result);
     super::recent::commands::collect(app, screen, &mut result);
     super::event_selection::commands::collect(app, screen, &mut result);
@@ -187,6 +189,7 @@ pub fn candidates(app: &App, ctx: &egui::Context) -> Vec<Command> {
             result.extend(contextual_definitions(app, ctx, screen));
         }
     }
+    result.retain(|c| c.id != "browse-views" || c.screen == current);
     result
 }
 
@@ -229,6 +232,9 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
     let mut screen = owner(app, ctx);
     if screen == Screen::Lyrics {
         crate::view::voicevox::lyrics::keep_ime_enter(app, ctx);
+    }
+    if screen == Screen::ParameterPicker {
+        super::parameter_editor::keep_ime(app, ctx);
     }
     if screen == Screen::Singer {
         crate::view::voicevox::singer::keep_ime(app, ctx);

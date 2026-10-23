@@ -11,11 +11,7 @@ pub fn prepare(app: &App, (a, b): (u64, u64)) -> Option<Prepared> {
     let duration = tempo.duration(a, b - a);
     let mut prepared = crate::play::selection_playback::skip(app, all.active, start)?;
     for (_, _, sequence) in &mut prepared.parts {
-        sequence.end = duration;
-        sequence.notes.retain_mut(|note| {
-            note.duration = note.duration.min((duration - note.start).max(0.0));
-            note.start < duration && note.duration > 0.0
-        });
+        sequence.truncate(duration);
     }
     prepared.active.end = duration;
     prepared.active.clock_track = 0;
@@ -24,6 +20,7 @@ pub fn prepare(app: &App, (a, b): (u64, u64)) -> Option<Prepared> {
         .iter()
         .map(|(track, _, sequence)| (*track, sequence.clone()))
         .collect();
+    crate::view::parameter_editor::preview::apply(app, &mut prepared);
     Some(prepared)
 }
 

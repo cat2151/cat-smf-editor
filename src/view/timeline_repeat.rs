@@ -116,13 +116,21 @@ pub(crate) fn row(
         egui::Sense::click_and_drag(),
     );
     let tick = |pos: egui::Pos2| axis.tick(pos.x.clamp(rect.left(), rect.right()) - rect.left());
-    if response.drag_started_by(egui::PointerButton::Primary) {
-        drag.left = ui.input(|i| i.pointer.press_origin()).map(tick);
+    let completed = super::timeline_drag::completed(ui, rect);
+    if response.drag_started_by(egui::PointerButton::Primary) || completed.is_some() {
+        drag.left = completed
+            .map(|p| p.0)
+            .or_else(|| ui.input(|i| i.pointer.press_origin()))
+            .map(tick);
         drag.right = None;
     }
     let preview = drag
         .left
-        .zip(response.interact_pointer_pos())
+        .zip(
+            completed
+                .map(|p| p.1)
+                .or_else(|| response.interact_pointer_pos()),
+        )
         .map(|(a, pos)| {
             let b = tick(pos);
             (a.min(b), a.max(b))
@@ -178,7 +186,7 @@ pub(crate) fn row(
         egui::FontId::monospace(12.0),
         RANGE,
     );
-    if response.drag_stopped_by(egui::PointerButton::Primary) {
+    if response.drag_stopped_by(egui::PointerButton::Primary) || completed.is_some() {
         drag.left = None;
         return preview.filter(|(a, b)| a < b).map(Action::Start);
     }

@@ -6,6 +6,7 @@ use cat_smf_editor::{score::audition_timing::TempoMap, score::display_rows::Disp
 use eframe::egui;
 
 pub struct Active {
+    pub automation: super::automation::Automation,
     pub mode: Mode,
     pub clock_track: usize,
     pub tempos: Vec<TempoMap>,
@@ -45,9 +46,11 @@ pub fn prepare(app: &App, mode: Mode) -> Option<Prepared> {
         .iter()
         .map(|(track, _, sequence)| (*track, sequence.clone()))
         .collect();
+    let automation = super::automation::Automation::prepare(app, &parts, mode == Mode::AllTracks);
     Some(Prepared {
         parts,
         active: Active {
+            automation,
             mode,
             clock_track: app.track,
             tempos,
@@ -115,16 +118,38 @@ pub fn jump(app: &mut App, tick: u64) {
 
 // Prepare the audio device after the start request's frame can be painted.
 pub fn advance(app: &mut App) {
+    crate::view::macro_editor::validate(app);
+    crate::view::parameter_editor::preview::validate(app);
     if let Some(prepared) = app.playback.pending.take() {
+        if let Some(error) = &prepared.active.automation.error {
+            app.audition.stop();
+            app.playback.active = None;
+            app.playback.repeat = None;
+            app.load_error = Some(format!("Automation: {error}"));
+            return;
+        }
         match crate::play::sung::prerender::takes(app, &prepared) {
             // Still preparing: the singer's WAV is being made in the background.
             None => app.playback.pending = Some(prepared),
             Some(takes) => {
-                if app.audition.sequences(prepared.parts, takes) && prepared.active.end > 0.0 {
+                let started = app.audition.sequences_automated(
+                    prepared.parts,
+                    takes,
+                    &prepared.active.automation,
+                    prepared.active.start_seconds,
+                );
+                if started && prepared.active.end > 0.0 {
                     app.playback.active = Some(prepared.active);
+                } else if !started {
+                    app.playback.repeat = None;
                 }
             }
         }
+    }
+    if app.playback.active.is_some() && app.audition.sequence_failed() {
+        app.playback.active = None;
+        app.playback.repeat = None;
+        return;
     }
     if let Some(active) = &app.playback.active
         && app.audition.seconds().is_none_or(|s| s >= active.end)
@@ -229,10 +254,14 @@ pub fn stop_shortcut(app: &mut App, ctx: &egui::Context) {
 }
 
 pub fn stop(app: &mut App) {
+    let preview = app.playback.parameter_preview.take().is_some();
     app.playback.pending = None;
     app.playback.active = None;
     app.playback.repeat = None;
     app.audition.stop();
+    if preview {
+        app.audition.restore_automated_baselines();
+    }
     if app.cursor_row.is_none() && crate::cursor::split::row_count(app, app.track) > 0 {
         let tick = playback::location(app).0;
         app.cursor_row = Some(crate::cursor::split::row_sounding_loaded(

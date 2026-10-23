@@ -46,11 +46,22 @@ impl Command {
         let label_lower = label.to_lowercase();
         let keys = self.key_label().to_lowercase();
         let words = self.search_words();
+        let aliases = if ["voicevox", "ずんだもん"]
+            .iter()
+            .any(|word| label_lower.contains(word) || words.contains(word))
+        {
+            "voicevox ずんだもん"
+        } else {
+            ""
+        };
         query.terms.iter().all(|(term, migemo)| {
             label_lower.contains(term)
                 || keys.contains(term)
                 || words.contains(term)
-                || migemo.as_ref().is_some_and(|r| r.is_match(&label))
+                || aliases.contains(term)
+                || migemo
+                    .as_ref()
+                    .is_some_and(|r| r.is_match(&label) || r.is_match(aliases))
         })
     }
 
@@ -78,6 +89,7 @@ impl Command {
             "lyrics-cancel" => "voicevox cancel",
             "mixer" => "mixer",
             "layers" => "layers",
+            "browse-views" => "views view track ビュー 視点",
             "effects" => "effects",
             "effect-add" => "add effect effects insert",
             "effect-replace" => "replace effect effects",
@@ -93,5 +105,36 @@ impl Command {
             id if id.ends_with("-close") => "close",
             _ => "",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::view::commands::Screen;
+
+    #[test]
+    fn voicevox_and_zundamon_are_mutual_palette_aliases() {
+        for (screen, id, name) in [
+            (Screen::Main, "voicevox-singer", "VOICEVOX: 歌声を選ぶ"),
+            (Screen::Settings, "mascot-playback", "ずんだもん演奏連動"),
+            (Screen::Edit, "edit-lyrics", "Lyrics"),
+            (Screen::Voicevox, "voicevox-page", "公式ページ"),
+            (Screen::Singer, "singer-confirm", "確定"),
+        ] {
+            let command = Command::plain(screen, id, name, &[], |_, _| {});
+            for text in ["voicevox", "VOICEVOX", "ずんだもん", "zundamon"] {
+                let mut query = SearchQuery::default();
+                query.update(text);
+                assert!(command.matches_query(&query), "{id}: {text}");
+            }
+            let mut query = SearchQuery::default();
+            query.update(&format!("ずんだもん {name}"));
+            assert!(command.matches_query(&query), "{id}");
+        }
+        let command = Command::plain(Screen::Main, "save", "保存", &[], |_, _| {});
+        let mut query = SearchQuery::default();
+        query.update("ずんだもん");
+        assert!(!command.matches_query(&query));
     }
 }

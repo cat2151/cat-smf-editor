@@ -40,37 +40,70 @@ mod tests {
     use eframe::egui::Modifiers;
 
     #[test]
-    fn empty_startup_requests_dialog_once_and_cancel_allows_manual_reopen() {
+    fn empty_startup_creates_new_song_instead_of_dialog() {
         let ctx = egui::Context::default();
         let mut app = App::empty();
         app.audition = crate::play::audition::Audition::disabled();
         app.open_initial(None);
-        assert!(std::mem::take(&mut app.file_open_requested));
-        complete(&mut app, None);
-        for _ in 0..2 {
-            let output = ctx.run(Default::default(), |ctx| crate::view::show(&mut app, ctx));
-            assert!(!app.file_open_requested);
-            assert!(!output.shapes.iter().any(|shape| {
-                matches!(&shape.shape, egui::epaint::Shape::Text(text)
-                    if text.galley.text().contains("Stopped") || text.galley.text() == "Tracks")
-            }));
-        }
-        assert!(app.loaded.is_none());
+        assert!(!app.file_open_requested);
+        assert!(app.saved.is_untitled());
+        assert_eq!(app.loaded.as_ref().unwrap().name, "untitled.mid");
+        assert!(app.load_error.is_none());
         press(&mut app, &ctx, Modifiers::CTRL, false);
         assert!(app.file_open_requested);
     }
 
     #[test]
-    fn failed_startup_load_requests_dialog_and_keeps_error() {
-        for explicit in [false, true] {
+    fn missing_argument_requests_dialog_and_keeps_error() {
+        let mut app = App::empty();
+        app.audition = crate::play::audition::Audition::disabled();
+        let path = PathBuf::from("X:/missing-cat-smf-editor-startup/song.mid");
+        app.open_initial(Some(path));
+        assert!(app.loaded.is_none());
+        assert!(app.file_open_requested);
+        assert!(app.load_error.is_some());
+        assert!(app.missing_last_mid.is_none());
+    }
+
+    #[test]
+    fn missing_last_mid_asks_new_song_or_quit() {
+        for (key, creates) in [(Key::N, true), (Key::Q, false)] {
+            let ctx = egui::Context::default();
             let mut app = App::empty();
             app.audition = crate::play::audition::Audition::disabled();
             let path = PathBuf::from("X:/missing-cat-smf-editor-startup/song.mid");
             app.config.navigation.last_mid = Some(path.clone());
-            app.open_initial(explicit.then_some(path));
+            app.config.analysis_open = true;
+            app.open_initial(None);
+            crate::view::analysis::restore(&mut app);
+            assert!(!app.analysis.is_open());
             assert!(app.loaded.is_none());
-            assert!(app.file_open_requested);
-            assert!(app.load_error.is_some());
+            assert!(!app.file_open_requested);
+            assert_eq!(app.missing_last_mid, Some(path));
+            // A modal's first pass is invisible.
+            let _ = ctx.run(Default::default(), |ctx| crate::view::show(&mut app, ctx));
+            let output = ctx.run(Default::default(), |ctx| crate::view::show(&mut app, ctx));
+            assert!(output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::epaint::Shape::Text(text)
+                    if text.galley.text().contains("song.mid"))
+            }));
+            let _ = ctx.run(
+                egui::RawInput {
+                    events: vec![egui::Event::Key {
+                        key,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: Modifiers::NONE,
+                    }],
+                    ..Default::default()
+                },
+                |ctx| crate::view::show(&mut app, ctx),
+            );
+            assert_eq!(app.missing_last_mid.is_none(), creates);
+            assert_eq!(app.saved.is_untitled() && app.loaded.is_some(), creates);
+            assert_eq!(app.config.navigation.close_approved, !creates);
+            assert_eq!(app.analysis.is_open(), creates);
         }
     }
 

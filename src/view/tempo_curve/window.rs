@@ -2,6 +2,9 @@
 use eframe::egui;
 
 pub(super) fn window(ctx: &egui::Context, maximized: bool) -> egui::Window<'static> {
+    if crate::view::palette::preview_active(ctx) {
+        return crate::view::palette::preview_window(ctx, "Tempo curve");
+    }
     let window = egui::Window::new("Tempo curve").collapsible(false);
     if maximized {
         window

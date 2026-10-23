@@ -21,12 +21,17 @@ mod pitch_keyboard;
 mod row;
 pub(crate) use row::beat_color;
 pub(crate) mod files;
+pub(crate) mod macro_editor;
+pub(crate) mod parameter_editor;
 pub(crate) mod recent;
+mod score_panes;
+pub(crate) mod selection_history;
 pub(crate) mod staff;
 pub(crate) mod tempo_curve;
 #[cfg(test)]
 pub(crate) mod tests;
 pub(crate) mod time_columns;
+mod timeline_drag;
 mod timeline_follow;
 mod timeline_minimap;
 mod timeline_repeat;
@@ -87,6 +92,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 }
 
 fn show_contents(app: &mut App, ctx: &egui::Context) {
+    if files::missing_last_dialog(app, ctx) {
+        return;
+    }
     let mut invalid_smf = files::invalid_smf_dialog(app, ctx);
     if !invalid_smf && !app.mml_input.open && recent::show(app, ctx) {
         return;
@@ -101,7 +109,8 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
     if !invalid_smf {
         invalid_smf = files::invalid_smf_dialog(app, ctx);
     }
-    let confirming = departure || invalid_smf;
+    let notice = !invalid_smf && !departure && files::backup_notice_dialog(app, ctx);
+    let confirming = departure || invalid_smf || notice;
     if !confirming {
         #[cfg(windows)]
         crate::player::resident_link::refresh_browser_activity(app);
@@ -198,62 +207,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         if let Some(error) = &app.saved.error {
             ui.colored_label(Color32::LIGHT_RED, error);
         }
-        // Raw rows are too wide for two columns.
-        if let Some(tracks) = app.track_view.split.filter(|_| app.note_mode) {
-            ui.columns(2, |panes| {
-                let active = app.track_view.active;
-                for slot in [active, 1 - active] {
-                    panes[slot].push_id(slot, |ui| {
-                        if let Some(tick) = pane(
-                            app,
-                            ui,
-                            tracks[slot],
-                            slot == active,
-                            &mut browse_patch,
-                            &mut replace_effect,
-                        ) {
-                            map_click = Some((slot, tracks[slot], tick));
-                        }
-                    });
-                    if slot == active {
-                        let rect = panes[slot].min_rect().expand(2.0);
-                        panes[slot].painter().with_clip_rect(rect).rect_stroke(
-                            rect,
-                            2.0,
-                            egui::Stroke::new(2.0_f32, ACTIVE_PANE),
-                            egui::StrokeKind::Inside,
-                        );
-                    }
-                }
-            });
-        } else if app.note_mode {
-            // The single column leaves the second column to the score.
-            ui.columns(2, |panes| {
-                if let Some(tick) = pane(
-                    app,
-                    &mut panes[0],
-                    app.track,
-                    true,
-                    &mut browse_patch,
-                    &mut replace_effect,
-                ) {
-                    map_click = Some((app.track_view.active, app.track, tick));
-                }
-                // The tick overlays show the same time axis and own the wheel while open.
-                if !app.piano_roll.open && !app.tempo_curve.open {
-                    staff::show(app, &mut panes[1]);
-                }
-            });
-        } else if let Some(tick) = pane(
-            app,
-            ui,
-            app.track,
-            true,
-            &mut browse_patch,
-            &mut replace_effect,
-        ) {
-            map_click = Some((app.track_view.active, app.track, tick));
-        }
+        map_click = score_panes::show(app, ui, &mut browse_patch, &mut replace_effect);
         app.track_view.apply_scroll = false;
         app.reset_scroll = false;
         app.reveal_cursor = false;
@@ -286,6 +240,8 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
     crate::view::voicevox::lyrics::show(app, ctx);
     crate::view::piano_roll::show(app, ctx);
     crate::view::tempo_curve::show(app, ctx);
+    crate::view::parameter_editor::show(app, ctx);
+    crate::view::macro_editor::show(app, ctx);
     crate::view::comma_menu::show(app, ctx);
     crate::view::voicevox::show(app, ctx);
     crate::view::voicevox::singer::show(app, ctx);
@@ -348,3 +304,5 @@ fn pane(
     ui.advance_cursor_after_rect(rect);
     tick
 }
+
+mod list_navigation;

@@ -70,6 +70,11 @@ pub(crate) fn accept(app: &mut App, settings: &Settings) -> Result<(), String> {
         patch.validate()?;
         changed |= patch != loaded.patches[track];
         chain_settings::write(&mut music.tracks[track], &patch, roots)?;
+        cat_smf_editor::score::macro_values::retain_unchanged_layers(
+            &mut music.tracks[track],
+            &loaded.patches[track],
+            &patch,
+        )?;
         patches.push((track, patch));
     }
     if !changed {

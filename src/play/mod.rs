@@ -1,9 +1,12 @@
 //! 再生と音声: 再生範囲・transport・試聴・mixer・トラック音量。
 pub(crate) mod analysis;
+mod audio_diagnostics;
 pub(crate) mod audio_sequence;
 pub(crate) mod audition;
 mod audition_native;
 mod auto_gain;
+pub(crate) mod automation;
+mod event_timeline;
 mod instance_cache;
 mod layer_render;
 pub(crate) mod mascot;
@@ -14,3 +17,8 @@ pub(crate) mod sung;
 pub(crate) mod track_volume;
 pub(crate) mod transport;
 pub(crate) mod wav;
+
+#[cfg(test)]
+mod macro_curve_native_tests;
+#[cfg(test)]
+mod macro_native_tests;

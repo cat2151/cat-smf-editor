@@ -2,8 +2,9 @@ use super::*;
 use cat_smf_editor::model::{Event, Music, Track};
 mod feedback;
 mod migemo;
+mod navigation;
 mod ranking;
-fn app() -> App {
+pub(super) fn app() -> App {
     crate::view::tests::app(Music {
         format: 1,
         division: 480,

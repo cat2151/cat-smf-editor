@@ -3,7 +3,7 @@ use crate::play::transport;
 use crate::view::palette::tests::{listed, open as open_palette, press, query};
 use cat_smf_editor::model::Event;
 
-const LABEL: &str = "Score: MML / コード進行: 1小節を上書き";
+const LABEL: &str = "Event list: MML / コード進行: 1小節を上書き";
 /// Measure 2 in 4/4 at 480 ticks per quarter note.
 const MEASURE: (u64, u64) = (1920, 3840);
 

@@ -6,8 +6,13 @@ use egui::{Key, Modifiers};
 use std::path::PathBuf;
 mod backup_tip;
 mod invalid_smf;
+mod missing_last;
 mod open;
+pub(crate) use backup_tip::close_notice as close_backup_notice;
+pub(super) use backup_tip::notice_dialog as backup_notice_dialog;
 pub(super) use invalid_smf::show as invalid_smf_dialog;
+pub(crate) use missing_last::create_new_song;
+pub(super) use missing_last::show as missing_last_dialog;
 pub use open::open_dialog;
 #[cfg(test)]
 #[path = "files/local_migration_test.rs"]
@@ -35,6 +40,10 @@ impl App {
             self.load_error = Some(error);
             return false;
         }
+        if matches!(action, Action::Save) {
+            self.save_now();
+            return false;
+        }
         let enabling = matches!(action, Action::EnableAutoSave);
         let mut error = None;
         if !enabling && self.saved.auto_save_enabled() {
@@ -57,6 +66,30 @@ impl App {
         true
     }
 
+    fn save_now(&mut self) {
+        if self.saved.is_untitled() {
+            crate::play::transport::stop(self);
+        }
+        match self.saved.save_confirmed() {
+            Ok(replaced) => {
+                self.sync_saved_path();
+                if replaced {
+                    backup_tip::notice(self);
+                }
+            }
+            Err(error) if error == crate::store::saved::SAVE_CANCELLED => {}
+            Err(error) => {
+                if self.saved.auto_save_enabled() {
+                    self.saved.auto_save_failed(error.clone());
+                } else {
+                    self.saved.error = Some(error.clone());
+                }
+                self.config.navigation.departure = Some(Action::Save);
+                self.config.navigation.departure_error = Some(error);
+            }
+        }
+    }
+
     pub(super) fn finish_departure(&mut self, save: bool, ctx: &egui::Context) {
         if save && self.saved.is_untitled() {
             crate::play::transport::stop(self);
@@ -70,7 +103,7 @@ impl App {
             self.enable_auto_save()
         } else {
             self.remember_loaded()
-                .and_then(|_| self.saved.save_confirmed())
+                .and_then(|_| self.saved.save_confirmed().map(|_| ()))
         };
         if let Err(error) = result {
             self.saved.error = Some(error.clone());
@@ -156,7 +189,7 @@ pub fn confirmation(app: &mut App, ctx: &egui::Context) {
         if let Some(loaded) = &app.loaded {
             ui.strong(&loaded.name);
         }
-        backup_tip::show(app, ctx, ui);
+        backup_tip::show(app, ui);
         if let Some(error) = &app.config.navigation.departure_error {
             ui.colored_label(egui::Color32::LIGHT_RED, error);
         }

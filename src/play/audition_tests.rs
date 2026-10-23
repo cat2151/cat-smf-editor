@@ -15,14 +15,16 @@ fn master_auto_gain_defaults_on_and_selection_resets_preserve_the_switch() {
 fn default_device_plays_two_patches_in_one_stream() {
     let mut audition = Audition::default();
     let ep = Patch::default();
-    let sequence = |duration| Sequence {
-        notes: vec![crate::play::audio_sequence::Note {
-            start: 0.05,
-            duration,
-            pitch: 60,
-            velocity: 80,
-        }],
-        end: duration + 0.05,
+    let sequence = |duration| {
+        Sequence::new(
+            vec![crate::play::audio_sequence::Note {
+                start: 0.05,
+                duration,
+                pitch: 60,
+                velocity: 80,
+            }],
+            duration + 0.05,
+        )
     };
     assert!(
         audition.sequences(

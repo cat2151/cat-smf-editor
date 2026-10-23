@@ -227,9 +227,7 @@ impl App {
         let font_span = cat_smf_editor::startup_trace::span("fonts");
         install_fonts(ctx);
         drop(font_span);
-        if self.config.analysis_open {
-            crate::view::analysis::toggle(self);
-        }
+        crate::view::analysis::restore(self);
         cat_smf_editor::startup_trace::restored();
     }
 }

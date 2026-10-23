@@ -22,16 +22,19 @@ fn fixture() -> (Music, Active) {
         ..Voice::default()
     };
     Voice::write(&mut music.tracks[1], Some(&other)).unwrap();
-    let seq = |start, duration| Sequence {
-        notes: vec![Note {
-            start,
-            duration,
-            pitch: 60,
-            velocity: 100,
-        }],
-        end: 4.0,
+    let seq = |start, duration| {
+        Sequence::new(
+            vec![Note {
+                start,
+                duration,
+                pitch: 60,
+                velocity: 100,
+            }],
+            4.0,
+        )
     };
     let active = Active {
+        automation: Default::default(),
         mode: Mode::AllTracks,
         clock_track: 0,
         tempos: (0..3).map(|t| TempoMap::new(&music, t)).collect(),

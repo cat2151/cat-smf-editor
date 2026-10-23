@@ -60,15 +60,15 @@ mod tests {
                 vec![(
                     0,
                     Patch::default(),
-                    Sequence {
-                        notes: vec![crate::play::audio_sequence::Note {
+                    Sequence::new(
+                        vec![crate::play::audio_sequence::Note {
                             start: 0.0,
                             duration: 1.0,
                             pitch: 60,
                             velocity: 64,
                         }],
-                        end: 2.0,
-                    }
+                        2.0
+                    )
                 )],
                 Vec::new()
             ),

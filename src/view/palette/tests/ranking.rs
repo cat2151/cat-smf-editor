@@ -64,7 +64,7 @@ fn query_history_wins_over_global_history_after_restart() {
     assert_eq!(b.palette.history.rank("v", &view), (0, 0));
     assert_eq!(b.palette.history.rank("", &save), (1, 0));
     query(&mut b, &c, "v");
-    assert_eq!(listed(&mut b).first().unwrap(), "Score: Notes / Raw");
+    assert_eq!(listed(&mut b).first().unwrap(), "Event list: Notes / Raw");
     press(&mut b, &c, Key::Escape);
     let bytes = std::fs::read(root.path().join("command-palette-history.json")).unwrap();
     open(&mut b, &c);

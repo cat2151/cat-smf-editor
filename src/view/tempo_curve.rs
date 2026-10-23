@@ -62,6 +62,10 @@ struct Drag {
 }
 
 impl State {
+    pub(crate) fn open_at_cursor(&mut self) {
+        self.open = true;
+        self.reveal = true;
+    }
     pub(crate) fn opened() -> Self {
         Self {
             open: true,
@@ -243,7 +247,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     // A fixed id keeps the drag alive when the error line above appears or goes.
                     let response = ui.interact(
                         rect,
-                        egui::Id::new("tempo-curve-points"),
+                        crate::view::palette::preview_id(
+                            ui.ctx(),
+                            egui::Id::new("tempo-curve-points"),
+                        ),
                         egui::Sense::click_and_drag(),
                     );
                     let axis = state.references.axis().unwrap_or_else(|| {
@@ -435,7 +442,7 @@ mod note_guides;
 mod references;
 mod trills;
 use super::timeline_repeat as repeat;
-mod viewport;
+pub(crate) mod viewport;
 mod window;
 
 mod points;

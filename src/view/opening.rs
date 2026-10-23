@@ -182,7 +182,7 @@ impl Job {
                     self.current = (index + 1 < self.rows.len()).then_some(index + 1);
                     Phase::Tracks(document, music, sound, index + 1)
                 } else {
-                    self.title = "Preparing score…";
+                    self.title = "Preparing event list…";
                     Phase::Install(document, music, sound)
                 }
             }

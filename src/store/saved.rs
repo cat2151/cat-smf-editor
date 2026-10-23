@@ -9,6 +9,8 @@ pub enum LoadError {
     Other(String),
 }
 
+pub(crate) const SAVE_CANCELLED: &str = "Save cancelled";
+
 impl std::fmt::Display for LoadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -100,20 +102,24 @@ impl Document {
         self.key.as_deref()
     }
 
-    pub(crate) fn save_confirmed(&mut self) -> Result<(), String> {
+    /// Returns whether the replaced file was copied into backup.
+    pub(crate) fn save_confirmed(&mut self) -> Result<bool, String> {
         if !self.is_untitled() {
-            return self.save();
+            let replaced = self.dirty();
+            return self.save().map(|_| replaced);
         }
         let path = rfd::FileDialog::new()
             .add_filter("SMF", &["mid", "midi", "smf"])
             .set_file_name("untitled.mid")
             .save_file()
-            .ok_or("Save cancelled")?;
+            .ok_or(SAVE_CANCELLED)?;
         self.save_as(&path)
     }
 
-    pub(crate) fn save_as(&mut self, path: &Path) -> Result<(), String> {
-        if path.exists() {
+    /// Returns whether the replaced file was copied into backup.
+    pub(crate) fn save_as(&mut self, path: &Path) -> Result<bool, String> {
+        let replaced = path.exists();
+        if replaced {
             let expected = std::fs::read(path).map_err(|e| e.to_string())?;
             let directory = self
                 .directory
@@ -142,7 +148,7 @@ impl Document {
         self.dirty_since = None;
         self.auto_save_stopped = false;
         self.error = None;
-        Ok(())
+        Ok(replaced)
     }
 
     pub fn dirty(&self) -> bool {

@@ -9,8 +9,8 @@ use cat_smf_editor::voicevox::{is_singer, score::from_track};
 use eframe::egui::{self, Key, Modifiers};
 use std::sync::Mutex;
 
-pub(super) const SINGER: &str = "Score: VOICEVOX: 現在のtrackの歌声を選ぶ";
-pub(super) const LYRICS: &str = "Score: VOICEVOX: 1小節の歌詞を差し替え";
+pub(super) const SINGER: &str = "Event list: VOICEVOX: 現在のtrackの歌声を選ぶ";
+pub(super) const LYRICS: &str = "Event list: VOICEVOX: 1小節の歌詞を差し替え";
 pub(super) const DONGURI: [&str; 8] = ["ど", "ん", "ぐ", "り", "こ", "ろ", "こ", "ろ"];
 
 pub(super) fn key(app: &mut App, ctx: &egui::Context, key: Key, modifiers: Modifiers) {

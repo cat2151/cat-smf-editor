@@ -67,3 +67,41 @@ impl Viewport {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn variation_vertical_bar_preserves_horizontal_range_selection() {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 200.0));
+        let mut view = Viewport {
+            limit_to_fit: true,
+            zoom_drag: Some(Drag {
+                edge: 0,
+                start: 30.0,
+                panel: rect,
+            }),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let response =
+                    ui.allocate_response(egui::vec2(20.0, 200.0), egui::Sense::click_and_drag());
+                view.drag_zoom(
+                    ui,
+                    rect,
+                    Axis {
+                        low: 0.0,
+                        high: 1.0,
+                    },
+                    true,
+                    2,
+                    &response,
+                );
+            });
+        });
+        assert_eq!(view.zoom_drag.map(|drag| drag.edge), Some(0));
+    }
+}

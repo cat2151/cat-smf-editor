@@ -37,20 +37,7 @@ pub fn skip(app: &App, mut active: Active, elapsed: f64) -> Option<Prepared> {
 }
 
 fn remaining(mut sequence: Sequence, elapsed: f64) -> Sequence {
-    sequence.notes.retain_mut(|note| {
-        let end = note.start + note.duration;
-        if end <= elapsed {
-            return false;
-        }
-        if note.start < elapsed {
-            note.duration = end - elapsed;
-            note.start = 0.0;
-        } else {
-            note.start -= elapsed;
-        }
-        true
-    });
-    sequence.end = (sequence.end - elapsed).max(0.0);
+    sequence.skip(elapsed);
     sequence
 }
 
@@ -64,6 +51,10 @@ pub fn restore(app: &mut App, mut prepared: Prepared) {
         };
         *patch = current.clone();
     }
+    // Patch changes can remove track-head macro values. Never resume the old fixed-value plan.
+    let selected: Vec<_> = prepared.parts.iter().map(|(track, _, _)| *track).collect();
+    prepared.active.automation =
+        super::automation::Automation::scoped(app, &prepared.parts, false, &selected);
     // Audio setup happens on the next frame, after the returned UI is painted.
     app.playback.pending = Some(prepared);
 }
@@ -76,8 +67,8 @@ mod tests {
     #[test]
     fn remaining_keeps_held_note_and_future_events_with_original_end() {
         let sequence = remaining(
-            Sequence {
-                notes: vec![
+            Sequence::new(
+                vec![
                     Note {
                         start: 0.0,
                         duration: 0.5,
@@ -97,8 +88,8 @@ mod tests {
                         velocity: 70,
                     },
                 ],
-                end: 4.0,
-            },
+                4.0,
+            ),
             1.5,
         );
         assert_eq!(sequence.notes.len(), 2);

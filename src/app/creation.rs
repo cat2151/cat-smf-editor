@@ -9,24 +9,28 @@ impl App {
     }
 
     pub(crate) fn new_smf_unchecked(&mut self) {
+        if self.install_new_song() {
+            self.file_open_requested = false;
+            crate::play::playback::start(self, crate::play::playback::Mode::Track);
+        }
+    }
+
+    pub(crate) fn install_new_song(&mut self) -> bool {
         let music = tracks::new_song();
         let document =
             match crate::store::saved::Document::untitled(self.saved.directory.clone(), &music) {
                 Ok(document) => document,
                 Err(error) => {
                     self.load_error = Some(error);
-                    return;
+                    return false;
                 }
             };
-        if self.install_document(
+        self.install_document(
             "untitled.mid".into(),
             "untitled.mid".into(),
             music,
             document,
-        ) {
-            self.file_open_requested = false;
-            crate::play::playback::start(self, crate::play::playback::Mode::Track);
-        }
+        )
     }
 
     pub(crate) fn add_track(&mut self) -> Result<(), String> {

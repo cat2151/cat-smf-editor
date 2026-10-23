@@ -24,6 +24,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                         a.audition.stop_key();
                         a.piano_roll.open = false;
                         a.tempo_curve.open = false;
+                        a.parameter_editor.close();
                         super::super::piano_roll::open(a);
                     }
                 },

@@ -90,15 +90,15 @@ fn voicevox_the_second_mml_audition_sounds_the_engine_s_one_note() {
     let head = LEAD_FRAMES as usize * 512 * 2;
     let length = (wav.len() - head) / 2;
     let seconds = length as f64 / f64::from(rate);
-    let note = Sequence {
-        notes: vec![Note {
+    let note = Sequence::new(
+        vec![Note {
             start: 0.0,
             duration: seconds,
             pitch,
             velocity: 100,
         }],
-        end: seconds,
-    };
+        seconds,
+    );
     let out = without_plugins(rate, vec![(note, Some(take))], vec![1.0])
         .run(&AtomicBool::new(false))
         .unwrap()

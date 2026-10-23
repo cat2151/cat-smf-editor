@@ -85,6 +85,21 @@ impl App {
     }
 
     fn install_music(&mut self, music: Music, restart: bool) {
+        let restore_parameters = self.loaded.as_ref().is_some_and(|loaded| {
+            use cat_smf_editor::edit::parameter_curve;
+            match (
+                parameter_curve::read(&loaded.music),
+                parameter_curve::read(&music),
+            ) {
+                (Ok(old), Ok(new)) => old.curves.iter().any(|(track, curve)| {
+                    !curve.points.is_empty()
+                        && new.curves.get(track).is_none_or(|next| {
+                            next.points.is_empty() || next.target != curve.target
+                        })
+                }),
+                _ => false,
+            }
+        });
         let session = self.session();
         let resume = restart
             .then(|| crate::play::transport::timeline::capture(self))
@@ -93,6 +108,9 @@ impl App {
         loaded.music = music;
         loaded.refresh();
         self.generation += 1;
+        if restore_parameters && restart {
+            self.audition.restore_automated_baselines();
+        }
         if let Some(session) = session {
             self.restore_position(&session);
         }

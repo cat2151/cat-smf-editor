@@ -42,6 +42,10 @@ pub struct Status {
     #[serde(default = "enabled")]
     pub tempo_curve_maximized: bool,
     #[serde(default = "enabled")]
+    pub parameter_curve_maximized: bool,
+    #[serde(default = "enabled")]
+    pub macro_variation_curve_maximized: bool,
+    #[serde(default = "enabled")]
     pub piano_roll_maximized: bool,
     #[serde(default = "enabled")]
     pub meta_text_visible: bool,
@@ -73,6 +77,8 @@ pub struct Store {
     pub session: Option<Session>,
     pub program_target: ProgramTarget,
     pub tempo_curve_maximized: bool,
+    pub parameter_curve_maximized: bool,
+    pub macro_variation_curve_maximized: bool,
     pub piano_roll_maximized: bool,
     pub meta_text_visible: bool,
     pub browser_panes: std::collections::BTreeMap<String, [String; 2]>,
@@ -96,6 +102,8 @@ impl Default for Status {
             session: None,
             program_target: ProgramTarget::default(),
             tempo_curve_maximized: true,
+            parameter_curve_maximized: true,
+            macro_variation_curve_maximized: true,
             piano_roll_maximized: true,
             meta_text_visible: true,
             browser_panes: Default::default(),
@@ -120,6 +128,8 @@ impl Default for Store {
             session: None,
             program_target: ProgramTarget::default(),
             tempo_curve_maximized: true,
+            parameter_curve_maximized: true,
+            macro_variation_curve_maximized: true,
             piano_roll_maximized: true,
             meta_text_visible: true,
             browser_panes: Default::default(),
@@ -174,6 +184,8 @@ impl Store {
                     session,
                     program_target,
                     tempo_curve_maximized,
+                    parameter_curve_maximized,
+                    macro_variation_curve_maximized,
                     piano_roll_maximized,
                     meta_text_visible,
                     browser_panes,
@@ -188,6 +200,8 @@ impl Store {
                     store.session = session;
                     store.program_target = program_target;
                     store.tempo_curve_maximized = tempo_curve_maximized;
+                    store.parameter_curve_maximized = parameter_curve_maximized;
+                    store.macro_variation_curve_maximized = macro_variation_curve_maximized;
                     store.piano_roll_maximized = piano_roll_maximized;
                     store.meta_text_visible = meta_text_visible;
                     store.browser_panes = browser_panes;
@@ -234,6 +248,16 @@ impl Store {
 
     pub fn select_tempo_curve_maximized(&mut self, maximized: bool) {
         self.tempo_curve_maximized = maximized;
+        self.persist();
+    }
+
+    pub fn select_parameter_curve_maximized(&mut self, maximized: bool) {
+        self.parameter_curve_maximized = maximized;
+        self.persist();
+    }
+
+    pub fn select_macro_variation_curve_maximized(&mut self, maximized: bool) {
+        self.macro_variation_curve_maximized = maximized;
         self.persist();
     }
 
@@ -329,6 +353,8 @@ impl Store {
                 session: self.session.clone(),
                 program_target: self.program_target,
                 tempo_curve_maximized: self.tempo_curve_maximized,
+                parameter_curve_maximized: self.parameter_curve_maximized,
+                macro_variation_curve_maximized: self.macro_variation_curve_maximized,
                 piano_roll_maximized: self.piano_roll_maximized,
                 meta_text_visible: self.meta_text_visible,
                 browser_panes: self.browser_panes.clone(),

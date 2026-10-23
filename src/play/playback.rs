@@ -23,6 +23,7 @@ pub enum Mode {
     Notes,
 }
 pub struct Playback {
+    pub parameter_preview: Option<crate::view::parameter_editor::preview::Preview>,
     pub open: bool,
     pub last: Mode,
     pub pending: Option<crate::play::transport::Prepared>,
@@ -45,6 +46,7 @@ impl Playback {
 impl Default for Playback {
     fn default() -> Self {
         Self {
+            parameter_preview: None,
             open: false,
             last: Mode::default(),
             pending: None,
@@ -99,29 +101,34 @@ pub fn sequence(app: &App, mode: Mode) -> Option<Sequence> {
 fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequence> {
     let loaded = app.loaded.as_ref()?;
     if mode == Mode::AllTracks {
-        let mut notes = Vec::new();
-        let mut end: f64 = 0.0;
-        for (track, source) in loaded.music.tracks.iter().enumerate() {
-            let end_tick = source.events.last().map_or(0, |e| e.tick);
-            let tempo = TempoMap::new(&loaded.music, track);
-            end = end.max(tempo.duration(0, end_tick));
-            for (i, event) in source.events.iter().enumerate().filter(|(_, e)| note_on(e)) {
-                let duration = loaded.note_views[track].durations[i]
-                    .unwrap_or(end_tick.saturating_sub(event.tick))
-                    .min(end_tick.saturating_sub(event.tick));
-                notes.push(Note {
-                    start: tempo.duration(0, event.tick),
-                    duration: tempo.duration(event.tick, duration),
-                    pitch: event.data[0],
-                    velocity: event.data[1],
-                });
-            }
+        let mut result = Sequence::new(Vec::new(), 0.0);
+        for track in 0..loaded.music.tracks.len() {
+            let sequence = sequence_track(app, track, Mode::Track)?;
+            result.end = result.end.max(sequence.end);
+            result.notes.extend(sequence.notes);
+            result.events.extend(sequence.events);
         }
-        notes.sort_by(|a, b| a.start.total_cmp(&b.start));
-        return Some(Sequence { notes, end });
+        result.notes.sort_by(|a, b| a.start.total_cmp(&b.start));
+        result.events.sort_by(|a, b| a.time.total_cmp(&b.time));
+        return Some(result);
     }
     let events = &loaded.music.tracks[track].events;
-    let end_tick = events.last()?.tick;
+    let end_tick = cat_smf_editor::edit::parameter_curve::read(&loaded.music)
+        .ok()
+        .map(|collection| {
+            collection
+                .curves
+                .keys()
+                .filter(|&&curve_track| collection.owner(curve_track) == Some(track))
+                .filter_map(|&curve_track| {
+                    loaded.music.tracks[curve_track]
+                        .events
+                        .last()
+                        .map(|e| e.tick)
+                })
+                .fold(events.last().map_or(0, |e| e.tick), u64::max)
+        })
+        .unwrap_or(events.last()?.tick);
     let (tick, position) = if mode == Mode::Track {
         (0, None)
     } else {
@@ -153,7 +160,7 @@ fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequence> {
         }
     }
     let tempo = TempoMap::new(&loaded.music, track);
-    let notes: Vec<_> = events
+    let selected: Vec<_> = events
         .iter()
         .enumerate()
         .filter(|(i, e)| {
@@ -165,6 +172,11 @@ fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequence> {
                     _ => e.tick >= start && e.tick < end,
                 }
         })
+        .map(|(i, _)| i)
+        .collect();
+    let notes: Vec<_> = selected
+        .iter()
+        .map(|&i| (i, &events[i]))
         .map(|(i, e)| {
             let duration =
                 loaded.note_views[track].durations[i].unwrap_or(end.saturating_sub(e.tick));
@@ -195,7 +207,9 @@ fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequence> {
     } else {
         tempo.duration(start, end.saturating_sub(start))
     };
-    Some(Sequence { notes, end })
+    Some(Sequence::from_source(
+        notes, end, events, &selected, &tempo, start,
+    ))
 }
 
 pub fn start(app: &mut App, mode: Mode) {
@@ -214,13 +228,29 @@ pub fn parts(
     let Some(loaded) = &app.loaded else {
         return Vec::new();
     };
-    let tracks = if mode == Mode::AllTracks || current_track_is_empty(app) {
+    let curves = cat_smf_editor::edit::parameter_curve::read(&loaded.music).ok();
+    let automation_owner = curves.as_ref().and_then(|c| {
+        c.curves
+            .contains_key(&app.track)
+            .then(|| c.owner(app.track))
+    });
+    let tracks = if mode == Mode::AllTracks {
+        (0..loaded.music.tracks.len()).collect()
+    } else if let Some(owner) = automation_owner {
+        owner.into_iter().collect()
+    } else if current_track_is_empty(app) {
         (0..loaded.music.tracks.len()).collect()
     } else {
         vec![app.track]
     };
     tracks
         .into_iter()
+        .filter(|&track| {
+            !loaded.music.tracks[track]
+                .events
+                .iter()
+                .any(cat_smf_editor::edit::parameter_curve::owned)
+        })
         .filter_map(|track| {
             let sequence = sequence_track(
                 app,
@@ -337,9 +367,13 @@ pub fn all_tracks(mode: Mode) -> bool {
 }
 
 fn current_track_is_empty(app: &App) -> bool {
-    app.loaded
-        .as_ref()
-        .is_some_and(|loaded| !loaded.music.tracks[app.track].events.iter().any(note_on))
+    app.loaded.as_ref().is_some_and(|loaded| {
+        !loaded.music.tracks[app.track]
+            .events
+            .iter()
+            .any(cat_smf_editor::edit::parameter_curve::owned)
+            && !loaded.music.tracks[app.track].events.iter().any(note_on)
+    })
 }
 
 fn scope_cell(

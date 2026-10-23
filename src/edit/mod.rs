@@ -1,18 +1,22 @@
 //! 読み込んだ SMF への編集。どの編集も触れたイベント以外の tick を変えない。
 pub mod event_range;
 pub mod lyric;
+pub mod meta_input;
 pub mod mml;
 pub mod note_length;
 pub mod note_move;
 pub mod note_start;
+pub mod parameter_curve;
 pub mod reference_tempo;
 mod relocate;
+pub mod scalar_curve;
 pub mod tempo_curve;
 pub mod tracks;
 pub mod trill;
 
 /// Rebuild derived notes and then the tempo events at their final positions.
 pub fn regenerate(music: &mut crate::model::Music) -> Result<(), String> {
+    parameter_curve::read(music)?;
     let curve = tempo_curve::read(music)?;
     // Stage the whole operation so malformed metadata or unrepresentable speeds
     // never leave a partially changed song.

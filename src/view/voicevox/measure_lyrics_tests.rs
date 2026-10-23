@@ -11,7 +11,7 @@ use cat_smf_editor::score::note_view::note_on;
 use eframe::egui::{self, Key};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const LABEL: &str = "Score: VOICEVOX: 1小節の歌詞を差し替え";
+const LABEL: &str = "Event list: VOICEVOX: 1小節の歌詞を差し替え";
 /// Measure 2 in 4/4 at 480 ticks per quarter note.
 pub(super) const MEASURE: (u64, u64) = (1920, 3840);
 

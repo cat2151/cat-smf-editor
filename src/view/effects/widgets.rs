@@ -18,7 +18,7 @@ pub(super) fn show(
     let auto_gain = app.audition.auto_gain_enabled();
     let error = app.player_selection.error.clone();
     let state = &mut app.effect_editor;
-    egui::Modal::new(egui::Id::new("effect-chain")).show(ctx, |ui| {
+    let contents = |ui: &mut egui::Ui| {
         if state.help {
             super::keyboard::help(state, ui);
             return;
@@ -65,7 +65,12 @@ pub(super) fn show(
         if let Some(error) = &error {
             ui.colored_label(Color32::LIGHT_RED, error);
         }
-    });
+    };
+    if crate::view::palette::preview_active(ctx) {
+        crate::view::palette::preview_window(ctx, "Preview").show(ctx, contents);
+    } else {
+        egui::Modal::new(egui::Id::new("effect-chain")).show(ctx, contents);
+    };
     actions
 }
 

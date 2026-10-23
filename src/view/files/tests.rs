@@ -9,6 +9,7 @@ mod auto_save_departure;
 mod clean_close;
 #[path = "invalid_smf_tests.rs"]
 mod invalid_smf;
+mod native_selection;
 
 struct Fixture {
     app: App,
@@ -101,8 +102,8 @@ fn press(app: &mut App, ctx: &egui::Context, key: Key) -> egui::FullOutput {
     ctx.run(input, |ctx| crate::view::show(app, ctx))
 }
 
-fn save(app: &mut App, ctx: &egui::Context) {
-    let _ = ctx.run(
+fn save(app: &mut App, ctx: &egui::Context) -> egui::FullOutput {
+    ctx.run(
         egui::RawInput {
             events: vec![egui::Event::Key {
                 key: Key::S,
@@ -114,20 +115,39 @@ fn save(app: &mut App, ctx: &egui::Context) {
             ..Default::default()
         },
         |ctx| crate::view::show(app, ctx),
-    );
+    )
+}
+
+fn set_note(app: &mut App, note: u8) {
+    app.edit_music(|music| {
+        music.tracks[0].events[0].data[0] = note;
+        Ok(())
+    })
+    .unwrap();
+}
+
+fn first_note(f: &Fixture) -> u8 {
+    smf_io::load(&f.first).unwrap().tracks[0].events[0].data[0]
+}
+
+fn backups(f: &Fixture) -> usize {
+    std::fs::read_dir(f.root.join("config/backup")).map_or(0, |dir| dir.count())
 }
 
 #[test]
-fn backup_tip_is_daily_and_survives_restart_without_losing_navigation() {
+fn backup_notice_is_daily_and_survives_restart_without_losing_navigation() {
     let mut f = fixture("daily-backup-tip");
     let ctx = egui::Context::default();
+    set_note(&mut f.app, 67);
     save(&mut f.app, &ctx);
-    assert!(f.app.config.navigation.backup_tip_visible);
+    assert!(f.app.config.navigation.backup_notice);
     let date = f.app.config.navigation.backup_tip_date.clone().unwrap();
     press(&mut f.app, &ctx, Key::Escape);
+    assert!(!f.app.config.navigation.backup_notice);
+    set_note(&mut f.app, 69);
     save(&mut f.app, &ctx);
-    assert!(!f.app.config.navigation.backup_tip_visible);
-    press(&mut f.app, &ctx, Key::N);
+    assert!(!f.app.config.navigation.backup_notice);
+    assert_eq!(first_note(&f), 69);
     f.app.config = crate::store::config::Store::open(f.root.join("status.json"));
     assert_eq!(
         f.app.config.navigation.backup_tip_date.as_ref(),
@@ -137,52 +157,35 @@ fn backup_tip_is_daily_and_survives_restart_without_losing_navigation() {
         f.app.config.navigation.last_mid.as_ref(),
         Some(&std::fs::canonicalize(&f.first).unwrap())
     );
-    save(&mut f.app, &ctx);
-    assert!(!f.app.config.navigation.backup_tip_visible);
-    press(&mut f.app, &ctx, Key::Escape);
     f.app.config.navigation.backup_tip_date = Some("2000-01-01".into());
+    set_note(&mut f.app, 71);
     save(&mut f.app, &ctx);
-    assert!(f.app.config.navigation.backup_tip_visible);
+    assert!(f.app.config.navigation.backup_notice);
     assert_eq!(
         f.app.config.navigation.backup_tip_date.as_ref(),
         Some(&date)
     );
-    press(&mut f.app, &ctx, Key::Y);
-    assert!(f.app.config.navigation.departure.is_none());
+    press(&mut f.app, &ctx, Key::Enter);
+    assert!(!f.app.config.navigation.backup_notice);
+    assert_eq!(backups(&f), 3);
 }
 
 #[test]
-fn save_always_confirms_and_n_or_escape_keep_edits_in_memory() {
-    let mut f = fixture("save-cancel");
+fn save_writes_at_once_and_skips_unchanged_documents() {
+    let mut f = fixture("save-at-once");
     let ctx = egui::Context::default();
-    save(&mut f.app, &ctx);
-    assert!(matches!(
-        f.app.config.navigation.departure,
-        Some(Action::Save)
-    ));
-    press(&mut f.app, &ctx, Key::N);
-    assert!(f.app.config.navigation.departure.is_none());
-    edit(&mut f.app);
     let original = std::fs::read(&f.first).unwrap();
-    for key in [Key::N, Key::Escape] {
-        save(&mut f.app, &ctx);
-        press(&mut f.app, &ctx, key);
-        assert!(f.app.config.navigation.departure.is_none());
-        assert_eq!(std::fs::read(&f.first).unwrap(), original);
-        assert!(f.app.saved.dirty());
-    }
     save(&mut f.app, &ctx);
-    press(&mut f.app, &ctx, Key::Y);
-    assert_eq!(
-        smf_io::load(&f.first).unwrap().tracks[0].events[0].data[0],
-        67
-    );
+    assert!(f.app.config.navigation.departure.is_none());
+    assert!(!f.app.config.navigation.backup_notice);
+    assert_eq!(std::fs::read(&f.first).unwrap(), original);
+    assert_eq!(backups(&f), 0);
+    edit(&mut f.app);
+    save(&mut f.app, &ctx);
+    assert!(f.app.config.navigation.departure.is_none());
+    assert_eq!(first_note(&f), 67);
     assert!(!f.app.saved.dirty());
-    save(&mut f.app, &ctx);
-    assert!(matches!(
-        f.app.config.navigation.departure,
-        Some(Action::Save)
-    ));
+    assert_eq!(backups(&f), 1);
 }
 
 #[test]
@@ -262,7 +265,6 @@ fn failed_save_stays_in_confirmation_and_can_cancel_or_retry() {
     let original = std::fs::read(&f.first).unwrap();
     std::fs::write(&f.first, b"external").unwrap();
     save(&mut f.app, &ctx);
-    press(&mut f.app, &ctx, Key::Y);
     assert!(f.app.config.navigation.departure_error.is_some());
     assert!(matches!(
         f.app.config.navigation.departure,
@@ -293,10 +295,6 @@ fn invalid_switch_does_not_drop_current_document_or_its_pending_edits() {
 fn startup_argument_takes_priority_and_no_argument_restores_last_mid() {
     let mut f = fixture("startup");
     f.app.loaded = None;
-    f.app.config.navigation.last_mid = None;
-    f.app.open_initial(None);
-    assert!(f.app.loaded.is_none());
-    assert!(f.app.file_open_requested);
     f.app.config.navigation.last_mid = Some(f.first.clone());
     f.app.open_initial(Some(f.second.clone()));
     assert!(!f.app.file_open_requested);
@@ -389,56 +387,16 @@ fn drop_same_file_confirms_edits_and_reloads_when_clean() {
 }
 
 #[test]
-fn native_selection_cancel_preserves_edits_and_selection_uses_departure_confirmation() {
-    let mut f = fixture("native-selection");
+fn untitled_first_save_shows_no_backup_tip() {
+    let mut f = fixture("backup-tip-untitled");
     let ctx = egui::Context::default();
-    edit(&mut f.app);
-    f.app.cursor_row = Some(1);
-    let original = f.app.loaded.as_ref().unwrap().original.clone();
-    super::open::complete(&mut f.app, None);
-    assert_eq!(f.app.cursor_row, Some(1));
-    assert!(f.app.saved.dirty());
-    assert!(f.app.config.navigation.departure.is_none());
-    super::open::complete(&mut f.app, Some(f.second.clone()));
-    assert!(matches!(
-        f.app.config.navigation.departure,
-        Some(Action::LoadAndPlay(_))
-    ));
-    assert_eq!(f.app.loaded.as_ref().unwrap().original, original);
+    f.app.new_smf_unchecked();
+    assert!(!f.app.allow_departure(Action::Close));
+    let _ = ctx.run(Default::default(), |ctx| crate::view::show(&mut f.app, ctx));
+    assert!(!f.app.config.navigation.backup_tip_visible);
+    assert!(f.app.config.navigation.backup_tip_date.is_none());
     press(&mut f.app, &ctx, Key::Escape);
-    assert!(f.app.saved.dirty());
-    super::open::complete(&mut f.app, Some(f.second.clone()));
-    press(&mut f.app, &ctx, Key::N);
-    crate::view::opening::tests::finish(&mut f.app, &ctx);
-    assert_eq!(
-        f.app.loaded.as_ref().unwrap().original,
-        std::fs::canonicalize(&f.second).unwrap()
-    );
-    assert_eq!(f.app.playback.last, crate::play::playback::Mode::AllTracks);
-    assert!(f.app.playback.active.is_some());
-    assert_eq!(
-        smf_io::load(&f.first).unwrap().tracks[0].events[0].data[0],
-        60
-    );
-}
-
-#[test]
-fn native_selection_starts_all_tracks_only_after_a_successful_load() {
-    let mut f = fixture("native-autoplay");
-    let ctx = egui::Context::default();
-    super::open::complete(&mut f.app, Some(f.second.clone()));
-    assert!(crate::view::opening::pending(&f.app));
-    assert!(f.app.playback.pending.is_none());
-    crate::view::opening::tests::finish(&mut f.app, &ctx);
-    assert_eq!(f.app.playback.last, crate::play::playback::Mode::AllTracks);
-    assert!(f.app.playback.active.is_some());
-    crate::play::transport::stop(&mut f.app);
-    super::open::complete(&mut f.app, None);
-    assert!(f.app.playback.pending.is_none());
-    let invalid = f.root.join("invalid.mid");
-    std::fs::write(&invalid, b"invalid MIDI").unwrap();
-    super::open::complete(&mut f.app, Some(invalid));
-    crate::view::opening::tests::finish(&mut f.app, &ctx);
-    assert!(f.app.load_error.is_some());
-    assert!(f.app.playback.pending.is_none());
+    let path = f.root.join("sources/new.mid");
+    assert_eq!(f.app.saved.save_as(&path), Ok(false));
+    assert_eq!(backups(&f), 0);
 }

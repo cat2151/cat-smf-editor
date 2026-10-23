@@ -53,10 +53,13 @@ impl Viewport {
                 self.pending_scroll = Some((self.scroll - delta).max(0.0));
             }
             Mode::BpmScroll => {
+                if self.limit_to_fit {
+                    return;
+                }
                 let axis = self.axis.unwrap_or(base);
                 let height = self.tempo_rect.map_or(200.0, |r| r.height()).max(1.0);
                 let span = axis.high - axis.low;
-                let bounds = tempo_curve::bpm_range();
+                let bounds = self.bounds();
                 let low = (axis.low + f64::from(delta / height) * span)
                     .clamp(*bounds.start(), (*bounds.end() - span).max(*bounds.start()));
                 self.axis = Some(Axis {
@@ -75,6 +78,54 @@ impl Viewport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn variation_axis_restores_fit_but_never_enlarges_beyond_it_or_scrolls() {
+        let base = Axis {
+            low: 0.0,
+            high: 1.0,
+        };
+        let mut view = Viewport {
+            limit_to_fit: true,
+            bounds: Some(Axis {
+                low: -1.5,
+                high: 2.5,
+            }),
+            axis: Some(Axis {
+                low: -0.15,
+                high: 1.15,
+            }),
+            ..Default::default()
+        };
+        let before = view.axis;
+        view.zoom_edge(2, true, base, 0.0);
+        view.apply_wheel(40.0, base, Mode::BpmZoom);
+        view.apply_wheel(40.0, base, Mode::BpmScroll);
+        let axis = view.axis.unwrap();
+        let before = before.unwrap();
+        assert!((axis.low - before.low).abs() < 1e-9);
+        assert!((axis.high - before.high).abs() < 1e-9);
+        view.zoom_edge(2, false, base, 0.0);
+        let axis = view.axis.unwrap();
+        assert!(axis.low < -0.15 && axis.high > 1.15);
+        assert!((axis.high + axis.low - 1.0).abs() < 1e-9);
+        for _ in 0..20 {
+            view.apply_wheel(-40.0, base, Mode::BpmZoom);
+        }
+        assert_eq!(view.axis, view.bounds);
+        view.zoom_edge(2, true, base, 0.0);
+        let restored = view.axis.unwrap();
+        assert!(restored.high - restored.low < 4.0);
+        assert!((restored.high + restored.low - 1.0).abs() < 1e-9);
+        for _ in 0..20 {
+            view.apply_wheel(40.0, base, Mode::BpmZoom);
+        }
+        let restored = view.axis.unwrap();
+        assert!((restored.low + 0.15).abs() < 1e-9);
+        assert!((restored.high - 1.15).abs() < 1e-9);
+        view.zoom_edge(0, true, base, 0.0);
+        assert!(view.zoom > 1.0);
+    }
 
     #[test]
     fn wheel_operations_leave_the_other_axis_unchanged() {

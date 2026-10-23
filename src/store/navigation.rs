@@ -9,6 +9,8 @@ pub struct Navigation {
     #[serde(skip)]
     pub backup_tip_visible: bool,
     #[serde(skip)]
+    pub backup_notice: bool,
+    #[serde(skip)]
     pub departure: Option<crate::view::files::Action>,
     #[serde(skip)]
     pub departure_error: Option<String>,

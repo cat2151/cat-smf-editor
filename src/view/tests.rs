@@ -19,6 +19,7 @@ pub(crate) fn app(music: Music) -> App {
         startup: Default::default(),
         opening: Default::default(),
         palette: Default::default(),
+        selection_history: Default::default(),
         undo: Default::default(),
         file_open_requested: false,
         recent: Default::default(),
@@ -48,6 +49,8 @@ pub(crate) fn app(music: Music) -> App {
         piano_roll: crate::view::piano_roll::State::default(),
         staff: crate::view::staff::State::default(),
         tempo_curve: crate::view::tempo_curve::State::default(),
+        macro_editor: Default::default(),
+        parameter_editor: Default::default(),
         last_command: None,
         loaded: Some(Loaded {
             patches: music
@@ -93,6 +96,7 @@ pub(crate) fn app(music: Music) -> App {
         }),
         load_error: None,
         invalid_smf_name: None,
+        missing_last_mid: None,
         track: 0,
         track_view: crate::cursor::split::State::default(),
         selected_event: None,

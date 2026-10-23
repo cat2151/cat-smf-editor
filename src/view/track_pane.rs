@@ -369,12 +369,11 @@ pub fn show(
                         events.last().map_or(0, |e| e.tick)
                     },
                 );
-                ui.ctx().data_mut(|d| {
-                    d.insert_temp(
-                        super::track_map::visible_id(app.generation, track, app.note_mode),
-                        visible,
-                    )
-                });
+                let id = super::palette::preview_id(
+                    ui.ctx(),
+                    super::track_map::visible_id(app.generation, track, app.note_mode),
+                );
+                ui.ctx().data_mut(|d| d.insert_temp(id, visible));
                 if active {
                     app.track_view.visible_ticks = Some(visible);
                 }

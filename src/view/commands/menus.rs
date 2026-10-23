@@ -28,6 +28,25 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                             .select_tempo_curve_maximized(!a.config.tempo_curve_maximized)
                     },
                 ),
+                (
+                    "parameter-max",
+                    "Parameter curve always maximized",
+                    Key::C,
+                    |a, _| {
+                        a.config
+                            .select_parameter_curve_maximized(!a.config.parameter_curve_maximized)
+                    },
+                ),
+                (
+                    "macro-variation-max",
+                    "Macro variation curve always maximized",
+                    Key::U,
+                    |a, _| {
+                        a.config.select_macro_variation_curve_maximized(
+                            !a.config.macro_variation_curve_maximized,
+                        )
+                    },
+                ),
                 ("roll-max", "Piano roll always maximized", Key::R, |a, _| {
                     a.config
                         .select_piano_roll_maximized(!a.config.piano_roll_maximized)

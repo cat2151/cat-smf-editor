@@ -4,6 +4,10 @@ use cat_smf_editor::score::instrument::ResolvedLayer;
 use eframe::egui::{self, Color32, RichText};
 
 pub(super) fn open(app: &mut crate::app::App) {
+    if crate::view::parameter_editor::is_track(app) {
+        crate::view::parameter_editor::open(app);
+        return;
+    }
     let singer = app
         .loaded
         .as_ref()
@@ -31,6 +35,21 @@ pub(super) fn show(loaded: &Loaded, parent: &mut egui::Ui, track: usize) -> (boo
     );
     ui.set_clip_rect(line.intersect(ui.clip_rect()));
     ui.label(RichText::new(&loaded.track_titles[track]).strong());
+    if let Ok(collection) = cat_smf_editor::edit::parameter_curve::read(&loaded.music)
+        && let Some(c) = collection.curves.get(&track)
+    {
+        let owner = collection.owner(track);
+        let title = owner.map_or("Missing owner", |o| loaded.track_titles[o].as_str());
+        let layer = owner.map_or_else(
+            || "Missing layer".into(),
+            |o| crate::view::parameter_editor::layer_label(&loaded.patches[o], c.target.layer),
+        );
+        patch = ui
+            .button(format!("{} / {} / {} / {}", title, layer, c.path, c.name))
+            .clicked();
+        parent.advance_cursor_after_rect(line);
+        return (patch, None);
+    }
     let layers = &loaded.patches[track].layers;
     let voice = cat_smf_editor::voicevox::Voice::read(&loaded.music.tracks[track]);
     let hover = voice.as_ref().map_or_else(

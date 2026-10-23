@@ -61,13 +61,22 @@ pub(crate) fn prepare(
     let offset = map.duration(0, start);
     let duration = map.duration(start, end - start);
     let mut prepared = crate::play::selection_playback::skip(app, all.active, offset)?;
-    prepared.parts.retain(|p| tracks.contains(&p.0));
+    let curves = cat_smf_editor::edit::parameter_curve::read(&app.loaded.as_ref()?.music).ok();
+    let owners: Vec<_> = tracks
+        .iter()
+        .map(|&track| {
+            curves
+                .as_ref()
+                .and_then(|c| c.owner(track))
+                .unwrap_or(track)
+        })
+        .collect();
+    prepared.parts.retain(|p| owners.contains(&p.0));
+    let all = (0..app.loaded.as_ref()?.music.tracks.len()).all(|track| tracks.contains(&track));
+    prepared.active.automation =
+        crate::play::automation::Automation::scoped(app, &prepared.parts, all, tracks);
     for (_, _, seq) in &mut prepared.parts {
-        seq.end = duration;
-        seq.notes.retain_mut(|n| {
-            n.duration = n.duration.min((duration - n.start).max(0.0));
-            n.start < duration && n.duration > 0.0
-        });
+        seq.truncate(duration);
     }
     prepared.active.mode = mode;
     prepared.active.clock_track = clock;
@@ -107,6 +116,9 @@ pub(crate) fn resume(app: &mut App, saved: Resume) {
             sequence
                 .notes
                 .retain(|n| n.start == 0.0 && pitches.contains(&(*track, n.pitch)));
+            sequence
+                .events
+                .retain(|event| pitches.contains(&(*track, ((event.word >> 8) & 127) as u8)));
         }
         prepared.active.sources = prepared
             .parts

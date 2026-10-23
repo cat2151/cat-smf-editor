@@ -178,6 +178,8 @@ fn session_json_is_renamed_and_existing_status_takes_priority() {
         session: Some(session.clone()),
         program_target: Default::default(),
         tempo_curve_maximized: true,
+        parameter_curve_maximized: true,
+        macro_variation_curve_maximized: true,
         piano_roll_maximized: true,
         meta_text_visible: true,
         browser_panes: Default::default(),

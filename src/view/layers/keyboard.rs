@@ -25,6 +25,7 @@ pub(super) fn help(state: &mut State, ui: &mut egui::Ui) {
                         ("m / s", "mute / solo"),
                         ("a / Delete", "複製 / 削除"),
                         ("f", "Spectrum / Lissajous"),
+                        ("u", "Automation"),
                         ("Ctrl+Z", "元に戻す"),
                     ],
                 ),

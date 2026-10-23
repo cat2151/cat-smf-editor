@@ -100,12 +100,17 @@ impl App {
     }
 
     pub fn open_initial(&mut self, mid: Option<std::path::PathBuf>) {
-        if let Some(path) = mid {
-            self.open_mid(path);
-        } else {
-            self.restore_session();
+        match mid {
+            Some(path) => self.open_mid(path),
+            None => match self.config.navigation.last_mid.clone() {
+                None => {
+                    self.install_new_song();
+                }
+                Some(path) if !path.exists() => self.missing_last_mid = Some(path),
+                Some(_) => self.restore_session(),
+            },
         }
-        self.file_open_requested = self.loaded.is_none();
+        self.file_open_requested = self.loaded.is_none() && self.missing_last_mid.is_none();
     }
 
     pub fn restore_session(&mut self) {

@@ -15,7 +15,7 @@ pub(super) fn show(
     if state.editing.is_some() {
         cancel = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
     }
-    egui::Modal::new(egui::Id::new("instrument-layers")).show(ctx, |ui| {
+    let contents = |ui: &mut egui::Ui| {
         if state.help {
             super::keyboard::help(state, ui);
             return;
@@ -63,6 +63,13 @@ pub(super) fn show(
                                 response.scroll_to_me(Some(egui::Align::Center));
                                 state.reveal = false;
                             }
+                            response.context_menu(|ui| {
+                                if ui.button("Automation…").clicked() {
+                                    state.selected = Some(id);
+                                    state.automation = Some(id);
+                                    ui.close_menu();
+                                }
+                            });
                             if response.clicked() {
                                 state.selected = Some(id);
                                 state.field = 0;
@@ -171,7 +178,12 @@ pub(super) fn show(
                 ui.colored_label(egui::Color32::LIGHT_RED, e);
             }
         });
-    });
+    };
+    if crate::view::palette::preview_active(ctx) {
+        crate::view::palette::preview_window(ctx, "Preview").show(ctx, contents);
+    } else {
+        egui::Modal::new(egui::Id::new("instrument-layers")).show(ctx, contents);
+    };
     if cancel {
         state.editing = None;
     }

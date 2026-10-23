@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+quick-xml = "0.41"
 mascot-render-client = { path = "../mascot-render-server/crates/mascot-render-client" }
 mascot-render-protocol = { path = "../mascot-render-server/crates/mascot-render-protocol" }
 mmlabc-to-smf = { git = "https://github.com/cat2151/mmlabc-to-smf-rust.git", package = "mmlabc-to-smf", features = ["cli"] }
@@ -15,6 +16,7 @@ serde_json = "1"
 sha2 = "0.10"
 toml = "0.8"
 regex = "1"
+fastrand = "2"
 rustmigemo = { git = "https://github.com/oguna/rustmigemo.git", rev = "121101dfcfd9465c998ba53fabe43773b14bf868" }
 
 

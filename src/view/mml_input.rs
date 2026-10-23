@@ -206,8 +206,17 @@ fn audition(app: &mut App, state: &State, request: Option<Option<cat_smf_editor:
             let take = notes.last().and_then(|&(pitch, _, seconds)| {
                 crate::play::sung::audition::note(app, state.track, pitch, seconds?)
             });
-            let patch = &app.loaded.as_ref().unwrap().patches[state.track];
-            app.audition.play_track(state.track, patch, &notes, take);
+            let tick = crate::play::playback::location(app).0;
+            if !crate::play::automation::audition_notes(
+                app,
+                state.track,
+                tick,
+                &notes,
+                take.clone(),
+            ) {
+                let patch = &app.loaded.as_ref().unwrap().patches[state.track];
+                app.audition.play_track(state.track, patch, &notes, take);
+            }
         } else {
             app.audition.stop();
         }

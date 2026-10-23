@@ -132,10 +132,15 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     if app.playback.mixer_focus {
         frame.stroke = ctx.style().visuals.selection.stroke;
     }
-    let window = egui::Window::new("Mixer (m)")
-        .open(&mut open)
-        .frame(frame)
-        .default_width(760.0)
+    let preview = crate::view::palette::preview_active(ctx);
+    let window = if preview {
+        crate::view::palette::preview_window(ctx, "Mixer (m)")
+    } else {
+        egui::Window::new("Mixer (m)")
+            .frame(frame)
+            .default_width(760.0)
+    };
+    let window = window.open(&mut open)
         .show(ctx, |ui| {
             let mut auto_gain = app.audition.auto_gain_enabled();
             if ui.checkbox(&mut auto_gain, "Master auto gain").changed() {
@@ -263,7 +268,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     {
         app.load_error = Some(error);
     }
-    if !open || !ctx.input(|i| i.pointer.primary_down()) {
+    if !preview && (!open || !ctx.input(|i| i.pointer.primary_down())) {
         app.undo.end_volume_gesture();
     }
     app.playback.mixer_open = open;

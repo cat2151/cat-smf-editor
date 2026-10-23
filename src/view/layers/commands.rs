@@ -15,6 +15,7 @@ pub(super) enum Op {
     Add,
     Remove,
     Analysis,
+    Automation,
     Confirm,
     Cancel,
 }
@@ -87,6 +88,7 @@ pub(super) fn specs(state: &State, patch: &Patch) -> Vec<Spec<Op>> {
     }
     if !patch.layers.is_empty() {
         result.extend([
+            p("layer-automation", "Automation…", &[Key::U], Automation),
             p("layer-edit", "音色選択 / 数値入力", &[Key::Enter], Edit),
             p("octave-up", "Octave +1", &[Key::O], Nudge(1, true)),
             p("octave-down", "Octave −1", &[Key::I], Nudge(1, false)),
@@ -178,6 +180,10 @@ pub(super) fn apply(
             }
             Ok(())
         }
+        Automation => {
+            state.automation = state.selected;
+            Ok(())
+        }
         Analysis => return true,
         Confirm => state.commit(patch),
         Cancel => {
@@ -242,6 +248,9 @@ fn execute(a: &mut App, op: Op) {
     }
     if let Some(e) = error {
         a.player_selection.error = Some(e);
+    }
+    if let Some(id) = a.layer_editor.automation.take() {
+        crate::view::parameter_editor::choose(a, id);
     }
     if let Some(id) = choose {
         crate::player::selection::open_layer(a, id);

@@ -38,7 +38,19 @@ pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
     crate::view::commands::route(app, ctx);
 }
 
+impl State {
+    pub(crate) fn open_at_cursor(&mut self) {
+        self.open = true;
+        self.reveal = true;
+    }
+}
+
 pub(crate) fn open(app: &mut App) {
+    if super::parameter_editor::is_track(app) {
+        super::parameter_editor::open(app);
+        return;
+    }
+    app.parameter_editor.close();
     let conductor = app.track == 0
         && app.loaded.as_ref().is_some_and(|l| {
             l.music

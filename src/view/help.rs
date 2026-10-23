@@ -19,7 +19,7 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
             ("Ctrl+Z", "元に戻す"),
             ("V", "Notes / Raw"),
             ("i / e / .", "MML・コード進行 / 編集menu / 反復"),
-            ("r", "ピアノロール / テンポカーブ"),
+            ("r", "ピアノロール / カーブ"),
             ("左ドラッグ", "A-B repeat"),
             ("s", "範囲選択 / 範囲menu"),
         ],
@@ -74,11 +74,31 @@ pub(super) fn close_guide(ui: &mut egui::Ui) {
             ui,
             &[(
                 Color32::from_rgb(0xe6, 0xdb, 0x74),
-                &[("Ctrl+Shift+P", "コマンドパレット")],
+                &[
+                    ("Ctrl+Shift+P", "コマンドパレット"),
+                    ("↑ ↓ / PageUp PageDown", "候補 / 10候補"),
+                    ("Ctrl+Home / Ctrl+End", "候補先頭 / 末尾"),
+                ],
             )],
         );
     });
     ui.weak("Esc: 閉じる");
+}
+
+pub(crate) fn view_rows(ui: &mut egui::Ui) {
+    key_groups(
+        ui,
+        &[(
+            Color32::from_rgb(0x66, 0xd9, 0xef),
+            &[
+                ("j k", "候補選択"),
+                ("h l", "階層"),
+                ("Enter", "選択・表示"),
+                ("Esc", "戻る・取消"),
+                ("F1", "ヘルプ"),
+            ],
+        )],
+    );
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
@@ -98,7 +118,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 });
         } else {
             egui::Grid::new("help-keys").show(ui, |ui| {
-                if app.piano_roll.open {
+                if app.parameter_editor.open {
+                    parameter_curve::rows(ui);
+                } else if app.piano_roll.open {
                     piano_roll::rows(ui);
                 } else {
                     key_groups(ui, &KEYS);
@@ -115,3 +137,5 @@ mod tests;
 
 mod piano_roll;
 mod tempo_curve;
+
+mod parameter_curve;

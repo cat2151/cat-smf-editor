@@ -14,8 +14,12 @@ mod output;
 use output::Voice;
 #[path = "audition_opening.rs"]
 pub(crate) mod opening;
+#[path = "audition_parameters.rs"]
+mod parameters;
 
 pub(super) struct Part {
+    timeline: Option<Arc<super::event_timeline::Timeline>>,
+    automation: Option<Arc<super::automation::RuntimePlan>>,
     velocities: [u8; 128],
     durations: [u64; 128],
     sequence: Option<Arc<Sequence>>,
@@ -25,6 +29,8 @@ pub(super) struct Part {
 impl Default for Part {
     fn default() -> Self {
         Self {
+            timeline: None,
+            automation: None,
             velocities: [0; 128],
             durations: [0; 128],
             sequence: None,
@@ -120,6 +126,9 @@ impl Audition {
             .as_deref()
             .or_else(|| self.key_voice.as_ref().and_then(|v| v.error()))
     }
+    pub fn sequence_failed(&self) -> bool {
+        self.error.is_some()
+    }
     pub fn needs_pump(&self) -> bool {
         self.voice.is_some() || self.key_voice.as_ref().is_some_and(|v| v.needs_pump())
     }
@@ -141,7 +150,7 @@ impl Audition {
             .voice
             .as_ref()
             .map_or_else(Vec::new, |v| v.patches.clone());
-        let mut missing = self.voice.is_none();
+        let mut missing = self.voice.as_ref().is_none_or(|voice| voice.automated());
         for (track, patch) in patches {
             match wanted.iter_mut().find(|(t, _)| t == track) {
                 Some((_, p)) if p == patch => {}
@@ -180,6 +189,25 @@ impl Audition {
             .any(|(_, p)| p.sequence.is_some())
             .then(|| progress.clone());
         if let Some(voice) = &self.voice {
+            crate::store::error_log::write(
+                "audio-command",
+                &format!(
+                    "pid={} stream={} parts={} tracks={:?} sequences={} timelines={:?}",
+                    std::process::id(),
+                    voice.diagnostic_id(),
+                    parts.len(),
+                    voice
+                        .patches
+                        .iter()
+                        .map(|(track, _)| track + 1)
+                        .collect::<Vec<_>>(),
+                    parts.iter().filter(|(_, p)| p.sequence.is_some()).count(),
+                    parts
+                        .iter()
+                        .map(|(track, p)| (track + 1, p.timeline.as_ref().map(|t| t.end)))
+                        .collect::<Vec<_>>()
+                ),
+            );
             let parts = voice
                 .patches
                 .iter()
@@ -192,6 +220,7 @@ impl Audition {
                 .collect();
             let mut command = voice.mailbox.lock().unwrap();
             command.generation = command.generation.wrapping_add(1);
+            let generation = command.generation;
             command.parts = Arc::new(parts);
             command.progress = progress;
             command.gains = Arc::new(
@@ -200,6 +229,11 @@ impl Audition {
                     .iter()
                     .map(|(track, _)| self.gain(*track))
                     .collect(),
+            );
+            drop(command);
+            crate::store::error_log::write(
+                "audio-command",
+                &format!("stream={} generation={generation}", voice.diagnostic_id()),
             );
         }
     }
@@ -237,49 +271,15 @@ impl Audition {
         true
     }
     /// `takes` give tracks a sung voice in place of their instruments.
+    #[cfg(test)]
     pub fn sequences(
         &mut self,
         parts: Vec<(usize, Patch, Sequence)>,
-        mut takes: Vec<(usize, Arc<crate::play::sung::Take>)>,
+        takes: Vec<(usize, Arc<crate::play::sung::Take>)>,
     ) -> bool {
-        #[cfg(test)]
-        {
-            self.takes = takes.clone();
-        }
-        if parts.is_empty() {
-            self.stop();
-            return true;
-        }
-        // A track without notes, such as a conductor track, only spans time.
-        let patches = parts
-            .iter()
-            .filter(|(_, _, sequence)| !sequence.notes.is_empty())
-            .map(|(track, patch, _)| (*track, patch.clone()))
-            .collect::<Vec<_>>();
-        if !self.prepare(&patches) {
-            return false;
-        }
-        self.send(
-            parts
-                .into_iter()
-                .map(|(track, _, sequence)| {
-                    let take = takes
-                        .iter()
-                        .position(|(t, _)| *t == track)
-                        .map(|i| takes.swap_remove(i).1);
-                    (
-                        track,
-                        Part {
-                            sequence: Some(Arc::new(sequence)),
-                            take,
-                            ..Part::default()
-                        },
-                    )
-                })
-                .collect(),
-        );
-        true
+        self.sequences_automated(parts, takes, &Default::default(), 0.0)
     }
+
     #[cfg(test)]
     pub fn set_test_seconds(&self, seconds: f64) {
         self.progress
@@ -339,6 +339,15 @@ impl Audition {
         }
     }
     pub fn stop(&mut self) {
+        crate::store::error_log::write(
+            "audio-stop",
+            &format!(
+                "pid={} voice={} key_active={}",
+                std::process::id(),
+                self.voice.is_some(),
+                self.key_active
+            ),
+        );
         self.stop_key();
         self.send(Vec::new());
     }
@@ -346,6 +355,9 @@ impl Audition {
         self.last_browser_use = Some(std::time::Instant::now());
     }
     pub fn pump(&mut self) {
+        if let Some(voice) = &mut self.voice {
+            voice.poll_diagnostics();
+        }
         if let Some(voice) = &mut self.key_voice {
             voice.pump();
         }
@@ -359,12 +371,32 @@ impl Audition {
                 master.pump();
             }
         }
-        if let Some(voice) = &self.voice
-            && (voice.failed.load(Ordering::Relaxed))
+        if let Some(voice) = &mut self.voice
+            && voice.failed.load(Ordering::Relaxed)
         {
+            match voice.refresh_automation() {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(error) => {
+                    self.voice = None;
+                    self.progress = None;
+                    self.error = Some(format!("Audio automation refresh: {error}"));
+                    return;
+                }
+            }
+            let error = voice.parameter_error().map(|code| {
+                format!(
+                    "Audio parameter batch failed ({code}): {}",
+                    voice
+                        .parameter_context
+                        .as_deref()
+                        .unwrap_or("unknown target")
+                )
+            });
             self.voice = None;
             self.progress = None;
-            self.error = Some("Audio: plugin or audio device stopped".into());
+            self.error =
+                Some(error.unwrap_or_else(|| "Audio: plugin or audio device stopped".into()));
         }
     }
     fn expire_cached(&mut self, now: std::time::Instant) {
@@ -395,3 +427,10 @@ mod cache_tests;
 #[cfg(test)]
 #[path = "audition_tests.rs"]
 mod tests;
+
+#[path = "audition_automation.rs"]
+mod parameter_automation;
+
+#[cfg(test)]
+#[path = "audition_probe.rs"]
+mod probe;

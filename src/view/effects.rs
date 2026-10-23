@@ -186,3 +186,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
     crate::view::comma_menu::swallow(ctx);
 }
+
+pub(crate) fn show_preview(app: &mut App, ctx: &egui::Context) {
+    let target = Target::Track(app.track);
+    let Some(chain) = effects(app, target) else {
+        return;
+    };
+    let saved = std::mem::take(&mut app.effect_editor);
+    app.effect_editor.target = Some(target);
+    let _ = widgets::show(app, ctx, target, &chain);
+    app.effect_editor = saved;
+}

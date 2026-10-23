@@ -23,6 +23,7 @@ pub struct State {
     editing: Option<Editing>,
     help: bool,
     reveal: bool,
+    automation: Option<u64>,
 }
 
 struct Editing {
@@ -31,6 +32,10 @@ struct Editing {
 }
 
 pub fn open(app: &mut App) {
+    if super::parameter_editor::is_track(app) {
+        super::parameter_editor::open(app);
+        return;
+    }
     let Some(patch) = app.loaded.as_ref().and_then(|l| l.patches.get(app.track)) else {
         return;
     };
@@ -220,8 +225,29 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     if let Some(error) = error {
         app.player_selection.error = Some(error);
     }
+    if let Some(id) = app.layer_editor.automation.take() {
+        super::parameter_editor::choose(app, id);
+    }
     if let Some(id) = choose {
         crate::player::selection::open_layer(app, id);
     }
     crate::view::comma_menu::swallow(ctx);
+}
+
+/// Draw the regular layer editor against an isolated patch and cursor.
+pub(crate) fn show_preview(app: &App, ctx: &egui::Context) {
+    let Some(mut patch) = app
+        .loaded
+        .as_ref()
+        .and_then(|l| l.patches.get(app.track))
+        .cloned()
+    else {
+        return;
+    };
+    let mut state = State {
+        open: true,
+        selected: patch.layers.first().map(|l| l.settings.id),
+        ..Default::default()
+    };
+    widgets::show(&mut state, ctx, &mut patch, &mut None, &mut None, None);
 }

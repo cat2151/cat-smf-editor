@@ -1,5 +1,6 @@
 mod creation;
 mod loading;
+mod parameter_automation;
 pub(crate) mod sound;
 mod startup;
 pub(crate) mod undo;
@@ -8,6 +9,7 @@ use eframe::egui;
 
 pub struct App {
     pub startup: startup::State,
+    pub selection_history: crate::view::selection_history::State,
     pub palette: crate::view::palette::State,
     pub undo: undo::History,
     pub file_open_requested: bool,
@@ -37,10 +39,14 @@ pub struct App {
     pub piano_roll: crate::view::piano_roll::State,
     pub staff: crate::view::staff::State,
     pub tempo_curve: crate::view::tempo_curve::State,
+    pub macro_editor: crate::view::macro_editor::State,
+    pub parameter_editor: crate::view::parameter_editor::State,
     pub last_command: Option<crate::view::edit_menu::Command>,
     pub loaded: Option<Loaded>,
     pub load_error: Option<String>,
     pub invalid_smf_name: Option<String>,
+    /// The previous session's file no longer exists at startup.
+    pub missing_last_mid: Option<std::path::PathBuf>,
     pub track: usize,
     pub track_view: crate::cursor::split::State,
     pub selected_event: Option<usize>,
@@ -73,6 +79,7 @@ impl App {
         Self {
             startup: Default::default(),
             palette: Default::default(),
+            selection_history: Default::default(),
             undo: Default::default(),
             file_open_requested: false,
             recent: Default::default(),
@@ -102,10 +109,13 @@ impl App {
             piano_roll: crate::view::piano_roll::State::default(),
             staff: crate::view::staff::State::default(),
             tempo_curve: crate::view::tempo_curve::State::default(),
+            macro_editor: Default::default(),
+            parameter_editor: Default::default(),
             last_command: None,
             loaded: None,
             load_error: None,
             invalid_smf_name: None,
+            missing_last_mid: None,
             track: 0,
             track_view: crate::cursor::split::State::default(),
             selected_event: None,
@@ -140,7 +150,9 @@ impl App {
     }
     pub fn select_track(&mut self, track: usize) {
         if self.track != track {
+            crate::view::macro_editor::cancel(self);
             self.layer_editor.open = false;
+            self.parameter_editor.close();
             self.effect_editor.close_track();
         }
         self.player_selection.no_notes_error = false;

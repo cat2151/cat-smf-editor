@@ -26,8 +26,7 @@ fn title_marks_unsaved_edits_and_clears_after_save_or_restoring_gain() {
         title(ctx.run(Default::default(), |ctx| crate::view::show(&mut f.app, ctx))),
         dirty
     );
-    save(&mut f.app, &ctx);
-    assert_eq!(title(press(&mut f.app, &ctx, Key::Y)), clean);
+    assert_eq!(title(save(&mut f.app, &ctx)), clean);
     for (gain, expected) in [(0.5, dirty), (1.0, clean)] {
         crate::play::mixer::volume::set(&mut f.app, 0, gain).unwrap();
         f.app.remember_loaded().unwrap();

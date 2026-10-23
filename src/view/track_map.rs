@@ -6,6 +6,7 @@ use cat_smf_editor::score::note_view::note_on;
 use eframe::egui::{self, Color32};
 
 mod tempo;
+mod variations;
 
 pub const WIDTH: f32 = 120.0;
 
@@ -29,7 +30,15 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
     let painter = ui.painter_at(rect);
     let events = &loaded.music.tracks[track].events;
-    let end = events.last().map_or(0, |e| e.tick).max(1) as f32;
+    let variations =
+        cat_smf_editor::score::macro_curve::read(&loaded.music.tracks[track]).unwrap_or_default();
+    let end = variations
+        .iter()
+        .filter_map(|c| c.points.last().map(|p| p.tick))
+        .chain(events.last().map(|e| e.tick))
+        .max()
+        .unwrap_or(0)
+        .max(1) as f32;
     let y = |tick: u64| rect.top() + rect.height() * (tick as f32 / end);
     let row = |tick: u64| {
         let top = y(tick).floor();
@@ -41,6 +50,7 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
     if let Some(curve) = &curve {
         tempo::draw(&painter, rect, f64::from(end), curve);
     }
+    variations::draw(&painter, rect, f64::from(end), &variations);
     // Curve-generated conductor tempos use a thin curve instead of full-width rows.
     // Other meta events stay visible above it; End of Track marks nothing.
     for (source, event) in loaded
@@ -114,9 +124,10 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
             );
         }
     }
+    let id = super::palette::preview_id(ui.ctx(), visible_id(app.generation, track, app.note_mode));
     let visible = ui
         .ctx()
-        .data_mut(|d| d.get_temp::<(u64, u64)>(visible_id(app.generation, track, app.note_mode)))
+        .data_mut(|d| d.get_temp::<(u64, u64)>(id))
         .or(app.track_view.visible_ticks);
     if let Some((first, last)) = visible {
         let top = y(first);

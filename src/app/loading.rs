@@ -85,6 +85,7 @@ impl App {
         } = sound;
         self.song_id = self.song_id.wrapping_add(1);
         self.undo.clear();
+        self.macro_editor = Default::default();
         self.layer_editor = Default::default();
         self.effect_editor = Default::default();
         self.note_edit = None;
@@ -94,6 +95,7 @@ impl App {
         self.comma_menu = Default::default();
         self.piano_roll.open = false;
         self.tempo_curve.open = false;
+        self.parameter_editor.close();
         self.track_view = crate::cursor::split::State::default();
         self.audition.clear_gains();
         self.player_selection.open = false;

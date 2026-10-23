@@ -268,6 +268,9 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
 }
 
 fn placement(ctx: &egui::Context, maximized: bool) -> egui::Window<'static> {
+    if crate::view::palette::preview_active(ctx) {
+        return crate::view::palette::preview_window(ctx, "Piano roll");
+    }
     let window = egui::Window::new("Piano roll").collapsible(false);
     if maximized {
         window

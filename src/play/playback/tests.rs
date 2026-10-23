@@ -217,8 +217,8 @@ fn measure_and_beat_moves_land_on_empty_boundaries() {
 #[test]
 fn audio_scheduler_splits_at_onsets_and_end_without_restarting_other_pitches() {
     use crate::play::audio_sequence::{Cursor, Note, Sequence};
-    let sequence = Sequence {
-        notes: vec![
+    let sequence = Sequence::new(
+        vec![
             Note {
                 start: 0.1,
                 duration: 0.5,
@@ -232,8 +232,8 @@ fn audio_scheduler_splits_at_onsets_and_end_without_restarting_other_pitches() {
                 velocity: 80,
             },
         ],
-        end: 0.6,
-    };
+        0.6,
+    );
     let mut cursor = Cursor::default();
     let mut velocities = [0; 128];
     let mut durations = [0; 128];

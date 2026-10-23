@@ -88,6 +88,17 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 {
                     app.config.select_tempo_curve_maximized(maximized);
                 }
+                let mut maximized = app.config.parameter_curve_maximized;
+                if ui
+                    .checkbox(&mut maximized, "c: Parameter curve always maximized")
+                    .changed()
+                {
+                    app.config.select_parameter_curve_maximized(maximized);
+                }
+                let mut maximized = app.config.macro_variation_curve_maximized;
+                if ui.checkbox(&mut maximized, "u: Macro variation curve always maximized").changed() {
+                    app.config.select_macro_variation_curve_maximized(maximized);
+                }
                 let mut maximized = app.config.piano_roll_maximized;
                 if ui
                     .checkbox(&mut maximized, "r: Piano roll always maximized")

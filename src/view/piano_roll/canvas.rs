@@ -19,7 +19,7 @@ pub(super) fn show(
     // A fixed id keeps the drag alive when the error line above appears or goes.
     let response = ui.interact(
         rect,
-        egui::Id::new(("piano-roll-notes", slot)),
+        crate::view::palette::preview_id(ui.ctx(), egui::Id::new(("piano-roll-notes", slot))),
         egui::Sense::click_and_drag(),
     );
     let roll = |pos: egui::Pos2| (pos - rect.min).to_pos2();

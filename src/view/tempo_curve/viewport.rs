@@ -2,6 +2,8 @@
 use super::*;
 use crate::view::timeline_zoom::{self, BAR};
 
+pub(crate) const VARIATION_MARGIN: f64 = 0.15;
+
 pub(super) const BAR_COLOR: Color32 = Color32::from_gray(75);
 
 mod edges;
@@ -11,7 +13,11 @@ mod wheel;
 mod zoom_drag;
 use wheel::Mode;
 
-pub(super) struct Viewport {
+pub(crate) struct Viewport {
+    /// Native scalar limits; absent for the existing tempo viewport.
+    pub bounds: Option<Axis>,
+    /// Variation axes stay centered and cannot enlarge beyond the initial fit.
+    pub limit_to_fit: bool,
     pub axis: Option<Axis>,
     zoom: f32,
     pub scroll: f32,
@@ -31,6 +37,8 @@ pub(super) struct Viewport {
 impl Default for Viewport {
     fn default() -> Self {
         Self {
+            bounds: None,
+            limit_to_fit: false,
             axis: None,
             zoom: 1.0,
             scroll: 0.0,
@@ -138,10 +146,25 @@ impl Viewport {
     }
 
     fn zoom_bpm(&mut self, base: Axis, factor: f64, anchor: f32) {
+        if self.limit_to_fit {
+            let axis = self.axis.unwrap_or(base);
+            let range = self.bounds();
+            let minimum_span = (base.high - base.low) * (1.0 + 2.0 * VARIATION_MARGIN);
+            let span = ((axis.high - axis.low) / factor)
+                .clamp(minimum_span, *range.end() - *range.start());
+            let center = (base.low + base.high) / 2.0;
+            self.axis = Some(Axis {
+                low: center - span / 2.0,
+                high: center + span / 2.0,
+            });
+            return;
+        }
         let axis = self.axis.unwrap_or(base);
         let center = axis.high - f64::from(anchor) * (axis.high - axis.low);
-        let span = ((axis.high - axis.low) / factor).clamp(0.01, 60_000_000.0);
-        let range = tempo_curve::bpm_range();
+        let range = self.bounds();
+        let minimum_span = self.bounds.map_or(0.01, |b| (b.high - b.low) * 1e-6);
+        let span =
+            ((axis.high - axis.low) / factor).clamp(minimum_span, *range.end() - *range.start());
         let low =
             (center - span / 2.0).clamp(*range.start(), (*range.end() - span).max(*range.start()));
         self.axis = Some(Axis {
@@ -150,7 +173,7 @@ impl Viewport {
         });
     }
 
-    fn zoom_time(&mut self, zoom: f32, anchor: f32) {
+    pub(crate) fn zoom_time(&mut self, zoom: f32, anchor: f32) {
         let next = timeline_zoom::clamp(zoom);
         self.pending_scroll = Some(timeline_zoom::rescroll(
             self.scroll,
@@ -162,10 +185,19 @@ impl Viewport {
         self.zoom = next;
     }
 
+    pub(crate) fn time_zoom(&self) -> f32 {
+        self.zoom
+    }
+
+    fn bounds(&self) -> std::ops::RangeInclusive<f64> {
+        self.bounds
+            .map_or_else(tempo_curve::bpm_range, |b| b.low..=b.high)
+    }
+
     pub fn notes(&mut self, ui: &mut egui::Ui, rect: egui::Rect, scale: f32) -> Option<u64> {
         let response = ui.interact(
             rect,
-            egui::Id::new("tempo-notes"),
+            crate::view::palette::preview_id(ui.ctx(), egui::Id::new("tempo-notes")),
             egui::Sense::click_and_drag(),
         );
         let local = |p: egui::Pos2| (p.x - rect.left()).max(0.0);
@@ -199,9 +231,13 @@ impl Viewport {
 
     pub fn vertical_bar(&mut self, ui: &mut egui::Ui, rect: egui::Rect, base: Axis) {
         self.tempo_rect = Some(rect);
+        if self.limit_to_fit {
+            self.vertical_scrollbar = None;
+            return;
+        }
         let axis = self.axis.unwrap_or(base);
         let span = axis.high - axis.low;
-        let bounds = tempo_curve::bpm_range();
+        let bounds = self.bounds();
         let low = (base.low - span).min(axis.low).max(*bounds.start());
         let high = (base.high + span).max(axis.high).min(*bounds.end());
         let content_height = rect.height() * ((high - low) / span) as f32;
@@ -241,7 +277,7 @@ impl Viewport {
     }
 }
 
-pub(super) fn minimap_tempos<'a>(
+pub(crate) fn minimap_tempos<'a>(
     events: &'a [(u64, f64)],
     curve: Option<&'a Curve>,
     references: &'a [cat_smf_editor::edit::reference_tempo::Reference],

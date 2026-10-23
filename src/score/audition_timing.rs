@@ -1,6 +1,7 @@
 //! Convert note lifetimes to seconds through the source track's tempo map.
 use crate::model::Music;
 
+#[derive(Clone)]
 pub struct TempoMap {
     segments: Vec<(u64, f64, f64)>,
 }
@@ -56,6 +57,23 @@ impl TempoMap {
         let i = self.segments.partition_point(|s| s.0 <= tick) - 1;
         let (start, seconds, slope) = self.segments[i];
         seconds + (tick - start) as f64 * slope
+    }
+    pub fn seconds_at(&self, tick: u64) -> f64 {
+        self.at(tick)
+    }
+
+    /// Fractional source tick at an absolute song time, for audio-rate curves.
+    pub fn fractional_tick(&self, seconds: f64) -> f64 {
+        let i = self
+            .segments
+            .partition_point(|s| s.1 <= seconds)
+            .saturating_sub(1);
+        let (tick, time, slope) = self.segments[i];
+        if slope > 0.0 {
+            tick as f64 + (seconds - time).max(0.0) / slope
+        } else {
+            tick as f64
+        }
     }
     /// Convert elapsed audio time back to a source tick, including tempo changes.
     pub fn tick_after(&self, start: u64, elapsed: f64) -> u64 {

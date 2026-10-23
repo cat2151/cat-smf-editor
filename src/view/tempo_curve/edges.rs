@@ -2,13 +2,13 @@
 use super::*;
 
 impl Roll {
-    pub(super) fn pinned(&self, mut pos: egui::Pos2) -> egui::Pos2 {
+    pub(crate) fn pinned(&self, mut pos: egui::Pos2) -> egui::Pos2 {
         pos.y = pos.y.clamp(self.rect.top(), self.rect.bottom());
         pos
     }
 
     /// A chevron points toward the true position, entirely inside the panel.
-    pub(super) fn edge_marker(&self, painter: &egui::Painter, pos: egui::Pos2, color: Color32) {
+    pub(crate) fn edge_marker(&self, painter: &egui::Painter, pos: egui::Pos2, color: Color32) {
         let direction = if pos.y < self.rect.top() {
             1.0
         } else if pos.y > self.rect.bottom() {

@@ -1,0 +1,30 @@
+# ADR 0014: 使用中のSurge XT macroを固定値としてまとめて編集する
+
+- 状態: 採用
+- 関連: [0013](0013-instrument-parameter-automation.md)、[player 0036](../../../cat-plugin-player/docs/adr/0036-surge-xt-macro-sweep.md)
+
+## 目的と判断
+
+TB-303系のCutoff・Resonanceなどを組み合わせて小さく音色を編集したいが、時間変化を作るautomationだけでは、複数macroを同時に調整する体験を確認できない。instance全体のstate編集やSurge XT GUIへの対応は後の課題とし、Surge XTのMacro 1～8のうち音色内で使われるものだけをまとめて調整する独立したoverlayを採る。
+
+playerには保存state内のmodroutingからmacroの使用を判定する処理がある。ただしplayerの表示条件はMIDI CC割り当てとchannelにも依存する。直接parameterを編集するeditorへその条件を移すと、使われていてもCC未割り当てのmacroが欠落する。そのためstate解析を共有し、routingの有無とCCでの到達可否を別々に取得する。playerのCC操作は従来の条件を保つ。
+
+## 保存と試聴の決定
+
+固定値は所有元trackのtick 0専用metaへ保存し、automation trackや元音色のstate cacheへは書かない。既存の復元経路と実利用中の303音色のSMFを調べ、新metaが存在しないことを確認した。既存schemaを置き換えず、新metaのない曲は音色の元値を保つので、一括移行は不要である。
+
+その後、複数macroを調整した結果を別案として残し、切り替えて比較したいという要求が加わった。一組の固定値だけでは比較するたびに前の調整が失われるため、layer単位のVariationを同じ専用metaに保持する判断へ拡張した。編集中の複製・切替もdraft内に閉じ、確定時に全案と選択番号を保存する。通常再生は選択された一組だけを使い、音色の差し替えでは比較案も解除する。
+
+実利用の起動対象SMFには既に8個のmacro固定値があった。固定値の表現は変えず、Variationが未作成ならその一組を最初のVariationとして編集する追加形式にした。旧形式から分岐する読込器やファイルの一括書換えは設けず、既存の音色・ノート・値をそのまま継続利用する。
+
+値の配送は既存の事前解決済みparameter経路を共有する。編集中は現在小節を繰り返し、audio側が読む固定値だけを更新する。ドラッグごとに曲を保存したり演奏を先頭へ戻したりすると、複数macroを比較する体験を妨げるため採らない。確定前のdraftを曲から分離し、確定全体を一回のUndoにまとめ、取消時には保存済みstateへ音源を戻す。
+
+通常再生で同じparameterのautomationが存在するときは時間変化を優先し、編集中の試聴だけはdraftを優先する。音色の差し替え時に古い固定値を引き継ぐと新音色の初期値を潰すため、そのlayerの固定値を解除する。対象の曲・track・layerが変わったdraftは取消す。全体state編集、他音源、effect/master、汎用parameter編集はこの判断の対象に含めない。
+
+## 値域と表示の見直し
+
+当初は画面・保存値・API値をすべて0～1として扱う案だった。実利用の303音色ではShapeだけがbipolarとして宣言され、state内の値は−1だった。一方で直接parameterの公開値域は0～1、現在値の読み出しは−1であり、設定送信と読み出しの表現が一致しなかった。初期値だけstateから換算すればよいという判断では、一般のAPI値域・単位・操作位置まで混同したままになるため、その前提を撤回した。
+
+bipolarは各macroが個別に宣言する正規の意味であり、それ自体を異常としない。宣言されたmacro値、横棒上の操作位置、API値、音源の表示文字列を区別する。unipolarは0～1、bipolarは−1～1をmacro値とし、後者の中央0は操作位置0.5に対応させる。[CLAP plain](https://github.com/free-audio/clap/blob/main/include/clap/ext/params.h)はparameterごとの公開値域、[VST3](https://steinbergmedia.github.io/vst3_dev_portal/pages/Technical+Documentation/Parameters+Automation/Index.html)はnormalized値を配送・保存する。汎用のCLAP操作位置は公開値域内の線形位置であり、物理単位や知覚上の尺度への変換とは扱わない。既存automationの保存値空間と補間は維持する。
+
+単純さを理由に0～1だけを表示すると誤変換を見落とすため、ユーザーは両方を併記する案を選んだ。macro値と操作位置を主表示にし、音源の文字列・API送信値・読み出し値・公開値域も識別できるようにする。音源の文字列は不透明な表示として使い、HzやdBへの逆変換を推測しない。範囲外の取得値は黙って丸めず、共通の境界で検証する。汎用automationでは不整合のある取得値からの新規作成を拒否し、macro専用編集では保存stateの宣言を根拠に初期位置を復元しつつAPI側の不整合を表示する。取得値を正常なAPI値に見せかける補正はしない。

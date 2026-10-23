@@ -97,6 +97,15 @@ fn audition(app: &mut App, chord: bool) {
     }
     let tick = app.selected_event.map(|i| events[i].tick);
     let take = tick.and_then(|tick| crate::play::sung::audition::cursor(app, app.track, tick));
+    if crate::play::automation::audition_notes(
+        app,
+        app.track,
+        tick.unwrap_or(0),
+        &pitches,
+        take.clone(),
+    ) {
+        return;
+    }
     let loaded = app.loaded.as_ref().unwrap();
     app.audition
         .play_track(app.track, &loaded.patches[app.track], &pitches, take);

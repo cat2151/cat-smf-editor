@@ -7,12 +7,43 @@ use cat_smf_editor::{
 };
 
 pub struct Native {
+    pub automated: bool,
+    automated_layers: Vec<usize>,
     layers: Vec<Chain>,
     effects: Option<Chain>,
     settings: Patch,
 }
 
 impl Native {
+    #[cfg(test)]
+    pub fn patch(&self) -> &Patch {
+        &self.settings
+    }
+    pub fn parameters(
+        &self,
+        layer: u64,
+    ) -> Result<Vec<cat_smf_editor::host::parameters::Parameter>, String> {
+        let index = self
+            .settings
+            .layers
+            .iter()
+            .position(|l| l.settings.id == layer)
+            .ok_or("Missing instrument layer")?;
+        self.layers[index].parameters()
+    }
+    pub fn parameter_text(
+        &self,
+        layer: u64,
+        value: cat_smf_editor::host::parameters::ParameterValue,
+    ) -> Result<String, String> {
+        let index = self
+            .settings
+            .layers
+            .iter()
+            .position(|l| l.settings.id == layer)
+            .ok_or("Missing instrument layer")?;
+        self.layers[index].parameter_text(value)
+    }
     pub fn open(rate: u32, patch: &Patch) -> Result<Self, String> {
         patch.validate()?;
         let layers = patch
@@ -34,6 +65,8 @@ impl Native {
             Some(open_effects(rate, patch)?)
         };
         Ok(Self {
+            automated: false,
+            automated_layers: Vec::new(),
             layers,
             effects,
             settings: patch.clone(),
@@ -54,7 +87,13 @@ impl Native {
 
     pub fn reload(self, rate: u32, patch: &Patch) -> Result<Self, String> {
         patch.validate()?;
-        let mut old: Vec<_> = self.settings.layers.into_iter().zip(self.layers).collect();
+        let previous = self.restore_baseline(rate)?;
+        let mut old: Vec<_> = previous
+            .settings
+            .layers
+            .into_iter()
+            .zip(previous.layers)
+            .collect();
         let mut layers = Vec::new();
         for layer in &patch.layers {
             let desired = Settings {
@@ -82,8 +121,8 @@ impl Native {
             };
             layers.push(chain);
         }
-        let effects = match self.effects {
-            Some(effects) if same_except_bypass(&self.settings.effects, &patch.effects) => {
+        let effects = match previous.effects {
+            Some(effects) if same_except_bypass(&previous.settings.effects, &patch.effects) => {
                 effects.set_master_bypass(&patch.effects)?;
                 Some(effects)
             }
@@ -91,6 +130,8 @@ impl Native {
             _ => Some(open_effects(rate, patch)?),
         };
         Ok(Self {
+            automated: false,
+            automated_layers: Vec::new(),
             layers,
             effects,
             settings: patch.clone(),
@@ -104,6 +145,102 @@ impl Native {
         if let Some(effects) = &self.effects {
             effects.pump();
         }
+    }
+
+    pub fn prepare_automation(
+        &mut self,
+        plan: &super::automation::OwnerPlan,
+    ) -> Result<Vec<super::automation::LayerBindings>, String> {
+        use super::automation::{Binding, LayerBindings};
+        use cat_smf_editor::score::automation::{validate_parameter, ParameterSpec};
+        let mut result: Vec<LayerBindings> = Vec::new();
+        for curve in &plan.curves {
+            let layer = self
+                .settings
+                .layers
+                .iter()
+                .position(|l| l.settings.id == curve.target.layer)
+                .ok_or_else(|| format!("Missing automation layer: {}", curve.name))?;
+            let key = match &self.settings.layers[layer].instrument {
+                Some(slot) => slot.plugin.clone(),
+                None => cat_smf_editor::chain::default_instrument()?,
+            };
+            if key.format != curve.target.plugin_format || key.id != curve.target.plugin_id {
+                return Err(format!("Automation instrument changed: {}", curve.name));
+            }
+            let parameters = self.layers[layer].parameters()?;
+            let mut matching = parameters
+                .iter()
+                .filter(|p| p.stable_id == curve.target.parameter_id);
+            let parameter = matching
+                .next()
+                .ok_or_else(|| format!("Missing parameter: {} / {}", curve.path, curve.name))?;
+            if matching.next().is_some() {
+                return Err(format!("Ambiguous parameter ID: {}", curve.name));
+            }
+            validate_parameter(
+                curve,
+                ParameterSpec {
+                    stable_id: &parameter.stable_id,
+                    minimum: parameter.minimum,
+                    maximum: parameter.maximum,
+                    normalized: parameter.normalized,
+                    eligible: parameter.eligible,
+                },
+            )?;
+            let index = if let Some(i) = result.iter().position(|b| b.layer == layer) {
+                i
+            } else {
+                self.layers[layer].prepare_parameters()?;
+                result.push(LayerBindings {
+                    layer,
+                    lanes: Vec::new(),
+                    values: Vec::new(),
+                });
+                result.len() - 1
+            };
+            if result[index].lanes.len() >= 256 {
+                return Err("Too many automated parameters on one layer".into());
+            }
+            result[index].values.push(parameter.binding);
+            result[index].lanes.push(Binding {
+                live: plan.live.get(&curve.target).cloned(),
+                curve: curve.clone(),
+                value: parameter.binding,
+            });
+        }
+        self.automated = !result.is_empty();
+        self.automated_layers = result.iter().map(|b| b.layer).collect();
+        Ok(result)
+    }
+
+    /// UI thread, with every renderer stopped; use saved baseline bytes only.
+    pub fn restore_baseline(mut self, rate: u32) -> Result<Self, String> {
+        if self.automated {
+            self.layers = std::mem::take(&mut self.layers)
+                .into_iter()
+                .enumerate()
+                .zip(&self.settings.layers)
+                .map(|((index, chain), layer)| {
+                    if !self.automated_layers.contains(&index) {
+                        return Ok(chain);
+                    }
+                    let desired = Settings {
+                        instrument: layer.instrument.clone(),
+                        ..Default::default()
+                    };
+                    if layer.instrument.is_some() {
+                        chain.reload(rate, &desired)
+                    } else {
+                        drop(chain);
+                        Chain::open(rate, &desired)
+                    }
+                })
+                .collect::<Result<_, _>>()?;
+            self.automated = false;
+            self.automated_layers.clear();
+        }
+        Ok(self)
     }
 
     /// # Safety

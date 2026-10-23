@@ -38,7 +38,10 @@ fn initial(track: &Track) -> Vec<Event> {
         .iter()
         .take_while(|e| e.tick == tick)
         .filter(|e| {
-            !matches!(e.status & 0xf0, 0x80 | 0x90) && !(e.status == 0xff && e.meta_type == 0x2f)
+            !matches!(e.status & 0xf0, 0x80 | 0x90)
+                && !(e.status == 0xff && e.meta_type == 0x2f)
+                && !super::parameter_curve::owned(e)
+                && !super::parameter_curve::group_event(e)
         })
         .cloned()
         .collect()

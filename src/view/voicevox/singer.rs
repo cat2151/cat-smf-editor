@@ -10,6 +10,9 @@ use cat_smf_editor::voicevox::{
 use eframe::egui::{self, Key};
 use std::thread::JoinHandle;
 
+mod history;
+mod keyboard;
+pub use keyboard::{collect, keep_ime};
 mod preview;
 
 type CatalogResult = (Option<Engine>, Result<Vec<Voice>, Failure>);
@@ -45,6 +48,7 @@ pub fn open(app: &mut App) {
     if app.loaded.is_none() {
         return;
     }
+    history::load(app);
     preview::reset(app);
     app.voicevox.singer = Some(Picker {
         song: app.song_id,
@@ -87,18 +91,7 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
                         }
                         if let Some(picker) = &mut app.voicevox.singer {
                             picker.reveal = true;
-                            let current = app
-                                .loaded
-                                .as_ref()
-                                .and_then(|l| l.music.tracks.get(picker.track))
-                                .and_then(Voice::read);
-                            picker.selected = if picker.query.trim().is_empty() {
-                                current
-                                    .and_then(|v| voices.iter().position(|c| c.same_style(&v)))
-                                    .unwrap_or(0)
-                            } else {
-                                0
-                            };
+                            picker.selected = 0;
                         }
                         app.voicevox.catalog.voices = voices;
                     }
@@ -157,13 +150,21 @@ fn filtered(app: &mut App) -> Vec<usize> {
         return Vec::new();
     };
     picker.search.update(&picker.query);
-    app.voicevox
+    let mut indices: Vec<_> = app
+        .voicevox
         .catalog
         .voices
         .iter()
         .enumerate()
         .filter_map(|(i, v)| picker.search.matches_text(&v.label()).then_some(i))
-        .collect()
+        .collect();
+    indices.sort_by_key(|&i| {
+        app.selection_history.singer.rank(
+            &picker.query,
+            &history::identity(&app.voicevox.catalog.voices[i]),
+        )
+    });
+    indices
 }
 
 fn confirm(app: &mut App, _: &egui::Context) {
@@ -193,6 +194,7 @@ fn apply(app: &mut App, voice: Option<Voice>) {
         .and_then(|l| l.music.tracks.get(track))
         .and_then(Voice::read);
     if current == voice {
+        history::record(app, voice.as_ref());
         close(app);
         return;
     }
@@ -203,100 +205,12 @@ fn apply(app: &mut App, voice: Option<Voice>) {
         )
     }) {
         Ok(()) => {
+            history::record(app, voice.as_ref());
             close(app);
             app.voicevox.error = None;
             crate::play::sung::prerender::ahead(app, track);
         }
         Err(error) => app.voicevox.catalog.error = Some(error),
-    }
-}
-
-pub fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
-    if screen != Screen::Singer {
-        return;
-    }
-    for (id, label, key, step) in [
-        ("singer-prev", "前の歌声", Key::ArrowUp, -1),
-        ("singer-next", "次の歌声", Key::ArrowDown, 1),
-    ] {
-        out.push(
-            Command::plain(screen, id, label, &[key], move |a, _| {
-                let len = filtered(a).len();
-                if let Some(p) = &mut a.voicevox.singer {
-                    p.selected = p
-                        .selected
-                        .saturating_add_signed(step)
-                        .min(len.saturating_sub(1));
-                    p.reveal = true;
-                }
-            })
-            .repeating(),
-        );
-    }
-    out.push(Command::plain(
-        screen,
-        "singer-confirm",
-        "確定",
-        &[Key::Enter],
-        confirm,
-    ));
-    out.push(Command::plain(
-        screen,
-        "singer-cancel",
-        "取消",
-        &[Key::Escape],
-        |a, _| close(a),
-    ));
-    out.push(Command::plain(
-        screen,
-        "singer-disable",
-        "歌声を解除",
-        &[],
-        |a, _| apply(a, None),
-    ));
-    if app.voicevox.catalog.error.is_some() {
-        out.push(Command::plain(
-            screen,
-            "singer-retry",
-            "再取得",
-            &[],
-            |a, _| preview::retry(a),
-        ));
-    }
-}
-
-pub fn keep_ime(app: &mut App, ctx: &egui::Context) {
-    let Some(p) = &mut app.voicevox.singer else {
-        return;
-    };
-    let events = ctx.input(|i| i.events.clone());
-    let mut ime = p.composing;
-    for e in &events {
-        if let egui::Event::Ime(e) = e {
-            ime = true;
-            match e {
-                egui::ImeEvent::Preedit(text) => p.composing = !text.is_empty(),
-                egui::ImeEvent::Commit(_) | egui::ImeEvent::Disabled => p.composing = false,
-                _ => {}
-            }
-        }
-    }
-    if ime
-        || events
-            .iter()
-            .any(|e| matches!(e, egui::Event::Text(_) | egui::Event::Paste(_)))
-    {
-        ctx.input_mut(|i| {
-            i.events.retain(|e| {
-                !matches!(
-                    e,
-                    egui::Event::Key {
-                        key: Key::Enter | Key::Escape | Key::ArrowUp | Key::ArrowDown,
-                        ..
-                    }
-                )
-            })
-        });
     }
 }
 
@@ -363,6 +277,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         let indices = filtered(app);
         let p = app.voicevox.singer.as_mut().unwrap();
         p.selected = p.selected.min(indices.len().saturating_sub(1));
+        crate::view::list_navigation::position(ui, p.selected, indices.len());
         egui::ScrollArea::vertical()
             .auto_shrink([false, true])
             .max_height((ctx.screen_rect().height() * 0.55).max(120.0))

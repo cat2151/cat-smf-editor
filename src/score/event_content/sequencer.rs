@@ -24,8 +24,57 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
                 .map(|v| v.label())
                 .unwrap_or_else(|_| "invalid".into()),
         )
+    } else if let Some(json) = data.strip_prefix(crate::score::macro_values::PREFIX) {
+        (
+            "Macro values",
+            serde_json::from_slice::<crate::score::macro_values::Values>(json)
+                .map(|v| {
+                    let mut parts = v
+                        .parameters
+                        .iter()
+                        .map(|c| {
+                            format!(
+                                "Layer {} / {}: {:.3}",
+                                c.target.layer,
+                                c.name,
+                                c.points.first().map_or(0.0, |p| p.value)
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    for set in &v.variations {
+                        for (i, snapshot) in set.snapshots.iter().enumerate() {
+                            parts.push(format!(
+                                "Layer {} / Variation {}{}: {}",
+                                set.layer,
+                                i + 1,
+                                if i == set.selected { " (active)" } else { "" },
+                                snapshot
+                                    .iter()
+                                    .map(|c| format!(
+                                        "{}: {:.3}",
+                                        c.name,
+                                        c.points.first().map_or(0.0, |p| p.value)
+                                    ))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ));
+                        }
+                    }
+                    parts.join(" · ")
+                })
+                .unwrap_or_else(|_| "invalid".into()),
+        )
+    } else if let Some(json) = data.strip_prefix(crate::score::macro_curve::PREFIX) {
+        (
+            "Macro variation curve",
+            crate::score::macro_curve::describe(json),
+        )
     } else if let Some(json) = data.strip_prefix(tempo_curve::PREFIX) {
         ("Tempo curve", tempo(json))
+    } else if let Some(json) = data.strip_prefix(crate::edit::parameter_curve::GROUP_PREFIX) {
+        ("Instance group", group(json))
+    } else if let Some(json) = data.strip_prefix(crate::edit::parameter_curve::PREFIX) {
+        ("Parameter curve", parameter(json))
     } else if let Some(json) = data.strip_prefix(instrument_layers::PREFIX) {
         ("Instrument layers", references(json, true))
     } else if let Some(json) = data.strip_prefix(master_references::PREFIX) {
@@ -45,6 +94,51 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
         return None;
     };
     Some(super::field(kind, ": ", value))
+}
+
+fn group(json: &[u8]) -> String {
+    match serde_json::from_slice::<crate::edit::parameter_curve::Group>(json) {
+        Ok(group) if group.version == 1 && group.id != 0 => format!("{}", group.id),
+        _ => "invalid".into(),
+    }
+}
+
+fn parameter(json: &[u8]) -> String {
+    match serde_json::from_slice::<crate::edit::parameter_curve::Curve>(json)
+        .map_err(|e| e.to_string())
+        .and_then(|c| c.validate().map(|()| c))
+    {
+        Ok(curve) => format!(
+            "{} / {} · group {} · layer {} · {} {} · {} · {:?} [{}, {}] · points {} · controls {}",
+            curve.path,
+            curve.name,
+            curve.target.group,
+            curve.target.layer,
+            curve.target.plugin_format,
+            curve.target.plugin_id,
+            curve.target.parameter_id,
+            curve.value_space,
+            curve.minimum,
+            curve.maximum,
+            if curve.points.is_empty() {
+                "empty".into()
+            } else {
+                curve
+                    .points
+                    .iter()
+                    .map(|p| format!("{}: {}", p.tick, p.value))
+                    .collect::<Vec<_>>()
+                    .join(" → ")
+            },
+            curve
+                .controls
+                .iter()
+                .map(|p| format!("{}: {}", p.tick, p.value))
+                .collect::<Vec<_>>()
+                .join(" → ")
+        ),
+        Err(error) => format!("invalid ({error})"),
+    }
 }
 
 // Schema version 1, then the gain as little-endian f32.

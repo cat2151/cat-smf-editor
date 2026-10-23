@@ -19,7 +19,7 @@ pub(super) fn show(
 ) -> Option<u8> {
     let response = ui.interact(
         rect.intersect(clip),
-        egui::Id::new(("piano-roll-keyboard", slot)),
+        crate::view::palette::preview_id(ui.ctx(), egui::Id::new(("piano-roll-keyboard", slot))),
         egui::Sense::click_and_drag(),
     );
     if ui.input(|i| i.pointer.primary_pressed()) && response.is_pointer_button_down_on() {

@@ -44,6 +44,14 @@ pub fn toggle(app: &mut App) {
     app.config.select_analysis_open(app.analysis.is_open());
 }
 
+/// Reopens the window left open last time. The editor owns it, so it would
+/// cover the missing-file dialog; that dialog reopens it on its way out.
+pub fn restore(app: &mut App) {
+    if app.config.analysis_open && !app.analysis.is_open() && app.missing_last_mid.is_none() {
+        toggle(app);
+    }
+}
+
 /// For a window that ended up off every screen.
 pub fn reset_window(app: &mut App) {
     app.config.forget_analysis_window();
@@ -76,7 +84,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             .with_inner_size([width, height]);
     }
     let mut close = false;
+    let visible = !app.palette.browsing_views();
+    builder = builder.with_visible(visible);
     ctx.show_viewport_immediate(viewport(app.analysis.placement), builder, |ctx, _class| {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(visible));
+        if !visible {
+            return;
+        }
         let palette_input = crate::view::palette::begin(app, ctx);
         crate::view::commands::route(app, ctx);
         let (requested, outer, inner) = ctx.input(|i| {

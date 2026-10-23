@@ -195,6 +195,11 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
         .patch_roots
         .lookup(app.player_selection.executable.clone());
     chain_settings::write(&mut music.tracks[track], settings, roots)?;
+    cat_smf_editor::score::macro_values::retain_unchanged_layers(
+        &mut music.tracks[track],
+        &loaded.patches[track],
+        settings,
+    )?;
     app.saved.remember(&loaded.original, &music)?;
     // Playback continues through a bypass change so that it can be compared by ear.
     let live = loaded.patches[track].same_except_bypass(settings);

@@ -20,6 +20,7 @@ impl Default for State {
 }
 
 pub(super) struct Mixer {
+    pub diagnostics: Option<std::sync::Arc<crate::play::audio_diagnostics::Counters>>,
     channels: usize,
     rate: u32,
     scratch: Vec<f32>,
@@ -39,6 +40,7 @@ impl Mixer {
         master: Option<cat_smf_editor::host::ProcessorRef>,
     ) -> Self {
         Self {
+            diagnostics: None,
             channels,
             rate,
             scratch: vec![0.0; 1024 * channels],
@@ -74,17 +76,31 @@ impl Mixer {
         let (scratch, mixed) = (&mut self.scratch[..len], &mut self.mixed[..len]);
         mixed.fill(0.0);
         for (i, (render, state)) in renders.iter_mut().zip(&mut self.states).enumerate() {
+            let frame = state.cursor.frame;
             if fresh {
+                // Stop the previous command before delivering the new event stream.
+                render.reset();
                 render.cue(command.parts.get(i).and_then(|part| part.take.clone()));
             }
             let changed = if let Some(part) = command.parts.get(i) {
-                if let Some(sequence) = &part.sequence {
-                    let (_, changed) = state.cursor.block(
+                if let Some(timeline) = &part.timeline
+                    && part.take.is_none()
+                {
+                    state.cursor.finished |= frame >= timeline.end;
+                    state.cursor.frame = frame.saturating_add(frames as u64);
+                    0
+                } else if let Some(sequence) = &part.sequence {
+                    let origin = part
+                        .timeline
+                        .as_ref()
+                        .map_or(sequence.origin, |timeline| timeline.origin);
+                    let (_, changed) = state.cursor.block_aligned(
                         sequence,
                         rate,
                         frames,
                         &mut state.velocities,
                         &mut state.durations,
+                        origin,
                     );
                     if fresh {
                         1
@@ -100,27 +116,59 @@ impl Mixer {
                 state.velocities.fill(0);
                 i32::from(fresh)
             };
-            if !render.process(
-                &state.velocities,
-                &state.durations,
-                changed,
-                scratch,
-                channels,
-            ) {
+            let plan = command
+                .parts
+                .get(i)
+                .and_then(|p| p.automation.as_deref())
+                .filter(|_| !state.cursor.finished);
+            let timeline = command
+                .parts
+                .get(i)
+                .and_then(|part| part.timeline.as_deref());
+            let rendered = if let Some(timeline) = timeline
+                && command.parts.get(i).is_none_or(|part| part.take.is_none())
+            {
+                render.process_scheduled(timeline, plan, frame, scratch, channels)
+            } else {
+                render.automate(plan, frame)
+                    && render.process(
+                        &state.velocities,
+                        &state.durations,
+                        changed,
+                        scratch,
+                        channels,
+                    )
+            };
+            if !rendered {
+                if let Some(d) = &self.diagnostics {
+                    d.failure(4);
+                }
                 failed.store(true, Ordering::Relaxed);
                 scratch.fill(0.0);
             }
+            if let Some(d) = &self.diagnostics {
+                d.track(i, scratch);
+            }
             if !mix_into(mixed, scratch, command.gains.get(i).copied().unwrap_or(1.0)) {
+                if let Some(d) = &self.diagnostics {
+                    d.failure(16);
+                }
                 failed.store(true, Ordering::Relaxed);
             }
         }
         if let Some(master) = &mut self.master
             && !master.process_input(mixed, channels)
         {
+            if let Some(d) = &self.diagnostics {
+                d.failure(32);
+            }
             failed.store(true, Ordering::Relaxed);
             mixed.fill(0.0);
         }
         if !mixed.iter().all(|s| s.is_finite()) {
+            if let Some(d) = &self.diagnostics {
+                d.failure(64);
+            }
             failed.store(true, Ordering::Relaxed);
             mixed.fill(0.0);
         }
@@ -148,14 +196,37 @@ fn boundary(states: &[State], parts: &[Part], rate: u32, max: usize) -> usize {
         .zip(parts)
         .filter_map(|(state, part)| {
             let sequence = part.sequence.as_ref()?;
+            if let Some(timeline) = &part.timeline
+                && part.take.is_none()
+            {
+                let count = timeline.next(state.cursor.frame, max);
+                return Some(
+                    part.automation
+                        .as_ref()
+                        .map_or(count, |plan| plan.next(state.cursor.frame, count)),
+                );
+            }
             let mut cursor = state.cursor.clone();
             let mut velocities = [0; 128];
             let mut durations = [0; 128];
-            Some(
-                cursor
-                    .block(sequence, rate, max, &mut velocities, &mut durations)
-                    .0,
-            )
+            let origin = part
+                .timeline
+                .as_ref()
+                .map_or(sequence.origin, |timeline| timeline.origin);
+            let notes = cursor
+                .block_aligned(sequence, rate, max, &mut velocities, &mut durations, origin)
+                .0;
+            let notes = part
+                .timeline
+                .as_ref()
+                .map_or(notes, |timeline| timeline.next(state.cursor.frame, notes));
+            Some(if !state.cursor.finished {
+                part.automation
+                    .as_ref()
+                    .map_or(notes, |plan| plan.next(state.cursor.frame, notes))
+            } else {
+                notes
+            })
         })
         .min()
         .unwrap_or(max)
@@ -183,15 +254,15 @@ mod tests {
     fn all_tracks_share_frame_boundaries_and_same_pitch_durations_stay_independent() {
         let mut states = [State::default(), State::default()];
         let parts = [0.1, 0.2].map(|start| Part {
-            sequence: Some(Arc::new(Sequence {
-                notes: vec![Note {
+            sequence: Some(Arc::new(Sequence::new(
+                vec![Note {
                     start,
                     duration: start,
                     pitch: 60,
                     velocity: 100,
                 }],
-                end: start * 2.0,
-            })),
+                start * 2.0,
+            ))),
             ..Part::default()
         });
         for expected_frame in [0, 100, 200, 400] {

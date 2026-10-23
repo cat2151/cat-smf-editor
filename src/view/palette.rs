@@ -3,8 +3,14 @@ use super::commands::{self, Command, Screen};
 use crate::app::App;
 use eframe::egui::{self, Key, Modifiers};
 mod history;
+mod insert_event;
 mod origin;
+pub(super) mod row;
+mod views;
 use origin::Origin;
+pub(crate) use views::preview::{
+    active as preview_active, id as preview_id, window as preview_window,
+};
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -20,8 +26,13 @@ pub struct State {
     composing: bool,
     geometry: Option<(f32, f32)>,
     handled: Option<(egui::ViewportId, u64)>,
+    views: Option<views::State>,
+    insert_event: Option<insert_event::State>,
 }
 impl State {
+    pub(crate) fn browsing_views(&self) -> bool {
+        self.views.is_some()
+    }
     pub fn is_open(&self) -> bool {
         self.origin.is_some()
     }
@@ -43,6 +54,16 @@ pub(crate) fn suspended(ctx: &egui::Context) -> bool {
 
 /// Save the real input, then give background widgets an inert input state.
 pub(crate) fn begin(a: &mut App, ctx: &egui::Context) -> Option<egui::InputState> {
+    if a.palette.browsing_views()
+        && ctx.viewport_id() == egui::ViewportId::ROOT
+        && a.palette
+            .origin
+            .as_ref()
+            .is_some_and(|o| o.viewport != egui::ViewportId::ROOT)
+    {
+        a.palette.origin = Some(Origin::capture(a, ctx));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+    }
     let token = frame_token(ctx);
     let opening=ctx.input(|i|i.events.iter().any(|e|matches!(e,egui::Event::Key{key:Key::P,pressed:true,repeat:false,modifiers,..} if commands::matches(*modifiers,Modifiers::CTRL|Modifiers::SHIFT))));
     if !a.palette.is_open() && opening && a.palette.handled != Some(token) {
@@ -110,6 +131,40 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     let mut execute = false;
     let mut cancel = false;
     let invalid = !origin.current(a, ctx);
+    if palette.insert_event.is_some() {
+        if invalid {
+            palette.insert_event = None;
+        } else {
+            let done = insert_event::show(a, ctx, palette.insert_event.as_mut().unwrap(), fresh);
+            if done {
+                origin.restore_focus(ctx);
+                palette.origin = None;
+                palette.insert_event = None;
+                palette.commands.clear();
+            }
+            a.palette = palette;
+            clear(ctx);
+            return;
+        }
+    }
+    if palette.views.is_some() {
+        if invalid {
+            palette.views = None;
+        } else {
+            let done = views::show(a, ctx, palette.views.as_mut().unwrap(), fresh);
+            if done {
+                if let Some(origin) = &palette.origin {
+                    origin.restore_focus(ctx);
+                }
+                palette.origin = None;
+                palette.views = None;
+                palette.commands.clear();
+            }
+            a.palette = palette;
+            clear(ctx);
+            return;
+        }
+    }
     if invalid {
         palette.commands = commands::candidates(a, ctx);
         palette.origin = Some(Origin::capture_with_focus(a, ctx, origin));
@@ -118,6 +173,12 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     }
     let events = ctx.input(|i| i.events.clone());
     let ime_enter = palette.composing || events.iter().any(|e| matches!(e, egui::Event::Ime(_)));
+    let mut filtered = filter(
+        &palette.commands,
+        &palette.query,
+        &mut palette.search,
+        &palette.history,
+    );
     if fresh {
         for event in &events {
             if let egui::Event::Ime(ime) = event {
@@ -138,19 +199,20 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
                 modifiers,
                 ..
             } = event
-                && commands::matches(*modifiers, Modifiers::NONE)
             {
+                if !ime_enter
+                    && let Some(action) = super::list_navigation::movement(*key, *modifiers)
+                {
+                    palette.selected = action.apply(palette.selected, filtered.len());
+                    palette.reveal = true;
+                    continue;
+                }
+                if !commands::matches(*modifiers, Modifiers::NONE) {
+                    continue;
+                }
                 match key {
                     Key::Escape if !ime_enter => cancel = true,
                     Key::Enter if !*repeat && !ime_enter && !invalid => execute = true,
-                    Key::ArrowUp if !ime_enter => {
-                        palette.selected = palette.selected.saturating_sub(1);
-                        palette.reveal = true;
-                    }
-                    Key::ArrowDown if !ime_enter => {
-                        palette.selected = palette.selected.saturating_add(1);
-                        palette.reveal = true;
-                    }
                     _ => {}
                 }
             }
@@ -162,21 +224,18 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
                 && !(matches!(
                     e,
                     egui::Event::Key {
-                        key: Key::ArrowUp | Key::ArrowDown | Key::Enter | Key::Escape,
+                        key: Key::Enter | Key::Escape,
                         ..
                     }
                 ) && !ime_enter)
+                && !(matches!(e, egui::Event::Key { key, modifiers, .. }
+                    if super::list_navigation::movement(*key, *modifiers).is_some())
+                    && !ime_enter)
         })
     });
     if !fresh {
         clear(ctx);
     }
-    let mut filtered = filter(
-        &palette.commands,
-        &palette.query,
-        &mut palette.search,
-        &palette.history,
-    );
     palette.selected = palette.selected.min(filtered.len().saturating_sub(1));
     let search_input = events.iter().any(|e| {
         matches!(
@@ -187,6 +246,20 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     let chosen = (execute && !search_input)
         .then(|| filtered.get(palette.selected).copied())
         .flatten();
+    if !cancel && chosen.is_some_and(|i| palette.commands[i].id == "insert-event") {
+        palette.insert_event = Some(insert_event::State::default());
+        a.palette = palette;
+        clear(ctx);
+        ctx.request_repaint();
+        return;
+    }
+    if !cancel && chosen.is_some_and(|i| palette.commands[i].id == "browse-views") {
+        palette.views = Some(views::State::new(a));
+        a.palette = palette;
+        clear(ctx);
+        ctx.request_repaint();
+        return;
+    }
     if cancel || chosen.is_some() {
         clear(ctx);
         if let Some(origin) = &palette.origin {
@@ -222,19 +295,11 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     let id = egui::Id::new("command-palette");
     let (width, left) = *palette.geometry.get_or_insert_with(|| {
         let style = ctx.style();
-        let font = egui::TextStyle::Button.resolve(&style);
-        let text_width = ctx.fonts(|fonts| {
-            palette
-                .commands
-                .iter()
-                .map(|command| {
-                    fonts
-                        .layout_no_wrap(row_text(command), font.clone(), egui::Color32::WHITE)
-                        .size()
-                        .x
-                })
-                .fold(0.0, f32::max)
-        });
+        let text_width = palette
+            .commands
+            .iter()
+            .map(|command| row::width(ctx, command))
+            .fold(0.0, f32::max);
         let margins = egui::Frame::popup(&style).total_margin().sum().x;
         let width = (text_width
             + 2.0 * style.spacing.button_padding.x
@@ -271,6 +336,7 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
                 &palette.history,
             );
         }
+        super::list_navigation::position(ui, palette.selected, filtered.len());
         egui::ScrollArea::vertical()
             .id_salt("palette-results")
             .max_height((ctx.screen_rect().bottom() - ui.cursor().top() - 24.0).max(1.0))
@@ -278,7 +344,7 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
             .show(ui, |ui| {
                 for (row, &index) in filtered.iter().enumerate() {
                     let command = &palette.commands[index];
-                    let response = ui.selectable_label(row == palette.selected, row_text(command));
+                    let response = row::show(ui, command, row == palette.selected);
                     if row == palette.selected && palette.reveal {
                         response.scroll_to_me(Some(egui::Align::Center));
                     }
@@ -291,15 +357,6 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     palette.reveal = false;
     a.palette = palette;
     clear(ctx);
-}
-
-fn row_text(command: &Command) -> String {
-    format!(
-        "{}    {} ({})",
-        command.label(),
-        command.key_label(),
-        command.screen.label()
-    )
 }
 
 fn filter(

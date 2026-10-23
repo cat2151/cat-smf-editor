@@ -2,11 +2,29 @@
 #[cfg(test)]
 #[path = "layer_audibility_tests.rs"]
 mod audibility_tests;
+#[cfg(test)]
+#[path = "layer_event_tests.rs"]
+mod event_tests;
 use crate::play::sung::{Player, Take};
 use cat_smf_editor::{host::ProcessorRef, instrument_layers::Layer, note_render};
 use std::sync::Arc;
 
 pub(crate) trait Instrument {
+    fn reset(&mut self) {}
+    fn ordered(
+        &mut self,
+        _events: &[cat_smf_editor::host::parameters::AutomationEvent],
+        _out: &mut [f32],
+        _channels: usize,
+    ) -> Result<(), i32> {
+        Err(-3)
+    }
+    fn parameters(
+        &mut self,
+        _values: &[cat_smf_editor::host::parameters::ParameterValue],
+    ) -> Result<(), i32> {
+        Ok(())
+    }
     fn render(
         &mut self,
         velocities: &[u8; 128],
@@ -17,6 +35,23 @@ pub(crate) trait Instrument {
     ) -> bool;
 }
 impl Instrument for note_render::Render {
+    fn reset(&mut self) {
+        self.reset_events();
+    }
+    fn ordered(
+        &mut self,
+        events: &[cat_smf_editor::host::parameters::AutomationEvent],
+        out: &mut [f32],
+        channels: usize,
+    ) -> Result<(), i32> {
+        self.process_events(events, out, channels)
+    }
+    fn parameters(
+        &mut self,
+        values: &[cat_smf_editor::host::parameters::ParameterValue],
+    ) -> Result<(), i32> {
+        self.parameters(values)
+    }
     fn render(
         &mut self,
         v: &[u8; 128],
@@ -38,6 +73,9 @@ impl Effect for ProcessorRef {
 }
 
 pub struct Render<R = note_render::Render, E = ProcessorRef> {
+    ordered_events: Vec<cat_smf_editor::host::parameters::AutomationEvent>,
+    automation: Vec<super::automation::LayerBindings>,
+    pub parameter_error: Option<i32>,
     layers: Vec<(R, Layer)>,
     effects: Option<E>,
     scratch: Vec<f32>,
@@ -49,6 +87,11 @@ pub struct Render<R = note_render::Render, E = ProcessorRef> {
 impl<R: Instrument, E: Effect> Render<R, E> {
     pub fn new(layers: Vec<(R, Layer)>, effects: Option<E>) -> Self {
         Self {
+            ordered_events: Vec::with_capacity(
+                cat_smf_editor::host::parameters::MAX_AUTOMATION_EVENTS,
+            ),
+            automation: Vec::new(),
+            parameter_error: None,
             layers,
             effects,
             scratch: vec![0.0; 1024 * 64],
@@ -57,9 +100,55 @@ impl<R: Instrument, E: Effect> Render<R, E> {
         }
     }
 
+    pub fn set_automation(&mut self, bindings: Vec<super::automation::LayerBindings>) {
+        if !bindings.is_empty()
+            && self.ordered_events.capacity()
+                < cat_smf_editor::host::parameters::MAX_AUTOMATION_EVENTS
+        {
+            self.ordered_events =
+                Vec::with_capacity(cat_smf_editor::host::parameters::MAX_AUTOMATION_EVENTS);
+        }
+        self.automation = bindings;
+        self.parameter_error = None;
+    }
+
+    pub fn automate(&mut self, plan: Option<&super::automation::RuntimePlan>, frame: u64) -> bool {
+        let Some(plan) = plan else {
+            return true;
+        };
+        if self.automation.iter().map(|b| b.lanes.len()).sum::<usize>() != plan.owner.curves.len() {
+            self.parameter_error = Some(-6);
+            return false;
+        }
+        if !plan.applies(frame) {
+            return true;
+        }
+        let tick = plan.tick(frame);
+        for binding in &mut self.automation {
+            for (lane, value) in binding.lanes.iter().zip(&mut binding.values) {
+                let Some(v) = lane.at(tick) else {
+                    self.parameter_error = Some(-3);
+                    return false;
+                };
+                *value = lane.value.with_value(v);
+            }
+            if let Err(code) = self.layers[binding.layer].0.parameters(&binding.values) {
+                self.parameter_error = Some(code);
+                return false;
+            }
+        }
+        true
+    }
+
     /// At the start of each playback; `None` gives the notes back to the instruments.
     pub fn cue(&mut self, take: Option<Arc<Take>>) {
         self.sung.cue(take);
+    }
+
+    pub fn reset(&mut self) {
+        for (render, _) in &mut self.layers {
+            render.reset();
+        }
     }
 
     pub fn process(
@@ -119,6 +208,9 @@ impl<R: Instrument, E: Effect> Render<R, E> {
         true
     }
 }
+
+#[path = "layer_ordered.rs"]
+mod ordered;
 
 fn transpose(
     layer: &Layer,

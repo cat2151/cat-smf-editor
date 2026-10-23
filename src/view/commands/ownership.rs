@@ -26,17 +26,22 @@ pub enum Screen {
     Help,
     Recent,
     Confirm,
+    Backup,
     Invalid,
+    Missing,
     Waiting,
     Browser,
     Analysis,
     Voicevox,
     Singer,
+    MacroEditor,
+    ParameterPicker,
+    ParameterInput,
 }
 impl Screen {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Main => "Score",
+            Self::Main => "Event list",
             Self::Settings => "Settings",
             Self::Program => "Program target",
             Self::Edit => "Edit",
@@ -56,12 +61,16 @@ impl Screen {
             Self::Help => "Help",
             Self::Recent => "Recent",
             Self::Confirm => "File",
+            Self::Backup => "Backup",
             Self::Invalid => "Invalid SMF",
+            Self::Missing => "Missing SMF",
             Self::Waiting => "Waiting",
             Self::Browser => "Browser",
             Self::Analysis => "Spectrum",
             Self::Voicevox => "VOICEVOX",
             Self::Singer => "VOICEVOX voice",
+            Self::MacroEditor => "Macro edit",
+            Self::ParameterPicker | Self::ParameterInput => "Automation",
         }
     }
     pub fn owns_keys(self) -> bool {
@@ -72,6 +81,8 @@ impl Screen {
                 | Self::LayerInput
                 | Self::Note
                 | Self::Singer
+                | Self::ParameterPicker
+                | Self::ParameterInput
                 | Self::Lyrics
                 | Self::Trill
                 | Self::Waiting
@@ -90,11 +101,26 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     {
         return Screen::Waiting;
     }
+    if a.missing_last_mid.is_some() {
+        return Screen::Missing;
+    }
     if a.invalid_smf_name.is_some() {
         return Screen::Invalid;
     }
     if a.config.navigation.departure.is_some() {
         return Screen::Confirm;
+    }
+    if a.config.navigation.backup_notice {
+        return Screen::Backup;
+    }
+    if a.macro_editor.open() {
+        return Screen::MacroEditor;
+    }
+    if a.parameter_editor.picker_open() {
+        return Screen::ParameterPicker;
+    }
+    if a.parameter_editor.input_open() {
+        return Screen::ParameterInput;
     }
     if a.voicevox.wizard {
         return Screen::Voicevox;
@@ -158,7 +184,7 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     if super::super::event_selection::valid(a) {
         return a.event_selection.command_screen();
     }
-    if a.piano_roll.open || a.tempo_curve.open {
+    if a.piano_roll.open || a.tempo_curve.open || a.parameter_editor.open {
         return Screen::Timeline;
     }
     Screen::Main

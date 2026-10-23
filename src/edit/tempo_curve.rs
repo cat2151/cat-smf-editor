@@ -11,14 +11,24 @@ use std::collections::BTreeSet;
 
 pub const PREFIX: &[u8] = b"\x7dcat-smf-editor\0tempo-curve\0";
 const MAX_TEMPO: u32 = 0xff_ffff;
-/// Bisection steps solving `x(s) = tick`; enough for f64 precision.
-const STEPS: usize = 60;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Point {
     pub tick: u64,
     pub bpm: f64,
+}
+
+impl super::scalar_curve::ScalarPoint for Point {
+    fn tick(self) -> u64 {
+        self.tick
+    }
+    fn value(self) -> f64 {
+        self.bpm
+    }
+    fn new(tick: u64, value: f64) -> Self {
+        Self { tick, bpm: value }
+    }
 }
 
 /// `controls[i]` bends the segment from `points[i]` to `points[i + 1]`.
@@ -72,28 +82,8 @@ impl Curve {
 
     /// BPM at `tick`; constant before the first and after the last tempo point.
     pub fn bpm_at(&self, tick: f64) -> f64 {
-        let (first, last) = (self.points[0], self.points[self.points.len() - 1]);
-        if tick <= first.tick as f64 {
-            return first.bpm;
-        }
-        if tick >= last.tick as f64 {
-            return last.bpm;
-        }
-        let i = self.points.partition_point(|p| p.tick as f64 <= tick) - 1;
-        let (a, b, c) = (self.points[i], self.points[i + 1], self.controls[i]);
-        let bezier = |s: f64, a: f64, c: f64, b: f64| {
-            (1.0 - s) * (1.0 - s) * a + 2.0 * s * (1.0 - s) * c + s * s * b
-        };
-        let (mut low, mut high) = (0.0, 1.0);
-        for _ in 0..STEPS {
-            let middle = (low + high) / 2.0;
-            if bezier(middle, a.tick as f64, c.tick as f64, b.tick as f64) < tick {
-                low = middle;
-            } else {
-                high = middle;
-            }
-        }
-        bezier((low + high) / 2.0, a.bpm, c.bpm, b.bpm)
+        super::scalar_curve::value_at(&self.points, &self.controls, tick)
+            .expect("Validated tempo curve and non-NaN tick")
     }
 }
 

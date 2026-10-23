@@ -4,6 +4,7 @@ use cat_smf_editor::model::{Event, Music, Track};
 use eframe::egui;
 
 mod tempo;
+mod variations;
 
 /// The map outlines only the ticks the list shows, right of the pane.
 #[test]
