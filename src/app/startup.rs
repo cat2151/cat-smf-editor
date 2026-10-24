@@ -95,6 +95,9 @@ impl App {
                     app.playback.pending = None;
                     app.load_error = Some("Audio device did not start playback".into());
                 }
+                // The first audio block can request a metadata rescan. Consume it
+                // and refresh bindings before GUI creation can occupy this thread.
+                app.audition.pump();
             }
         }
         app

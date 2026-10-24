@@ -354,51 +354,6 @@ impl Audition {
     pub fn browser_used(&mut self) {
         self.last_browser_use = Some(std::time::Instant::now());
     }
-    pub fn pump(&mut self) {
-        if let Some(voice) = &mut self.voice {
-            voice.poll_diagnostics();
-        }
-        if let Some(voice) = &mut self.key_voice {
-            voice.pump();
-        }
-        self.expire_cached(std::time::Instant::now());
-        if let Some(voice) = &self.voice {
-            voice.pump_cached();
-            for native in &voice.natives {
-                native.pump();
-            }
-            if let Some(master) = &voice.master {
-                master.pump();
-            }
-        }
-        if let Some(voice) = &mut self.voice
-            && voice.failed.load(Ordering::Relaxed)
-        {
-            match voice.refresh_automation() {
-                Ok(true) => return,
-                Ok(false) => {}
-                Err(error) => {
-                    self.voice = None;
-                    self.progress = None;
-                    self.error = Some(format!("Audio automation refresh: {error}"));
-                    return;
-                }
-            }
-            let error = voice.parameter_error().map(|code| {
-                format!(
-                    "Audio parameter batch failed ({code}): {}",
-                    voice
-                        .parameter_context
-                        .as_deref()
-                        .unwrap_or("unknown target")
-                )
-            });
-            self.voice = None;
-            self.progress = None;
-            self.error =
-                Some(error.unwrap_or_else(|| "Audio: plugin or audio device stopped".into()));
-        }
-    }
     fn expire_cached(&mut self, now: std::time::Instant) {
         if self.last_browser_use.is_some_and(|last| {
             now.saturating_duration_since(last) >= std::time::Duration::from_secs(5 * 60)
@@ -430,6 +385,9 @@ mod tests;
 
 #[path = "audition_automation.rs"]
 mod parameter_automation;
+
+#[path = "audition_pump.rs"]
+mod pump;
 
 #[cfg(test)]
 #[path = "audition_probe.rs"]

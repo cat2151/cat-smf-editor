@@ -8,7 +8,7 @@ use cat_smf_editor::{
 
 pub struct Native {
     pub automated: bool,
-    automated_layers: Vec<usize>,
+    automated_layers: Vec<(usize, u64)>,
     layers: Vec<Chain>,
     effects: Option<Chain>,
     settings: Patch,
@@ -147,6 +147,12 @@ impl Native {
         }
     }
 
+    pub fn automation_changed(&self) -> bool {
+        self.automated_layers
+            .iter()
+            .any(|&(layer, revision)| self.layers[layer].parameter_list_changes() != revision)
+    }
+
     pub fn prepare_automation(
         &mut self,
         plan: &super::automation::OwnerPlan,
@@ -210,7 +216,10 @@ impl Native {
             });
         }
         self.automated = !result.is_empty();
-        self.automated_layers = result.iter().map(|b| b.layer).collect();
+        self.automated_layers = result
+            .iter()
+            .map(|b| (b.layer, self.layers[b.layer].parameter_list_changes()))
+            .collect();
         Ok(result)
     }
 
@@ -222,7 +231,11 @@ impl Native {
                 .enumerate()
                 .zip(&self.settings.layers)
                 .map(|((index, chain), layer)| {
-                    if !self.automated_layers.contains(&index) {
+                    if !self
+                        .automated_layers
+                        .iter()
+                        .any(|&(layer, _)| layer == index)
+                    {
                         return Ok(chain);
                     }
                     let desired = Settings {

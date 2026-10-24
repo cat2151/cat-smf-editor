@@ -9,6 +9,9 @@ use std::sync::{
     Arc, Mutex,
 };
 
+#[path = "audio_boundary.rs"]
+mod boundary;
+
 /// A track's plugin with its held-note state, carried into the next stream.
 type Reusable = Cache<(Native, Render)>;
 
@@ -308,37 +311,14 @@ impl Voice {
             .iter()
             .find_map(|r| r.parameter_error)
     }
-    /// Metadata notifications invalidate instance-local tokens, not stable IDs.
-    /// Exclude the callback while resolving fresh tokens on the same instances;
-    /// its mixer, cursor and command remain in place throughout this refresh.
-    pub fn refresh_automation(&mut self) -> Result<bool, String> {
-        let mut renders = self.renders.lock().map_err(|e| e.to_string())?;
-        if !renders.iter().any(|r| r.parameter_error == Some(-6))
-            || renders
-                .iter()
-                .any(|r| r.parameter_error.is_some_and(|code| code != -6))
-        {
-            return Ok(false);
-        }
-        let command = self.mailbox.lock().map_err(|e| e.to_string())?;
-        for ((native, render), part) in self
-            .natives
-            .iter_mut()
-            .zip(&mut *renders)
-            .zip(command.parts.iter())
-        {
-            if let Some(plan) = &part.automation {
-                render.set_automation(native.prepare_automation(&plan.owner)?);
-            }
-        }
-        self.failed.store(false, Ordering::Relaxed);
-        Ok(true)
-    }
     #[cfg(test)]
     pub fn cached_count(&self) -> usize {
         self.cached.values().count()
     }
 }
+
+#[path = "audition_refresh.rs"]
+mod refresh;
 
 #[cfg(test)]
 #[path = "automation/refresh_tests.rs"]
@@ -389,8 +369,11 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 if let Ok(latest) = mailbox.try_lock() {
                     command = latest.clone();
                 }
-                // Only `Voice::into_reusable` locks this too, after this stream is dropped.
-                let Ok(mut pointers) = renders.try_lock() else {
+                // The UI also excludes rendering while delivering native metadata
+                // notifications and refreshing their instance-local bindings.
+                let Some(mut pointers) =
+                    boundary::render_lock(&renders, data.len() / channels, rate)
+                else {
                     diagnostics.lock_miss();
                     data.fill(T::EQUILIBRIUM);
                     return;
