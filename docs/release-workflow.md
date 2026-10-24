@@ -12,7 +12,8 @@ package名とexe名が一致する、Windows MSVC向けの単一バイナリア�
 リポジトリ依存の設定は `.github/release.json` に集約する。
 
 - `dependencies`: 公開GitHubリポジトリ、解決するref、兄弟checkoutのディレクトリ名。
-  各refを一度だけSHAに解決し、ビルドとnotesで同じSHAを使う。editorにはUAPMD、cat-plugin-playerの共有ソース、clap-mml-play-server内の`core-lib`（`cmrt-core`）、clap-mml-render-tui内の`chord`と`midi-filter`、integration testの実素材としてcat-music-patternsが必要。
+  各refを一度だけSHAに解決し、ビルドとnotesで同じSHAを使う。editorにはUAPMD、cat-plugin-playerの共有ソース、clap-mml-play-server内の`core-lib`（`cmrt-core`）、clap-mml-render-tui内の`chord`と`midi-filter`、mascot-render-server内の`mascot-render-client`と`mascot-render-protocol`、integration testの実素材としてcat-music-patternsが必要。
+  mascot-render-serverも`refs/heads/main`をSHA解決して兄弟checkoutへ取得する。ここではclient/protocol crateを参照し、server本体のexeはビルド・同梱しない。
   素材も`refs/heads/main`を一度SHA解決し、他依存と同じcheckout・notes・再ビルド判定へ渡す。素材はZIPへ同梱しない。
   MML・コード入力はplayerのshared入力UI・変換経路を使い、TUIのchord変換とGit依存のMML変換器を利用する。
   `cmrt-core`はpath identity用に`default-features = false`で参照し、MMLアプリ本体やhost機能はビルドしない。
@@ -96,7 +97,7 @@ UAPMDの補修、plugin固有処理、音声エンジンまで今回の共通wor
 検証用にPyYAMLが必要（実際のActions実行では不要）。
 `python -m unittest discover -s scripts -p 'test_release_workflow.py'` で、workflow内のPython処理を
 mockしたGitHub/git応答で検証する。初回公開、入力一致時の省略、依存変更（`cmrt-core`・`cmrt-chord`・素材の取得元だけの変更を含む）、engine変更、手動再ビルド、
-通信失敗、Cargoの`cmrt-core`・`cmrt-chord` pathと取得先の整合、兄弟checkoutのSHA、ZIPの内容を対象にする。
+通信失敗、Cargoの全path依存と取得先の整合、mascot-render-serverだけの変更による再ビルド、兄弟checkoutのSHA、ZIPの内容を対象にする。
 Actions YAMLはactionlint、adapterは実際のローカルReleaseビルドとdumpbinで検証する。
 素材テストは`cargo test --release --locked --test catalog_and_corpus --test smf_io`で有効なまま確認する。
 共有補修の実FetchContent回帰、両アプリのRelease/test、playerの静的CRT検査はそれぞれ必要で、

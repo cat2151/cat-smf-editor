@@ -25,6 +25,11 @@
       "repository": "cat2151/cat-music-patterns",
       "ref": "refs/heads/main",
       "path": "cat-music-patterns"
+    },
+    {
+      "repository": "cat2151/mascot-render-server",
+      "ref": "refs/heads/main",
+      "path": "mascot-render-server"
     }
   ],
   "build_script": "scripts/release.ps1",

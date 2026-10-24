@@ -72,10 +72,42 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertNotIn('cat-plugin-player-2.3.4-windows-x64.zip', notes)
             dependencies = json.loads(out['dependencies'])
             self.assertEqual([dep['path'] for dep in dependencies],
-                             ['uapmd', 'cat-plugin-player', 'clap-mml-play-server', 'clap-mml-render-tui', 'cat-music-patterns'])
+                             ['uapmd', 'cat-plugin-player', 'clap-mml-play-server',
+                              'clap-mml-render-tui', 'cat-music-patterns', 'mascot-render-server'])
             self.assertTrue(all(dep['sha'] == SHA for dep in dependencies))
             self.assertIn('cat2151/cat-plugin-player', notes)
             self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {SHA}', notes)
+
+    def test_all_cargo_path_dependencies_have_release_checkouts(self):
+        manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))
+        config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
+        checkouts = {dep['path'] for dep in config['dependencies']}
+        tables = [manifest]
+        tables.extend(manifest.get('target', {}).values())
+        for table in tables:
+            for kind in ['dependencies', 'dev-dependencies', 'build-dependencies']:
+                for name, dependency in table.get(kind, {}).items():
+                    if not isinstance(dependency, dict) or 'path' not in dependency:
+                        continue
+                    with self.subTest(dependency=name):
+                        parts = Path(dependency['path']).parts
+                        self.assertEqual(parts[0], '..')
+                        self.assertIn(parts[1], checkouts)
+
+    def test_mascot_source_change_rebuilds_and_records_revision(self):
+        config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
+        sibling = next(dep for dep in config['dependencies']
+                       if dep['path'] == 'mascot-render-server')
+        self.assertEqual(sibling['repository'], 'cat2151/mascot-render-server')
+        self.assertEqual(sibling['ref'], 'refs/heads/main')
+        with workspace():
+            _, body = self.resolve(missing=True)
+            changed = {'https://github.com/cat2151/mascot-render-server': OTHER_SHA}
+            out, notes = self.resolve(body=body, dependency_shas=changed)
+            self.assertEqual(out['build'], 'true')
+            self.assertIn(f'cat2151/mascot-render-server (refs/heads/main): {OTHER_SHA}', notes)
+            out, _ = self.resolve(body=notes, dependency_shas=changed)
+            self.assertEqual(out['build'], 'false')
 
     def test_cmrt_core_path_is_provided_by_release_checkout(self):
         manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))
@@ -114,7 +146,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             out, notes = self.resolve(body=body, dependency_shas=changed)
             self.assertEqual(out['build'], 'true')
             self.assertEqual([dep['sha'] for dep in json.loads(out['dependencies'])],
-                             [SHA, SHA, SHA, SHA, OTHER_SHA])
+                             [SHA, SHA, SHA, SHA, OTHER_SHA, SHA])
             self.assertIn(f'cat2151/cat-music-patterns (refs/heads/main): {OTHER_SHA}', notes)
             out, _ = self.resolve(body=notes, dependency_shas=changed)
             self.assertEqual(out['build'], 'false')
@@ -148,7 +180,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})
             self.assertEqual(out['build'], 'true')
             dependencies = json.loads(out['dependencies'])
-            self.assertEqual([dep['sha'] for dep in dependencies], [SHA, SHA, OTHER_SHA, SHA, SHA])
+            self.assertEqual([dep['sha'] for dep in dependencies],
+                             [SHA, SHA, OTHER_SHA, SHA, SHA, SHA])
             self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {OTHER_SHA}', notes)
             out, _ = self.resolve(body=notes, dependency_shas={
                 'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})
@@ -160,7 +193,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
                         {'repository': 'cat2151/clap-mml-play-server',
                          'path': 'clap-mml-play-server', 'sha': OTHER_SHA},
                         {'repository': 'cat2151/cat-music-patterns',
-                         'path': 'cat-music-patterns', 'sha': OTHER_SHA}]
+                         'path': 'cat-music-patterns', 'sha': OTHER_SHA},
+                        {'repository': 'cat2151/mascot-render-server',
+                         'path': 'mascot-render-server', 'sha': OTHER_SHA}]
         with patch.dict(os.environ, {'DEPENDENCIES': json.dumps(dependencies)}), patch('subprocess.run') as run:
             exec(compile(step('build', 'Checkout resolved sibling commits'), '<checkout>', 'exec'), {})
         commands = [call.args[0] for call in run.call_args_list]
@@ -172,6 +207,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn(['git', '-C', 'clap-mml-play-server', 'checkout', '--detach', 'FETCH_HEAD'], commands)
         self.assertIn(['git', '-C', 'cat-music-patterns', 'fetch', '--depth=1', 'origin', OTHER_SHA], commands)
         self.assertIn(['git', '-C', 'cat-music-patterns', 'checkout', '--detach', 'FETCH_HEAD'], commands)
+        self.assertIn(['git', '-C', 'mascot-render-server', 'fetch', '--depth=1', 'origin', OTHER_SHA], commands)
+        self.assertIn(['git', '-C', 'mascot-render-server', 'checkout', '--detach', 'FETCH_HEAD'], commands)
 
     def package(self, files):
         env = {'PACKAGE': 'another-app', 'VERSION': '2.3.4', 'PACKAGE_FILES': json.dumps(files)}
