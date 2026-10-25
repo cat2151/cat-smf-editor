@@ -157,6 +157,7 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     super::event_selection::commands::collect(app, screen, &mut result);
     super::mml_input::commands::collect(app, screen, &mut result);
     super::voicevox::collect(app, screen, &mut result);
+    super::track_overview::collect(app, screen, &mut result);
     for c in &mut result {
         c.target = Some(Target::of(app));
     }
@@ -181,7 +182,7 @@ pub fn candidates(app: &App, ctx: &egui::Context) -> Vec<Command> {
             Screen::Recent,
             Screen::Timeline,
         ],
-        Screen::Timeline => &[Screen::Settings, Screen::Program, Screen::Play],
+        Screen::Timeline | Screen::Overview => &[Screen::Settings, Screen::Program, Screen::Play],
         Screen::Mixer => &[Screen::Effects],
         Screen::Settings => &[Screen::Program],
         Screen::Go => &[Screen::Tracks],
@@ -277,7 +278,11 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
                     Screen::Go | Screen::Tracks | Screen::Split | Screen::Play
                 ) && matches!(
                     screen,
-                    Screen::Main | Screen::Go | Screen::Tracks | Screen::Timeline
+                    Screen::Main
+                        | Screen::Go
+                        | Screen::Tracks
+                        | Screen::Timeline
+                        | Screen::Overview
                 ) {
                     screen = next;
                 } else {

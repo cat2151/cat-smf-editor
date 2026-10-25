@@ -112,7 +112,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         window
     };
     window.open(&mut open).resizable(false).show(ctx, |ui| {
-        if app.tempo_curve.open && !app.piano_roll.open {
+        if app.tempo_curve.open && !app.piano_roll.open && !app.track_overview.open {
             egui::ScrollArea::vertical()
                 .max_height((ctx.screen_rect().height() - 160.0).max(200.0))
                 .show(ui, |ui| {
@@ -120,7 +120,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 });
         } else {
             egui::Grid::new("help-keys").show(ui, |ui| {
-                if app.parameter_editor.open {
+                if app.track_overview.open {
+                    track_overview::rows(ui);
+                } else if app.parameter_editor.open {
                     parameter_curve::rows(ui);
                 } else if app.piano_roll.open {
                     piano_roll::rows(ui);
@@ -139,5 +141,6 @@ mod tests;
 
 mod piano_roll;
 mod tempo_curve;
+mod track_overview;
 
 mod parameter_curve;

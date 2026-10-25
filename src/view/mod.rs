@@ -39,6 +39,7 @@ mod timeline_repeat;
 mod timeline_zoom;
 mod title;
 mod track_map;
+pub(crate) mod track_overview;
 mod track_pane;
 pub(crate) mod track_rename;
 pub(crate) mod trill_edit;
@@ -50,6 +51,19 @@ use eframe::egui::{self, Color32, ScrollArea};
 
 /// Outline of the focused pane in two-column view (Monokai orange).
 pub const ACTIVE_PANE: Color32 = Color32::from_rgb(0xfd, 0x97, 0x1f);
+
+/// One Monokai accent per track, independent of the displayed measure and row order.
+pub(crate) fn track_color(track: usize) -> Color32 {
+    const COLORS: [Color32; 6] = [
+        Color32::from_rgb(0x66, 0xd9, 0xef),
+        Color32::from_rgb(0xf9, 0x26, 0x72),
+        Color32::from_rgb(0xfd, 0x97, 0x1f),
+        Color32::from_rgb(0xa6, 0xe2, 0x2e),
+        Color32::from_rgb(0xae, 0x81, 0xff),
+        Color32::from_rgb(0xe6, 0xdb, 0x74),
+    ];
+    COLORS[track % COLORS.len()]
+}
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
     if app.startup_pending(ctx) {
@@ -259,6 +273,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
     crate::view::note_edit::show(app, ctx);
     crate::view::voicevox::lyrics::show(app, ctx);
     crate::view::piano_roll::show(app, ctx);
+    crate::view::track_overview::show(app, ctx);
     crate::view::tempo_curve::show(app, ctx);
     crate::view::parameter_editor::show(app, ctx);
     crate::view::macro_editor::show(app, ctx);

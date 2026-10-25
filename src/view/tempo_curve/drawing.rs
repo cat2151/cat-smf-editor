@@ -73,7 +73,7 @@ pub(super) fn draw(
     let start = (visible.left() - rect.left()).max(0.0);
     let end = (visible.right() - rect.left()).max(start);
     let samples = ((end - start) / EDGE_MARKER_STEP).ceil() as usize;
-    let line = super::curve_path::line(roll, curve, visible);
+    let line = super::curve_path::line(roll, &curve.points, &curve.controls, visible);
     painter.add(egui::Shape::line(line, egui::Stroke::new(2.0_f32, CURVE)));
     for x in 0..=samples {
         let tick = f64::from((start + x as f32 * EDGE_MARKER_STEP).min(end) / roll.scale);

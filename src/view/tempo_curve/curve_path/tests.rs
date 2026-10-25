@@ -71,7 +71,7 @@ fn narrow_bends_keep_their_height_while_zooming_and_following() {
                 };
                 let visible =
                     egui::Rect::from_min_max(egui::pos2(0.0, 10.0), egui::pos2(400.0, 310.0));
-                let points = line(&roll, &curve, visible);
+                let points = line(&roll, &curve.points, &curve.controls, visible);
                 // Knot and extremum heights must survive even at subpixel widths.
                 for (i, pair) in curve.points.windows(2).enumerate() {
                     let c = curve.controls[i];

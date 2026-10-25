@@ -336,7 +336,7 @@ pub(crate) mod viewport;
 mod window;
 
 mod canvas;
-mod panes;
+pub(crate) mod panes;
 
 mod navigation;
 

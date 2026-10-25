@@ -434,7 +434,7 @@ impl Roll {
     }
 }
 
-mod curve_path;
+pub(crate) mod curve_path;
 mod drawing;
 mod edges;
 mod interaction;

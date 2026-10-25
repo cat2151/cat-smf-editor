@@ -208,6 +208,14 @@ pub(crate) fn solo(app: &mut App, track: usize, (start, end): (u64, u64)) {
     replace(app, prepared);
 }
 
+/// Stops everything, then plays `tracks` from `tick` to their last event, timed by `clock`.
+pub(crate) fn play_to_end(app: &mut App, clock: usize, tick: u64, tracks: &[usize], mode: Mode) {
+    super::stop(app);
+    let prepared = end_at(app, clock, tick, mode, tracks)
+        .and_then(|end| prepare(app, tick, end, tracks, mode, clock));
+    replace(app, prepared);
+}
+
 pub(crate) fn audition(app: &mut App, track: usize, tick: u64) {
     let tracks: Vec<_> = (0..app.loaded.as_ref().map_or(0, |l| l.music.tracks.len())).collect();
     let mode = match app.playback.last {

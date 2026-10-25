@@ -77,7 +77,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             .repeating(),
         );
     }
-    if matches!(s, Screen::Main | Screen::Timeline) {
+    if matches!(s, Screen::Main | Screen::Timeline | Screen::Overview) {
         out.push(
             Command::new(
                 s,
@@ -310,7 +310,12 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     }
     if matches!(
         s,
-        Screen::Main | Screen::Timeline | Screen::Mixer | Screen::Layers | Screen::Effects
+        Screen::Main
+            | Screen::Timeline
+            | Screen::Overview
+            | Screen::Mixer
+            | Screen::Layers
+            | Screen::Effects
     ) && a.undo.available()
     {
         out.push(Command::new(
@@ -326,6 +331,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         Screen::Main
             | Screen::TrackRename
             | Screen::Timeline
+            | Screen::Overview
             | Screen::Mixer
             | Screen::Layers
             | Screen::Effects

@@ -37,13 +37,13 @@ fn polyphonic_track_has_one_colored_heading_and_contiguous_high_first_rows() {
     );
     assert_eq!(
         labels[0].galley.job.sections[0].format.color,
-        track_color(1)
+        crate::view::track_color(1)
     );
     assert_eq!(
         labels[1].galley.job.sections[0].format.color,
-        track_color(2)
+        crate::view::track_color(2)
     );
-    assert_ne!(track_color(1), track_color(2));
+    assert_ne!(crate::view::track_color(1), crate::view::track_color(2));
     assert_eq!(labels[1].pos.y - labels[0].pos.y, LINE);
     assert_eq!(mml(&output).len(), 2);
     assert_eq!(mml(&output)[0].galley.job.text, "c1");

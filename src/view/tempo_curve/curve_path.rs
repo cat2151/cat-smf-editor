@@ -1,10 +1,20 @@
 //! Screen-space flattening, retaining every knot and vertical extremum at any zoom.
 use super::*;
+use cat_smf_editor::edit::scalar_curve::{self, ScalarPoint};
 
 const TOLERANCE: f32 = 0.1;
 type Position = [f64; 2];
 
-pub(super) fn line(roll: &Roll, curve: &Curve, visible: egui::Rect) -> Vec<egui::Pos2> {
+pub(crate) fn line<P: ScalarPoint>(
+    roll: &Roll,
+    points: &[P],
+    controls: &[P],
+    visible: egui::Rect,
+) -> Vec<egui::Pos2> {
+    if points.is_empty() {
+        return Vec::new();
+    }
+    let at = |tick| scalar_curve::value_at(points, controls, tick).unwrap_or(f64::NAN);
     let left = f64::from((visible.left() - roll.rect.left()).max(0.0));
     let right = f64::from((visible.right() - roll.rect.left()).max(left as f32));
     let scale = f64::from(roll.scale);
@@ -16,30 +26,22 @@ pub(super) fn line(roll: &Roll, curve: &Curve, visible: egui::Rect) -> Vec<egui:
                 * f64::from(roll.rect.height()),
         ]
     };
-    let mut raw = vec![pos(left / scale, curve.bpm_at(left / scale))];
-    let first = curve
-        .points
-        .partition_point(|p| (p.tick as f64) < left / scale)
+    let mut raw = vec![pos(left / scale, at(left / scale))];
+    let first = points
+        .partition_point(|p| (p.tick() as f64) < left / scale)
         .saturating_sub(1);
-    let end = curve
-        .points
-        .partition_point(|p| p.tick as f64 <= right / scale)
-        .min(curve.controls.len());
+    let end = points
+        .partition_point(|p| p.tick() as f64 <= right / scale)
+        .min(controls.len());
     for i in first..end {
-        let a = curve.points[i];
-        let c = curve.controls[i];
-        let b = curve.points[i + 1];
+        let [a, c, b] = [points[i], controls[i], points[i + 1]];
         flatten(
-            [
-                pos(a.tick as f64, a.bpm),
-                pos(c.tick as f64, c.bpm),
-                pos(b.tick as f64, b.bpm),
-            ],
+            [a, c, b].map(|p| pos(p.tick() as f64, p.value())),
             right - left,
             &mut raw,
         );
     }
-    raw.push(pos(right / scale, curve.bpm_at(right / scale)));
+    raw.push(pos(right / scale, at(right / scale)));
     let screen = |p: Position| {
         roll.pinned(egui::pos2(
             (f64::from(roll.rect.left()) + left + p[0]) as f32,

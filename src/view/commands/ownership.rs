@@ -27,6 +27,7 @@ pub enum Screen {
     Lyrics,
     Trill,
     Timeline,
+    Overview,
     Help,
     Recent,
     Confirm,
@@ -64,6 +65,7 @@ impl Screen {
             Self::Lyrics => "Lyrics",
             Self::Trill => "Trill",
             Self::Timeline => "Timeline",
+            Self::Overview => "Track Overview",
             Self::Help => "Help",
             Self::Recent => "Recent",
             Self::Confirm => "File",
@@ -197,6 +199,9 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     }
     if a.playback.open {
         return Screen::Play;
+    }
+    if a.track_overview.open {
+        return Screen::Overview;
     }
     if a.playback.mixer_focused() {
         return Screen::Mixer;

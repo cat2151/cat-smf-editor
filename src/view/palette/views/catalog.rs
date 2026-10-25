@@ -39,6 +39,7 @@ fn list(
         Level::Tracks => {
             view("Mixer", View::Mixer);
             view("Dual event list", View::DoubleScore);
+            view("Track Overview", View::Overview);
             if loaded.music.format == 1
                 && (tempo_curve::read(&loaded.music).is_ok_and(|c| c.is_some())
                     || loaded.music.tracks.first().is_some_and(|t| {

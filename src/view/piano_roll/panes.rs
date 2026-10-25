@@ -24,7 +24,7 @@ pub(super) fn tracks(app: &App, loaded: &Loaded) -> Vec<usize> {
     tracks
 }
 
-pub(super) fn fit_height(layout: &mut Layout, height: f32) {
+pub(crate) fn fit_height(layout: &mut Layout, height: f32) {
     let factor = height / layout.size.y;
     layout.size.y = height;
     for y in &mut layout.staff {

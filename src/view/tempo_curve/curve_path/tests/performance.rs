@@ -43,7 +43,12 @@ fn curve_path_cpu_cost() {
                     },
                 };
                 let start = Instant::now();
-                let points = line(black_box(&roll), black_box(&curve), visible);
+                let points = line(
+                    black_box(&roll),
+                    black_box(&curve.points),
+                    &curve.controls,
+                    visible,
+                );
                 build += start.elapsed().as_secs_f64();
                 count = points.len();
                 let shapes = vec![egui::epaint::ClippedShape {

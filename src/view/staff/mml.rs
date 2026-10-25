@@ -196,19 +196,6 @@ fn job<'a>(tokens: impl Iterator<Item = &'a Token>, playing: Option<u64>) -> egu
     job
 }
 
-/// Stable Monokai accents, independent of the displayed measure and row order.
-fn track_color(track: usize) -> Color32 {
-    const COLORS: [Color32; 6] = [
-        Color32::from_rgb(0x66, 0xd9, 0xef),
-        Color32::from_rgb(0xf9, 0x26, 0x72),
-        Color32::from_rgb(0xfd, 0x97, 0x1f),
-        Color32::from_rgb(0xa6, 0xe2, 0x2e),
-        Color32::from_rgb(0xae, 0x81, 0xff),
-        Color32::from_rgb(0xe6, 0xdb, 0x74),
-    ];
-    COLORS[track % COLORS.len()]
-}
-
 /// Fixed below the staff. Scrolling the score must not move or change the MML measure.
 /// Returns the track of a clicked row.
 pub(super) fn show(
@@ -237,7 +224,7 @@ pub(super) fn show(
                 },
                 font.clone(),
                 if colored(row) {
-                    track_color(row.track)
+                    crate::view::track_color(row.track)
                 } else {
                     gray
                 },

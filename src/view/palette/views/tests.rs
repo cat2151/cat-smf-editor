@@ -230,3 +230,23 @@ fn help_escape_and_double_score_keep_the_score_context() {
     assert!(!a.palette.is_open());
     assert_eq!(a.track, 0);
 }
+
+#[test]
+fn track_overview_is_listed_previewed_and_opened_from_views() {
+    let mut a = fixture();
+    let c = egui::Context::default();
+    browse(&mut a, &c);
+    select(&mut a, Target::View(View::Overview));
+    frame(&mut a, &c, vec![]);
+    assert!(
+        !a.track_overview.open,
+        "the preview never opens the real overview"
+    );
+    press(&mut a, &c, Key::Enter);
+    assert!(a.track_overview.open);
+    assert!(!a.palette.is_open());
+    assert_eq!(
+        crate::view::commands::owner(&a, &c),
+        crate::view::commands::Screen::Overview
+    );
+}

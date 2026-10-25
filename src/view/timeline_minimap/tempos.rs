@@ -1,5 +1,5 @@
 //! Tempo layers share the note overview's time axis, with an independent song-wide BPM axis.
-use crate::view::tempo_curve::{Axis, CURVE, TEMPO};
+use crate::view::tempo_curve::{Axis, Roll, CURVE, TEMPO};
 use cat_smf_editor::edit::reference_tempo::{ranks, Reference};
 use cat_smf_editor::edit::tempo_curve::Curve;
 use eframe::egui::{self, Color32};
@@ -45,13 +45,7 @@ pub(crate) fn draw(painter: &egui::Painter, rect: egui::Rect, end: f32, data: Te
         painter.add(egui::Shape::line(steps, egui::Stroke::new(1.0_f32, TEMPO)));
     }
     if let Some(curve) = data.curve {
-        let samples = rect.width().ceil().max(1.0) as usize;
-        let points = (0..=samples)
-            .map(|i| {
-                let tick = f64::from(end) * i as f64 / samples as f64;
-                pos(tick, curve.bpm_at(tick))
-            })
-            .collect();
+        let points = curve_line(rect, painter.clip_rect(), end, axis, curve);
         painter.add(egui::Shape::line(points, egui::Stroke::new(1.5_f32, CURVE)));
     }
     let current = ranks(data.references);
@@ -73,3 +67,26 @@ pub(crate) fn draw(painter: &egui::Painter, rect: egui::Rect, end: f32, data: Te
         ));
     }
 }
+
+/// The tempo curve screen's flattening, so knots and peaks stay put while scrolling.
+fn curve_line(
+    rect: egui::Rect,
+    clip: egui::Rect,
+    end: f32,
+    axis: Axis,
+    curve: &Curve,
+) -> Vec<egui::Pos2> {
+    let visible = clip.intersect(rect);
+    if visible.width() <= 0.0 || end <= 0.0 {
+        return Vec::new();
+    }
+    let roll = Roll {
+        rect: egui::Rect::from_x_y_ranges(rect.x_range(), rect.shrink(2.0).y_range()),
+        scale: rect.width() / end,
+        axis,
+    };
+    crate::view::tempo_curve::curve_path::line(&roll, &curve.points, &curve.controls, visible)
+}
+
+#[cfg(test)]
+mod tests;

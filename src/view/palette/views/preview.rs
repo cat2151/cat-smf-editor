@@ -8,6 +8,7 @@ pub(super) struct State {
     tempo: crate::view::tempo_curve::State,
     parameter: crate::view::parameter_editor::State,
     staff: crate::view::staff::State,
+    overview: crate::view::track_overview::State,
 }
 
 pub(crate) fn active(ctx: &egui::Context) -> bool {
@@ -88,9 +89,16 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, state: &mut State, view: 
     std::mem::swap(&mut app.tempo_curve, &mut state.tempo);
     std::mem::swap(&mut app.parameter_editor, &mut state.parameter);
     std::mem::swap(&mut app.staff, &mut state.staff);
+    std::mem::swap(&mut app.track_overview, &mut state.overview);
     match view {
         View::Piano(_) => crate::view::piano_roll::show(app, ctx),
         View::Tempo => crate::view::tempo_curve::show(app, ctx),
+        View::Overview => {
+            if !app.track_overview.open {
+                crate::view::track_overview::open(app);
+            }
+            crate::view::track_overview::show(app, ctx);
+        }
         View::Parameter(lane) => {
             crate::view::parameter_editor::show_preview(app, ctx, Some(lane), None);
         }
@@ -138,6 +146,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, state: &mut State, view: 
     std::mem::swap(&mut app.tempo_curve, &mut state.tempo);
     std::mem::swap(&mut app.parameter_editor, &mut state.parameter);
     std::mem::swap(&mut app.staff, &mut state.staff);
+    std::mem::swap(&mut app.track_overview, &mut state.overview);
     app.track = track;
     app.track_view = track_view;
     app.note_mode = note_mode;

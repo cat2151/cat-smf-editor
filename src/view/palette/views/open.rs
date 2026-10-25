@@ -3,6 +3,7 @@ use super::*;
 pub(super) fn show(app: &mut App, view: View) {
     app.piano_roll.open = false;
     app.tempo_curve.open = false;
+    app.track_overview.open = false;
     app.parameter_editor.close();
     app.layer_editor.open = false;
     app.drum_editor.open = false;
@@ -24,6 +25,7 @@ pub(super) fn show(app: &mut App, view: View) {
             crate::cursor::split::split_on(app);
         }
         View::Tempo => app.tempo_curve.open_at_cursor(),
+        View::Overview => crate::view::track_overview::open(app),
         View::Parameter(track) => {
             if let Some(owner) = app
                 .loaded

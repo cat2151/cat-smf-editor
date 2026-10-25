@@ -21,6 +21,7 @@ enum View {
     Score(usize),
     Mixer,
     DoubleScore,
+    Overview,
     Tempo,
     Piano(usize),
     Instruments(usize),
