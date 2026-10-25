@@ -56,10 +56,36 @@ pub(crate) fn prepare(
     if start >= end {
         return None;
     }
-    let all = super::prepare(app, Mode::AllTracks)?;
+    let mut all = super::prepare(app, Mode::AllTracks)?;
     let map = all.active.tempos.get(clock)?;
     let offset = map.duration(0, start);
     let duration = map.duration(start, end - start);
+    // A range can include silent measures beyond the last saved event.
+    let until = offset + duration;
+    all.active.end = all.active.end.max(until);
+    for (_, sequence) in &mut all.active.sources {
+        sequence.end = sequence.end.max(until);
+    }
+    for &track in tracks {
+        if !all.active.sources.iter().any(|s| s.0 == track)
+            && app
+                .loaded
+                .as_ref()?
+                .music
+                .tracks
+                .get(track)
+                .is_some_and(|t| {
+                    !t.events
+                        .iter()
+                        .any(cat_smf_editor::edit::parameter_curve::owned)
+                })
+        {
+            all.active.sources.push((
+                track,
+                crate::play::audio_sequence::Sequence::new(vec![], until),
+            ));
+        }
+    }
     let mut prepared = crate::play::selection_playback::skip(app, all.active, offset)?;
     let curves = cat_smf_editor::edit::parameter_curve::read(&app.loaded.as_ref()?.music).ok();
     let owners: Vec<_> = tracks

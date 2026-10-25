@@ -24,6 +24,7 @@ pub const DEFAULT_LABEL: &str = "Surge XT / Init Saw";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Patch {
+    pub drums: Option<super::drums::Settings>,
     pub layers: Vec<ResolvedLayer>,
     pub effects: Vec<PluginState>,
 }
@@ -31,6 +32,7 @@ pub struct Patch {
 impl Default for Patch {
     fn default() -> Self {
         Self {
+            drums: None,
             layers: vec![ResolvedLayer {
                 settings: Layer::default(),
                 instrument: None,
@@ -104,7 +106,11 @@ impl Patch {
             .iter()
             .map(|effect| resolve_effect(effect, &mut resolve))
             .collect::<Result<_, _>>()?;
-        Ok(Self { layers, effects })
+        Ok(Self {
+            layers,
+            effects,
+            drums: None,
+        })
     }
     pub fn saved(&self) -> Result<instrument_layers::Settings, String> {
         let settings = instrument_layers::Settings {
@@ -130,6 +136,15 @@ impl Patch {
 
     pub fn validate(&self) -> Result<(), String> {
         self.saved()?;
+        if let Some(drums) = &self.drums {
+            drums.validate_layers(
+                &self
+                    .layers
+                    .iter()
+                    .map(|l| l.settings.clone())
+                    .collect::<Vec<_>>(),
+            )?;
+        }
         for layer in &self.layers {
             Chain {
                 instrument: layer.instrument.clone(),
@@ -150,7 +165,9 @@ impl Patch {
 
     /// `other` differs from `self` at most in effect bypass.
     pub fn same_except_bypass(&self, other: &Self) -> bool {
-        self.layers == other.layers && same_except_bypass(&self.effects, &other.effects)
+        self.drums == other.drums
+            && self.layers == other.layers
+            && same_except_bypass(&self.effects, &other.effects)
     }
 
     pub fn same_plugins(&self, other: &Self) -> bool {
@@ -178,6 +195,7 @@ impl Patch {
 impl From<Chain> for Patch {
     fn from(chain: Chain) -> Self {
         Self {
+            drums: None,
             layers: vec![ResolvedLayer {
                 settings: Layer::default(),
                 instrument: chain.instrument,
@@ -199,5 +217,10 @@ pub fn write(
     patch: &Patch,
     roots: &mut dyn crate::patch_roots::Roots,
 ) -> Result<(), String> {
-    instrument_layers::write(track, &patch.saved()?, roots)
+    patch.validate()?;
+    let mut next = track.clone();
+    instrument_layers::write(&mut next, &patch.saved()?, roots)?;
+    super::drums::write(&mut next, patch.drums.as_ref())?;
+    *track = next;
+    Ok(())
 }

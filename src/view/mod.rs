@@ -4,6 +4,7 @@ pub(crate) mod beat_audition;
 pub(crate) mod busy;
 pub(crate) mod comma_menu;
 pub(crate) mod commands;
+pub(crate) mod drums;
 pub(crate) mod edit_menu;
 pub(crate) mod effects;
 mod event_repeat;
@@ -39,6 +40,7 @@ mod timeline_zoom;
 mod title;
 mod track_map;
 mod track_pane;
+pub(crate) mod track_rename;
 pub(crate) mod trill_edit;
 mod undo;
 pub(crate) mod voicevox;
@@ -77,6 +79,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
     crate::play::mascot::update(app);
     show_contents(app, ctx);
+    track_rename::show(app, ctx);
     if app.palette.is_open() {
         app.audition.pump();
     }
@@ -128,6 +131,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
             crate::play::transport::stop_shortcut(app, ctx);
             undo::shortcuts(app, ctx);
             crate::view::layers::show(app, ctx);
+            crate::view::drums::show(app, ctx);
             crate::view::effects::show(app, ctx);
             #[cfg(windows)]
             crate::player::resident_link::trace_slow(app, "advance", started);
@@ -158,6 +162,11 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
 
         let mut track = app.track;
         let mut add_track = false;
+        let mut rename_track = None;
+        let can_rename = matches!(
+            commands::owner(app, ctx),
+            commands::Screen::Main | commands::Screen::Timeline
+        );
         egui::SidePanel::left("tracks")
             .resizable(true)
             .default_width(260.0)
@@ -176,7 +185,15 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
                     .id_salt(("track-list", app.generation))
                     .show(ui, |ui| {
                         for (index, title) in loaded.track_titles.iter().enumerate() {
-                            ui.selectable_value(&mut track, index, title);
+                            let response = ui.selectable_value(&mut track, index, title);
+                            if can_rename {
+                                response.context_menu(|ui| {
+                                    if ui.button("Rename…").clicked() {
+                                        rename_track = Some(index);
+                                        ui.close_menu();
+                                    }
+                                });
+                            }
                         }
                         add_track = ui
                             .add_enabled(
@@ -194,6 +211,9 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
             busy::request(app, ctx, busy::Task::AddTrack);
         } else if track != app.track {
             app.select_track(track);
+        }
+        if let Some(track) = rename_track {
+            track_rename::begin(app, track);
         }
     }
 

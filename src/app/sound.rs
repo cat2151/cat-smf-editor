@@ -33,7 +33,10 @@ fn resolve_tracks(
     let mut patches = Vec::new();
     let mut volumes = Vec::new();
     for track in &music.tracks {
-        if audible_only && !crate::player::bulk::has_notes(track) {
+        if audible_only
+            && !crate::player::bulk::has_notes(track)
+            && cat_smf_editor::score::drums::read(track)?.is_none()
+        {
             patches.push(Patch::default());
             volumes.push(1.0);
             continue;
@@ -79,7 +82,7 @@ pub(crate) fn resolve_track(
     state_cache: &mut cat_smf_editor::score::state_cache::Cache,
 ) -> Result<(Patch, f32), String> {
     let mut roots = patch_roots.lookup(explicit.clone());
-    let patch = Patch::resolve(
+    let mut patch = Patch::resolve(
         cat_smf_editor::instrument_layers::read(track, &mut roots)?,
         &mut |reference: &cat_smf_editor::patch_reference::PatchReference| {
             state_cache.resolve(reference, |r| {
@@ -87,5 +90,7 @@ pub(crate) fn resolve_track(
             })
         },
     )?;
+    patch.drums = cat_smf_editor::score::drums::read(track)?;
+    patch.validate()?;
     Ok((patch, crate::play::track_volume::read(track)?))
 }

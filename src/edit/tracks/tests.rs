@@ -1,6 +1,70 @@
 use super::*;
 
 #[test]
+fn rename_preserves_timed_events_and_round_trips() {
+    let mut music = new_song();
+    let before = crate::smf_io::encode(&music).unwrap();
+    rename(&mut music.tracks[0], "日本語 Piano").unwrap();
+    let encoded = crate::smf_io::encode(&music).unwrap();
+    let decoded = crate::ffi::parse(&encoded).unwrap();
+    assert_eq!(decoded.tracks[0].name().as_deref(), Some("日本語 Piano"));
+    music.tracks[0].events.remove(0);
+    assert_eq!(crate::smf_io::encode(&music).unwrap(), before);
+    let track = &mut music.tracks[0];
+    track.events.insert(1, event(0, 0xff, 0x03, b"old"));
+    track.events.insert(2, event(0, 0xff, 0x03, b"later"));
+    let count = track.events.len();
+    rename(track, "new").unwrap();
+    assert_eq!(track.name().as_deref(), Some("new"));
+    assert_eq!(track.events.len(), count);
+    assert_eq!(track.events[2].data, b"later");
+    rename(track, "").unwrap();
+    assert_eq!(track.name().as_deref(), Some(""));
+}
+
+#[test]
+fn normal_track_does_not_inherit_drum_routing_or_its_row_instruments() {
+    let mut source = Track { events: vec![] };
+    let settings = crate::score::drums::Settings::default();
+    crate::score::drums::write(&mut source, Some(&settings)).unwrap();
+    crate::instrument_layers::write(
+        &mut source,
+        &crate::instrument_layers::Settings {
+            layers: (1..=4)
+                .map(|id| crate::instrument_layers::Layer {
+                    id,
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        },
+        &mut crate::patch_roots::Table::default(),
+    )
+    .unwrap();
+    crate::score::drums::toggle(&mut source, 480, 0, 0).unwrap();
+    let mut music = Music {
+        format: 1,
+        division: 480,
+        tracks: vec![source.clone(), source],
+    };
+    add(&mut music).unwrap();
+    assert!(crate::score::drums::read(&music.tracks[2])
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        crate::instrument_layers::parse(&music.tracks[2])
+            .unwrap()
+            .layers
+            .len(),
+        1
+    );
+    assert!(music.tracks[2]
+        .events
+        .iter()
+        .any(|e| note_on(e) && e.data[0] == 60));
+}
+
+#[test]
 fn new_song_is_minimal_and_roundtrips() {
     let music = new_song();
     assert_eq!(

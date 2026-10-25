@@ -5,6 +5,9 @@ pub fn prepare(app: &App, (a, b): (u64, u64)) -> Option<Prepared> {
     if a >= b {
         return None;
     }
+    if let Some((tracks, clock)) = crate::view::drums::playback::scope(app, (a, b)) {
+        return super::timeline::prepare(app, a, b, &tracks, Mode::AllTracks, clock);
+    }
     let all = super::prepare(app, Mode::AllTracks)?;
     let tempo = all.active.tempos.first()?;
     let start = tempo.duration(0, a);

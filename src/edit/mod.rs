@@ -8,7 +8,7 @@ pub mod note_move;
 pub mod note_start;
 pub mod parameter_curve;
 pub mod reference_tempo;
-mod relocate;
+pub(crate) mod relocate;
 pub mod scalar_curve;
 pub mod tempo_curve;
 pub mod tracks;
@@ -22,6 +22,7 @@ pub fn regenerate(music: &mut crate::model::Music) -> Result<(), String> {
     // never leave a partially changed song.
     let mut next = music.clone();
     trill::rebuild(&mut next, curve.as_ref())?;
+    crate::score::drums::rebuild(&mut next)?;
     if let Some(curve) = &curve {
         tempo_curve::regenerate(&mut next, curve)?;
     }

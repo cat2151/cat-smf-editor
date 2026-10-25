@@ -75,6 +75,28 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
         ("Instance group", group(json))
     } else if let Some(json) = data.strip_prefix(crate::edit::parameter_curve::PREFIX) {
         ("Parameter curve", parameter(json))
+    } else if let Some(json) = data.strip_prefix(crate::score::drums::PREFIX) {
+        (
+            "Drum sequencer",
+            serde_json::from_slice::<crate::score::drums::Settings>(json)
+                .map(|s| {
+                    s.rows
+                        .iter()
+                        .enumerate()
+                        .map(|(i, r)| {
+                            format!(
+                                "{}: GM {} → {} / Layer {}",
+                                crate::score::drums::NAMES[i],
+                                crate::score::drums::NOTES[i],
+                                r.output,
+                                r.layer
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" · ")
+                })
+                .unwrap_or_else(|_| "invalid".into()),
+        )
     } else if let Some(json) = data.strip_prefix(instrument_layers::PREFIX) {
         ("Instrument layers", references(json, true))
     } else if let Some(json) = data.strip_prefix(master_references::PREFIX) {

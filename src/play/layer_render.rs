@@ -73,6 +73,7 @@ impl Effect for ProcessorRef {
 }
 
 pub struct Render<R = note_render::Render, E = ProcessorRef> {
+    drums: Option<cat_smf_editor::score::drums::Settings>,
     ordered_events: Vec<cat_smf_editor::host::parameters::AutomationEvent>,
     automation: Vec<super::automation::LayerBindings>,
     pub parameter_error: Option<i32>,
@@ -87,6 +88,7 @@ pub struct Render<R = note_render::Render, E = ProcessorRef> {
 impl<R: Instrument, E: Effect> Render<R, E> {
     pub fn new(layers: Vec<(R, Layer)>, effects: Option<E>) -> Self {
         Self {
+            drums: None,
             ordered_events: Vec::with_capacity(
                 cat_smf_editor::host::parameters::MAX_AUTOMATION_EVENTS,
             ),
@@ -110,6 +112,10 @@ impl<R: Instrument, E: Effect> Render<R, E> {
         }
         self.automation = bindings;
         self.parameter_error = None;
+    }
+
+    pub fn set_drums(&mut self, drums: Option<cat_smf_editor::score::drums::Settings>) {
+        self.drums = drums;
     }
 
     pub fn automate(&mut self, plan: Option<&super::automation::RuntimePlan>, frame: u64) -> bool {
@@ -171,7 +177,7 @@ impl<R: Instrument, E: Effect> Render<R, E> {
             let (shifted, lengths) = if sung {
                 ([0; 128], [0; 128])
             } else {
-                transpose(layer, velocities, durations)
+                transpose(layer, self.drums.as_ref(), velocities, durations)
             };
             let scratch = &mut self.scratch[..out.len()];
             if !render.render(&shifted, &lengths, changed, scratch, channels) {
@@ -214,18 +220,30 @@ mod ordered;
 
 fn transpose(
     layer: &Layer,
+    drums: Option<&cat_smf_editor::score::drums::Settings>,
     velocities: &[u8; 128],
     durations: &[u64; 128],
 ) -> ([u8; 128], [u64; 128]) {
     let mut shifted = [0; 128];
     let mut lengths = [0; 128];
     for pitch in 0..128 {
-        if let Some(target) = layer.pitch(pitch as u8) {
+        if let Some(target) = routed_pitch(layer, drums, pitch as u8) {
             shifted[target as usize] = velocities[pitch];
             lengths[target as usize] = durations[pitch];
         }
     }
     (shifted, lengths)
+}
+
+fn routed_pitch(
+    layer: &Layer,
+    drums: Option<&cat_smf_editor::score::drums::Settings>,
+    input: u8,
+) -> Option<u8> {
+    match drums {
+        Some(drums) => drums.pitch(layer.id, input),
+        None => layer.pitch(input),
+    }
 }
 
 #[cfg(test)]
@@ -323,7 +341,7 @@ mod tests {
         durations[60] = 1000;
         velocities[120] = 127;
         durations[120] = 500;
-        let (v, d) = transpose(&layer, &velocities, &durations);
+        let (v, d) = transpose(&layer, None, &velocities, &durations);
         assert_eq!((v[72], d[72]), (91, 1000));
         assert_eq!(v.iter().filter(|v| **v != 0).count(), 1);
         assert_eq!(velocities[60], 91);

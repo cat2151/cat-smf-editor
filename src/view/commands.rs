@@ -93,6 +93,7 @@ pub(crate) struct Target {
     track: usize,
     event: Option<usize>,
     layer: (Option<u64>, usize),
+    drums: (usize, usize, u64),
     effect: (Option<super::effects::Target>, usize),
     mixer: (bool, usize, bool),
     pane: usize,
@@ -105,6 +106,7 @@ impl Target {
             track: a.track,
             event: a.selected_event,
             layer: a.layer_editor.command_target(),
+            drums: a.drum_editor.command_target(),
             effect: a.effect_editor.command_target(),
             mixer: (
                 a.playback.mixer_focused(),
@@ -147,6 +149,7 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     menus::collect(app, screen, &mut result);
     navigation::collect(app, screen, &mut result);
     super::layers::commands::collect(app, screen, &mut result);
+    super::drums::commands::collect(app, screen, &mut result);
     super::macro_editor::collect(app, screen, &mut result);
     super::parameter_editor::collect(app, screen, &mut result);
     super::effects::commands::collect(app, screen, &mut result);

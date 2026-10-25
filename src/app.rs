@@ -15,7 +15,9 @@ pub struct App {
     pub file_open_requested: bool,
     pub recent: crate::view::recent::State,
     pub song_id: u64,
+    pub track_rename: Option<crate::view::track_rename::Editing>,
     pub layer_editor: crate::view::layers::State,
+    pub drum_editor: crate::view::drums::State,
     pub effect_editor: crate::view::effects::State,
     pub state_cache: cat_smf_editor::score::state_cache::Cache,
     pub patch_roots: crate::player::patch_roots::Cache,
@@ -84,7 +86,9 @@ impl App {
             file_open_requested: false,
             recent: Default::default(),
             song_id: 0,
+            track_rename: None,
             layer_editor: Default::default(),
+            drum_editor: Default::default(),
             effect_editor: Default::default(),
             state_cache: cat_smf_editor::score::state_cache::Cache::new(
                 crate::store::config::directory(),
@@ -152,6 +156,7 @@ impl App {
         if self.track != track {
             crate::view::macro_editor::cancel(self);
             self.layer_editor.open = false;
+            self.drum_editor.open = false;
             self.parameter_editor.close();
             self.effect_editor.close_track();
         }

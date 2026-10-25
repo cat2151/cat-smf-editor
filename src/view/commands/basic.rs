@@ -51,6 +51,20 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 &[(Key::T, Modifiers::SHIFT)],
                 |a, _| super::super::layers::open(a),
             ));
+            out.push(Command::new(
+                s,
+                "drums",
+                "Drum sequencer",
+                &[(Key::D, Modifiers::SHIFT)],
+                |a, _| super::super::drums::open(a),
+            ));
+            out.push(Command::plain(
+                s,
+                "add-drum-track",
+                "ドラムトラック追加",
+                &[],
+                |a, _| super::super::drums::add_track(a),
+            ));
         }
         out.push(
             Command::new(
@@ -310,6 +324,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if matches!(
         s,
         Screen::Main
+            | Screen::TrackRename
             | Screen::Timeline
             | Screen::Mixer
             | Screen::Layers

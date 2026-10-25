@@ -4,9 +4,12 @@ pub fn read(
     track: &crate::model::Track,
     roots: &mut dyn crate::patch_roots::Roots,
 ) -> Result<Patch, String> {
-    Patch::resolve(crate::instrument_layers::read(track, roots)?, |_| {
+    let mut patch = Patch::resolve(crate::instrument_layers::read(track, roots)?, |_| {
         Err("Patch state requires session restoration".into())
-    })
+    })?;
+    patch.drums = super::drums::read(track)?;
+    patch.validate()?;
+    Ok(patch)
 }
 
 pub use crate::instrument_layers::PREFIX;

@@ -9,6 +9,7 @@ mascot-render-client = { path = "../mascot-render-server/crates/mascot-render-cl
 mascot-render-protocol = { path = "../mascot-render-server/crates/mascot-render-protocol" }
 mmlabc-to-smf = { git = "https://github.com/cat2151/mmlabc-to-smf-rust.git", package = "mmlabc-to-smf", features = ["cli"] }
 cmrt-chord = { path = "../clap-mml-render-tui/chord" }
+cmrt-patches = { path = "../clap-mml-render-tui/patches" }
 eframe = "0.31"
 cpal = "0.15"
 serde = { version = "1", features = ["derive"] }
@@ -21,7 +22,7 @@ rustmigemo = { git = "https://github.com/oguna/rustmigemo.git", rev = "121101dfc
 
 
 libloading = "0.8"
-# Plugin path comparison only (shared/chain_settings.rs); the host stack stays off.
+# Plugin path comparison only (shared/chain_settings.rs).
 cmrt-core = { path = "../clap-mml-play-server/core-lib", default-features = false }
 dirs = "6"
 dunce = "1.0.5"

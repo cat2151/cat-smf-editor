@@ -5,6 +5,7 @@ pub(super) fn show(app: &mut App, view: View) {
     app.tempo_curve.open = false;
     app.parameter_editor.close();
     app.layer_editor.open = false;
+    app.drum_editor.open = false;
     app.effect_editor = Default::default();
     app.playback.mixer_open = false;
     app.playback.open = false;

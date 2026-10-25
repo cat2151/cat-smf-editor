@@ -110,18 +110,19 @@ pub fn request(app: &mut App, request: Request) -> Result<(), String> {
         bulk: request.bulk,
         original: loaded.original.clone(),
     };
+    let defaults = drum_filters(app, target.open);
     let panes = app
         .config
         .browser_panes
         .get(&pane_context(&target))
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_else(|| defaults.0.clone());
     let query = app
         .config
         .browser_queries
         .get(&pane_context(&target))
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or(defaults.1);
     let cursor = app
         .config
         .patch_cursors
@@ -234,6 +235,33 @@ pub fn refresh_browser_activity(app: &mut App) {
         && link.activity.poll(child.id())
     {
         app.audition.browser_used();
+    }
+}
+
+fn drum_filters(app: &App, open: Open) -> ([String; 2], String) {
+    let row = (|| {
+        let Open::Layer { track, layer, .. } = open else {
+            return None;
+        };
+        app.loaded
+            .as_ref()?
+            .patches
+            .get(track)?
+            .drums
+            .as_ref()?
+            .rows
+            .iter()
+            .position(|r| r.layer == layer)
+    })();
+    match row {
+        Some(row) => (
+            [
+                "Drum tracks".into(),
+                ["kick", "snare", "hi-hat", "percussion"][row].into(),
+            ],
+            "plugin:surgext".into(),
+        ),
+        None => Default::default(),
     }
 }
 

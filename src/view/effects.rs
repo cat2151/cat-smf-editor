@@ -52,6 +52,7 @@ pub fn open(app: &mut App, target: Target, selected: usize) {
         ..Default::default()
     };
     app.layer_editor.open = false;
+    app.drum_editor.open = false;
     app.playback.open = false;
     app.help_open = false;
     app.comma_menu.open = false;

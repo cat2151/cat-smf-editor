@@ -87,6 +87,7 @@ impl App {
         self.undo.clear();
         self.macro_editor = Default::default();
         self.layer_editor = Default::default();
+        self.drum_editor = Default::default();
         self.effect_editor = Default::default();
         self.note_edit = None;
         self.trill_edit = None;

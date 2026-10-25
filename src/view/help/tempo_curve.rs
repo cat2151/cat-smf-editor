@@ -59,6 +59,7 @@ pub(super) fn rows(ui: &mut egui::Ui) {
             ("zoomバー: 左ドラッグ", "範囲拡大"),
             ("ホイール", "時間移動"),
             ("Ctrl+→ ←", "次 / 前のトラック"),
+            ("F2", "トラック名変更"),
         ],
     );
     group(ui, Color32::from_gray(190), &[("Ctrl+, → m", "最大化")]);

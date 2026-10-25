@@ -8,6 +8,17 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if a.loaded.is_none() {
         return;
     }
+    if matches!(s, Screen::Main | Screen::Timeline | Screen::Tracks) {
+        out.push(Command::plain(
+            s,
+            "rename-track",
+            "トラック名変更",
+            &[Key::F2],
+            |a, _| {
+                super::super::track_rename::begin(a, a.track);
+            },
+        ));
+    }
     if matches!(s, Screen::Main | Screen::Timeline) {
         for (id, name, key, forward) in [
             ("track-next", "次のtrack", Key::ArrowRight, true),

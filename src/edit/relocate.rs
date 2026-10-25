@@ -7,7 +7,7 @@ use crate::{
 use std::collections::{HashMap, VecDeque};
 
 /// Note Off index for each Note On, paired first-in first-out per channel and key like NoteView.
-pub(super) fn pairs<'a>(events: impl Iterator<Item = &'a Event>) -> Vec<Option<usize>> {
+pub(crate) fn pairs<'a>(events: impl Iterator<Item = &'a Event>) -> Vec<Option<usize>> {
     let events: Vec<_> = events.collect();
     let mut pending: HashMap<(u8, u8), VecDeque<usize>> = HashMap::new();
     let mut result = vec![None; events.len()];

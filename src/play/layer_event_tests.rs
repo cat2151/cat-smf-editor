@@ -36,6 +36,57 @@ impl Effect for NoEffect {
 }
 
 #[test]
+fn drum_rows_receive_only_their_note_on_and_off_at_the_configured_pitch() {
+    let records: Vec<_> = (0..4).map(|_| Rc::new(RefCell::new(Vec::new()))).collect();
+    let mut render = Render::<_, NoEffect>::new(
+        records
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                (
+                    Recorder(r.clone()),
+                    Layer {
+                        id: i as u64 + 1,
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect(),
+        None,
+    );
+    let mut drums = cat_smf_editor::score::drums::Settings::default();
+    for (i, row) in drums.rows.iter_mut().enumerate() {
+        row.output = 60 + i as u8;
+    }
+    render.set_drums(Some(drums));
+    let mut pitches = cat_smf_editor::score::drums::NOTES.to_vec();
+    pitches.push(72);
+    let sequence = Sequence::new(
+        pitches
+            .iter()
+            .map(|&pitch| Note {
+                start: 0.0,
+                duration: 0.01,
+                pitch,
+                velocity: 100,
+            })
+            .collect(),
+        0.02,
+    );
+    let timeline = Timeline::new(&sequence, 0.0, 48000);
+    let mut out = [0.0; 2];
+    assert!(render.process_scheduled(&timeline, None, 0, &mut out, 2));
+    assert!(render.process_scheduled(&timeline, None, 480, &mut out, 2));
+    for (i, record) in records.iter().enumerate() {
+        let pitch = (60 + i as u32) << 8;
+        assert_eq!(
+            *record.borrow(),
+            vec![vec![0x2090_0064 | pitch], vec![0x2080_0000 | pitch]]
+        );
+    }
+}
+
+#[test]
 fn every_layer_receives_the_complete_event_order_after_transposition() {
     let first = Rc::new(RefCell::new(Vec::new()));
     let second = Rc::new(RefCell::new(Vec::new()));

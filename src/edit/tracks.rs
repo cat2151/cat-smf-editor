@@ -2,6 +2,23 @@
 use crate::model::{Event, Music, Track};
 use crate::score::note_view::note_on;
 
+/// Replace the displayed Track Name, or insert it at tick zero when absent.
+/// Later name events retain their timing and payloads.
+pub fn rename(track: &mut Track, name: &str) -> Result<(), String> {
+    if let Some(event) = track
+        .events
+        .iter_mut()
+        .find(|e| e.status == 0xff && e.meta_type == 0x03)
+    {
+        event.data = name.as_bytes().to_vec();
+    } else {
+        track
+            .events
+            .insert(0, event(0, 0xff, 0x03, name.as_bytes()));
+    }
+    super::refresh_deltas(track)
+}
+
 fn event(tick: u64, status: u8, meta_type: u8, data: &[u8]) -> Event {
     Event {
         delta: 0,
@@ -33,6 +50,7 @@ fn same(a: &Event, b: &Event) -> bool {
 
 fn initial(track: &Track) -> Vec<Event> {
     let tick = track.events.first().map_or(0, |e| e.tick);
+    let drums = track.events.iter().any(crate::score::drums::owned);
     track
         .events
         .iter()
@@ -42,6 +60,8 @@ fn initial(track: &Track) -> Vec<Event> {
                 && !(e.status == 0xff && e.meta_type == 0x2f)
                 && !super::parameter_curve::owned(e)
                 && !super::parameter_curve::group_event(e)
+                && !crate::score::drums::owned(e)
+                && !(drums && crate::instrument_layers::owned(e))
         })
         .cloned()
         .collect()

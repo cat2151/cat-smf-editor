@@ -100,6 +100,7 @@ pub(crate) fn open_mode(app: &mut App, browser: Browser, bulk: bool, slot: Optio
     };
     if browser == Browser::Patch
         && !bulk
+        && loaded.patches[app.track].drums.is_none()
         && !crate::player::bulk::has_notes(&loaded.music.tracks[app.track])
     {
         app.player_selection.open = true;

@@ -22,6 +22,7 @@ pub(super) fn rows(ui: &mut egui::Ui) {
                 ("Shift+Space", "演奏停止"),
                 ("F", "再生位置追従"),
                 ("Ctrl+→ ←", "次 / 前のtrack"),
+                ("F2", "トラック名変更"),
                 ("r / Esc", "閉じる"),
             ],
         )],

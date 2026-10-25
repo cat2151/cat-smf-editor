@@ -89,6 +89,8 @@ impl Command {
             "lyrics-cancel" => "voicevox cancel",
             "mixer" => "mixer",
             "layers" => "layers",
+            "drums" => "drum sequencer ドラム",
+            "add-drum-track" => "add drum track ドラム",
             "browse-views" => "views view track ビュー 視点",
             "effects" => "effects",
             "effect-add" => "add effect effects insert",

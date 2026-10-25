@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Screen {
     Main,
+    TrackRename,
     Settings,
     Program,
     Edit,
@@ -12,6 +13,9 @@ pub enum Screen {
     Play,
     Mixer,
     Layers,
+    Drums,
+    DrumInput,
+    DrumCreate,
     LayerInput,
     LayerHelp,
     Effects,
@@ -42,6 +46,7 @@ impl Screen {
     pub fn label(self) -> &'static str {
         match self {
             Self::Main => "Event list",
+            Self::TrackRename => "Track name",
             Self::Settings => "Settings",
             Self::Program => "Program target",
             Self::Edit => "Edit",
@@ -51,6 +56,7 @@ impl Screen {
             Self::Play => "Play",
             Self::Mixer => "Mixer",
             Self::Layers | Self::LayerInput | Self::LayerHelp => "Layers",
+            Self::Drums | Self::DrumInput | Self::DrumCreate => "Drum sequencer",
             Self::Effects | Self::EffectHelp => "Effects",
             Self::Selection | Self::SelectionMenu => "Selection",
             Self::Mml => "MML",
@@ -77,8 +83,10 @@ impl Screen {
         !matches!(
             self,
             Self::Main
+                | Self::TrackRename
                 | Self::Mml
                 | Self::LayerInput
+                | Self::DrumInput
                 | Self::Note
                 | Self::Singer
                 | Self::ParameterPicker
@@ -112,6 +120,9 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     }
     if a.config.navigation.backup_notice {
         return Screen::Backup;
+    }
+    if a.track_rename.is_some() {
+        return Screen::TrackRename;
     }
     if a.macro_editor.open() {
         return Screen::MacroEditor;
@@ -148,6 +159,15 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     }
     if a.layer_editor.open {
         return a.layer_editor.command_screen();
+    }
+    if a.drum_editor.open {
+        return if a.drum_editor.confirm_create {
+            Screen::DrumCreate
+        } else if a.drum_editor.input.is_some() {
+            Screen::DrumInput
+        } else {
+            Screen::Drums
+        };
     }
     if a.effect_editor.is_open() {
         return a.effect_editor.command_screen();

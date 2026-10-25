@@ -270,12 +270,14 @@ impl Native {
                 )
             })
             .collect();
-        super::layer_render::Render::new(
+        let mut render = super::layer_render::Render::new(
             layers,
             self.effects
                 .as_ref()
                 .map(|chain| unsafe { chain.audio_ref() }),
-        )
+        );
+        render.set_drums(self.settings.drums.clone());
+        render
     }
 
     pub fn silence(&self, out: &mut [f32]) -> bool {

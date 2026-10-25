@@ -46,6 +46,15 @@ impl State {
 }
 
 pub(crate) fn open(app: &mut App) {
+    if app
+        .loaded
+        .as_ref()
+        .is_some_and(|l| l.patches[app.track].drums.is_some())
+    {
+        super::drums::open(app);
+        return;
+    }
+    app.drum_editor.open = false;
     if super::parameter_editor::is_track(app) {
         super::parameter_editor::open(app);
         return;

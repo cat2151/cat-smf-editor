@@ -156,3 +156,91 @@ fn named_cursor_is_sent_to_a_new_player_after_editor_restart() {
     drop(input);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn drum_rows_open_normal_browser_with_role_filters_and_preserve_repeat_on_preview() {
+    use cat_smf_editor::score::instrument::ResolvedLayer;
+    let mut app = crate::view::tests::app(music());
+    let settings = cat_smf_editor::score::drums::Settings::default();
+    let patch = Settings {
+        drums: Some(settings.clone()),
+        layers: (1..=4)
+            .map(|id| ResolvedLayer {
+                settings: cat_smf_editor::instrument_layers::Layer {
+                    id,
+                    ..Default::default()
+                },
+                instrument: None,
+            })
+            .collect(),
+        effects: vec![],
+    };
+    crate::player::selection::store_track(&mut app, 1, &patch).unwrap();
+    app.track = 1;
+    crate::view::drums::open(&mut app);
+    app.player_selection.executable = Some(std::env::current_exe().unwrap());
+    app.player_selection.launch = Some(record);
+    let ctx = egui::Context::default();
+    crate::player::selection::open_layer(&mut app, 1);
+    assert!(app.player_selection.error.is_none());
+    let (mut out, mut input) = resident_ipc::connect(launched().last().unwrap()).unwrap();
+    poll_until(&mut app, &ctx, connected);
+    for (row, role) in ["kick", "snare", "hi-hat", "percussion"].iter().enumerate() {
+        if row > 0 {
+            crate::player::selection::open_layer(&mut app, row as u64 + 1);
+        }
+        let Some(ToPlayer::OpenFiltered {
+            open, panes, query, ..
+        }) = input.receive().unwrap()
+        else {
+            panic!("open");
+        };
+        assert_eq!(panes, ["Drum tracks", role]);
+        assert_eq!(query, "plugin:surgext");
+        let plugin = PluginKey {
+            format: "CLAP".into(),
+            id: "synth".into(),
+            name: "synth".into(),
+            vendor: String::new(),
+            bundle_path: "X:/plugins/synth.clap".into(),
+        };
+        let shared = out.share(&[1, 2, 3]).unwrap();
+        out.send(&ToEditor::Selected(Selected {
+            target: open,
+            plugin: plugin.clone(),
+            reference: Some(Box::new(cat_smf_editor::patch_reference::PatchReference {
+                plugin,
+                source: cat_smf_editor::patch_reference::Source::Catalog {
+                    path: "X:/patches/a.preset".into(),
+                    file: "X:/patches/a.preset".into(),
+                },
+                display: role.to_string(),
+            })),
+            preset_name: Some(role.to_string()),
+            state: shared.reference.clone(),
+        }))
+        .unwrap();
+        poll_until(&mut app, &ctx, |a| {
+            a.loaded.as_ref().unwrap().patches[1].layers[row]
+                .instrument
+                .is_some()
+        });
+        assert_eq!(input.receive().unwrap(), Some(ToPlayer::Applied(Ok(()))));
+        assert_eq!(app.playback.repeat, Some((0, 1920)));
+        assert_eq!(
+            app.playback
+                .pending
+                .as_ref()
+                .unwrap()
+                .parts
+                .iter()
+                .map(|p| p.0)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+        assert_eq!(
+            app.loaded.as_ref().unwrap().patches[1].drums,
+            Some(settings.clone())
+        );
+    }
+}
