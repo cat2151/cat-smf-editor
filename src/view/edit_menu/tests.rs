@@ -74,12 +74,30 @@ fn period_repeats_the_last_command_on_the_new_cursor_without_its_number() {
 }
 
 #[test]
-fn a_cursor_off_a_note_opens_nothing_and_later_rows_do_not_open_it() {
+fn raw_note_menu_edits_notes_and_off_note_requests_do_not_leak_to_later_rows() {
     let (mut app, ctx) = at(0);
-    app.note_mode = false;
+    crate::view::patterns::mode::toggle(&mut app);
     press(&mut app, &ctx, egui::Key::E);
     press(&mut app, &ctx, egui::Key::D);
-    app.note_mode = true;
+    assert_eq!(editing(&app), Some((Field::Duration, 0, "960".into())));
+    enter(&mut app, &ctx, "240");
+    assert_eq!(
+        app.loaded.as_ref().unwrap().note_views[1].durations[0],
+        Some(240)
+    );
+    let off = app.loaded.as_ref().unwrap().visible().tracks[1]
+        .events
+        .iter()
+        .position(|e| !cat_smf_editor::score::note_view::note_on(e))
+        .unwrap();
+    crate::cursor::moves::place(&mut app, off);
+    press(&mut app, &ctx, egui::Key::E);
+    press(&mut app, &ctx, egui::Key::D);
+    assert_eq!(editing(&app), None);
+    crate::cursor::moves::place(&mut app, 0);
+    render(&mut app, &ctx, vec![]);
+    assert_eq!(editing(&app), None);
+    crate::view::patterns::mode::toggle(&mut app);
     render(&mut app, &ctx, vec![]);
     assert_eq!(editing(&app), None);
 }

@@ -9,6 +9,7 @@ pub(super) fn rows(ui: &mut egui::Ui) {
                 &[
                     ("Ctrl+,", "設定menu"),
                     ("Ctrl+Z", "元に戻す"),
+                    ("V", "Notes / Raw"),
                     ("i", "MML・コード進行"),
                     ("ノート左端 / 中央 / 右端: ドラッグ", "開始 / 位置 / 長さ"),
                 ],

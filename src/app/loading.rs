@@ -85,6 +85,10 @@ impl App {
         } = sound;
         self.song_id = self.song_id.wrapping_add(1);
         self.undo.clear();
+        self.lifecycle = Default::default();
+        self.edit_start = Default::default();
+        self.edit_style = None;
+        self.patterns = Default::default();
         self.macro_editor = Default::default();
         self.layer_editor = Default::default();
         self.drum_editor = Default::default();
@@ -120,18 +124,21 @@ impl App {
             "score_display_build"
         });
         let time = MusicalTime::new(&music);
-        let note_views = music
+        let note_views: Vec<_> = music
             .tracks
             .iter()
             .map(|t| NoteView::new(&t.events))
             .collect();
+        let expansions = crate::play::playback::expand_all(&music, &note_views);
         let mut loaded = Loaded {
+            display_music: None,
             patches,
             original: path.clone(),
             name,
             keys: cat_smf_editor::score::key_signature::KeySignatures::new(&music),
             time,
             note_views,
+            expansions,
             track_titles: Vec::new(),
             display_rows: Vec::new(),
             time_columns: Vec::new(),

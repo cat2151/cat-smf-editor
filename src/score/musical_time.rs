@@ -42,7 +42,6 @@ struct Segment {
 pub struct MeterMap {
     ppqn: u16,
     segments: Vec<Segment>,
-    pub assumed_four_four: bool,
     pub warnings: Vec<String>,
 }
 /// A compact run of exact beat boundaries, including fractional MIDI ticks.
@@ -68,6 +67,10 @@ impl BeatRun {
     }
 }
 impl MeterMap {
+    pub fn signature(&self, tick: u64) -> (u8, u8) {
+        let segment = &self.segments[self.segments.partition_point(|s| s.tick <= tick) - 1];
+        (segment.meter.numerator, segment.meter.exponent)
+    }
     /// Absolute tick of an MBT position (fractional boundaries round up).
     pub fn tick_at(&self, position: &Position) -> Option<u64> {
         let segment = self
@@ -184,7 +187,7 @@ impl MeterMap {
                 if event.status != 0xff || event.meta_type != 0x58 {
                     continue;
                 }
-                if event.data.len() != 4 || event.data[0] == 0 || event.data[1] > 63 {
+                if !valid_time_signature(&event.data) {
                     warnings.push(format!(
                         "Invalid time signature: track {}, event {} (tick {})",
                         t + 1,
@@ -205,7 +208,6 @@ impl MeterMap {
             }
         }
         changes.sort_by_key(|c| (c.0, c.1, c.2));
-        let assumed_four_four = changes.first().is_none_or(|c| c.0 != 0);
         let mut segments = vec![Segment {
             tick: 0,
             measure: 1,
@@ -244,10 +246,14 @@ impl MeterMap {
         Self {
             ppqn: music.division,
             segments,
-            assumed_four_four,
             warnings,
         }
     }
+}
+
+/// Data of a Time Signature meta event that `MeterMap` reads instead of warning about.
+pub fn valid_time_signature(data: &[u8]) -> bool {
+    data.len() == 4 && data[0] != 0 && data[1] <= 63
 }
 
 fn gcd(mut a: u128, mut b: u128) -> u128 {

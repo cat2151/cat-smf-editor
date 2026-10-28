@@ -3,6 +3,7 @@ use crate::view::tests::app;
 use cat_smf_editor::model::{Event, Music, Track};
 use eframe::egui;
 
+mod pattern_edit;
 mod tempo;
 mod variations;
 

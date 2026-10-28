@@ -6,10 +6,7 @@ use egui::Color32;
 pub(super) fn resolve(app: &mut App) -> Result<(), String> {
     let c = current(app)?;
     let loaded = app.loaded.as_ref().unwrap();
-    let collection = parameter_curve::read(&loaded.music)?;
-    let owner = collection
-        .owner(source_track(app))
-        .ok_or("Missing automation owner")?;
+    let owner = curve_owner(app)?;
     app.parameter_editor.owner = Some(owner);
     let patch = loaded.patches[owner].clone();
     let key = plugin(&patch, c.target.layer)?;
@@ -58,9 +55,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
     let owner = if variation {
         Some(app.track)
     } else {
-        parameter_curve::read(&loaded.music)
-            .ok()
-            .and_then(|m| m.owner(source_track(app)))
+        curve_owner(app).ok()
     };
     let title = owner.map_or_else(
         || "Missing owner".into(),

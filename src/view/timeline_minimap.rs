@@ -3,13 +3,23 @@ use super::piano_roll::Layout;
 use eframe::egui::{self, Color32};
 
 pub(crate) const COLOR: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
+pub(crate) const BACKGROUND: Color32 = Color32::from_gray(28);
 const INSET: f32 = 8.0;
 const HEIGHT_SHARE: f32 = 0.18;
 const MIN_HEIGHT: f32 = 24.0;
 const MAX_HEIGHT: f32 = 56.0;
 const AFTER: f32 = 4.0;
+const NOTE_TINT: f32 = 0.65;
 
-fn height(area: f32) -> f32 {
+/// A note's color here: its piano roll color, dimmed.
+pub(crate) fn note_color(
+    pitch: u8,
+    key: Option<cat_smf_editor::score::key_signature::KeySignature>,
+) -> Color32 {
+    super::pitch_keyboard::roll_color(pitch, key).gamma_multiply(NOTE_TINT)
+}
+
+pub(crate) fn height(area: f32) -> f32 {
     (area * HEIGHT_SHARE).clamp(MIN_HEIGHT, MAX_HEIGHT)
 }
 
@@ -100,7 +110,7 @@ impl State {
         self.rect = Some(rect);
         let end = view.end.max(1.0);
         let painter = ui.painter().with_clip_rect(ui.clip_rect().intersect(rect));
-        painter.rect_filled(rect, 2.0, Color32::from_gray(28));
+        painter.rect_filled(rect, 2.0, BACKGROUND);
         for (note, color) in layout
             .references
             .iter()
@@ -123,7 +133,7 @@ impl State {
             let mut note = egui::Rect::from_min_max(point(note.min), point(note.max));
             note.max.x = note.max.x.max(note.min.x + 1.0);
             note.max.y = note.max.y.max(note.min.y + 1.0);
-            painter.rect_filled(note, 0.0, color.gamma_multiply(0.65));
+            painter.rect_filled(note, 0.0, color.gamma_multiply(NOTE_TINT));
         }
         overlay(&painter, rect);
         let x = |offset: f32| {

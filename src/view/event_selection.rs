@@ -41,13 +41,33 @@ pub(crate) fn count(app: &App) -> usize {
         if app.note_mode {
             l.display_rows[app.track].len()
         } else {
-            l.music.tracks[app.track].events.len()
+            l.visible().tracks[app.track].events.len()
         }
     })
 }
 
 pub(crate) fn whole(app: &App) -> bool {
     range(app).is_some_and(|r| r == (0..count(app)))
+}
+
+/// Selected row starts, deliberately excluding note durations.
+pub(crate) fn measures(app: &App) -> Option<(u64, u64)> {
+    let range = range(app)?;
+    let loaded = app.loaded.as_ref()?;
+    let map = loaded.time.map(app.track)?;
+    let measure = |row| {
+        u64::try_from(
+            map.position(crate::cursor::split::row_tick_loaded(
+                loaded,
+                app.note_mode,
+                app.track,
+                row,
+            ))
+            .measure,
+        )
+        .ok()
+    };
+    Some((measure(range.start)?, measure(range.end - 1)?))
 }
 
 /// Returns true while selection owns the keyboard, including its closing frame.
@@ -71,6 +91,9 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
         .open(&mut open)
         .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
         .show(ctx, |ui| {
+            if ui.button("g: Generate same measures").clicked() {
+                crate::view::palette::open_same_measure(app, ctx, true);
+            }
             let mut choices = vec![
                 (actions::Action::Repeat, "a: A-B repeat"),
                 (actions::Action::DeleteEvents, "d: Delete events"),

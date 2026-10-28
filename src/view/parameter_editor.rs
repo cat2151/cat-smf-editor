@@ -7,7 +7,12 @@ use cat_smf_editor::{
 };
 use eframe::egui;
 mod canvas;
+pub(crate) mod pattern_targets;
+mod persistence;
 mod picker_ui;
+use persistence::{current, curve_owner, store};
+#[cfg(test)]
+mod pattern_tests;
 pub use picker_ui::keep_ime;
 use picker_ui::picker_ui;
 mod commands;
@@ -32,6 +37,7 @@ pub struct State {
     pub open: bool,
     /// A view opened from its owner keeps the score on that owner track.
     curve_track: Option<usize>,
+    pattern_curve: Option<(u64, Target)>,
     variation_layer: Option<u64>,
     picker: Option<Picker>,
     selected: Option<(super::tempo_curve::Target, usize)>,
@@ -230,6 +236,11 @@ fn create(app: &mut App) -> Result<(), String> {
     {
         return Err("Parameter target changed; reopen Automation".into());
     }
+    let pattern = app.patterns.editing.as_ref().is_some_and(|c| c.standalone);
+    if pattern {
+        crate::play::transport::stop(app);
+        app.audition.restore_automated_baselines();
+    }
     let current = catalog(app, owner, &patch, layer)?
         .into_iter()
         .find(|v| v.stable_id == parameter.stable_id && v.eligible)
@@ -241,14 +252,23 @@ fn create(app: &mut App) -> Result<(), String> {
         return Err("Parameter instance changed; reopen Automation".into());
     }
     let p = app.parameter_editor.picker.as_ref().unwrap();
-    if !p.previewed && current.binding.with_value(0.0) != parameter.binding.with_value(0.0) {
+    if !pattern
+        && !p.previewed
+        && current.binding.with_value(0.0) != parameter.binding.with_value(0.0)
+    {
         return Err("Parameter instance changed; reopen Automation".into());
     }
     parameter.checked_current()?;
+    current.checked_current()?;
+    let baseline = if pattern {
+        current.current
+    } else {
+        parameter.current
+    };
     let tick = p.tick;
     let query = p.query.clone();
     let identity = history::identity(&key, &parameter);
-    let curve = Curve {
+    let mut curve = Curve {
         version: 1,
         target: Target {
             group: 0,
@@ -268,10 +288,50 @@ fn create(app: &mut App) -> Result<(), String> {
         path: current.path,
         points: vec![Point {
             tick,
-            value: parameter.current,
+            value: baseline,
         }],
         controls: vec![],
     };
+    if let Some(edit) = app
+        .patterns
+        .editing
+        .as_ref()
+        .filter(|c| c.standalone)
+        .cloned()
+    {
+        let catalog =
+            cat_smf_editor::score::pattern::Catalog::read(&app.loaded.as_ref().unwrap().music)?;
+        let definition = catalog
+            .patterns
+            .get(&edit.pattern)
+            .ok_or("Missing pattern")?;
+        curve.target.group = definition.container;
+        let target = curve.target.clone();
+        let existing = cat_smf_editor::score::pattern::automation::curves(
+            &app.loaded.as_ref().unwrap().music,
+            definition,
+        )?
+        .iter()
+        .any(|c| c.target == target);
+        if !existing {
+            crate::view::patterns::workspace::mutate(app, |m| {
+                cat_smf_editor::score::pattern::automation::write(
+                    m,
+                    edit.pattern,
+                    curve,
+                    Some(baseline),
+                )
+            })?;
+        }
+        history::record(app, &query, &identity);
+        app.parameter_editor = State {
+            open: true,
+            pattern_curve: Some((edit.pattern, target)),
+            ..Default::default()
+        };
+        curve::resolve(app)?;
+        return Ok(());
+    }
     app.create_parameter_track(owner, curve)?;
     history::record(app, &query, &identity);
     app.parameter_editor.picker = None;
@@ -305,34 +365,6 @@ pub(crate) fn open_existing_variation(app: &mut App, layer: u64) {
 }
 fn source_track(app: &App) -> usize {
     app.parameter_editor.curve_track.unwrap_or(app.track)
-}
-fn current(app: &App) -> Result<Curve, String> {
-    if let Some(layer) = app.parameter_editor.variation_layer {
-        return variation::current(app, layer);
-    }
-    parameter_curve::read(&app.loaded.as_ref().ok_or("No SMF is loaded")?.music)?
-        .curves
-        .remove(&source_track(app))
-        .ok_or("Not a parameter track".into())
-}
-fn store(app: &mut App, next: Curve) {
-    let result = current(app).and_then(|old| {
-        if old == next {
-            return Ok(());
-        }
-        let track = source_track(app);
-        let variation = app.parameter_editor.variation_layer.is_some();
-        app.edit_music(|music| {
-            if variation {
-                cat_smf_editor::score::macro_curve::write(&mut music.tracks[track], &next)
-            } else {
-                parameter_curve::write(music, track, &next)
-            }
-        })
-    });
-    if let Err(e) = result {
-        app.parameter_editor.error = Some(e);
-    }
 }
 pub fn show(app: &mut App, ctx: &egui::Context) {
     if app.parameter_editor.picker.is_some() {

@@ -26,7 +26,7 @@ pub fn row_count(app: &App, track: usize) -> usize {
     if app.note_mode {
         loaded.display_rows[track].len()
     } else {
-        loaded.music.tracks[track].events.len()
+        loaded.visible().tracks[track].events.len()
     }
 }
 
@@ -40,7 +40,7 @@ pub fn row_tick_loaded(
     track: usize,
     row: usize,
 ) -> u64 {
-    let events = &loaded.music.tracks[track].events;
+    let events = &loaded.visible().tracks[track].events;
     if note_mode {
         match loaded.display_rows[track].get(row) {
             DisplayRow::Event(i) => events[i].tick,
@@ -69,7 +69,7 @@ pub fn row_at_loaded(
     let count = if note_mode {
         loaded.display_rows[track].len()
     } else {
-        loaded.music.tracks[track].events.len()
+        loaded.visible().tracks[track].events.len()
     };
     let (mut low, mut high) = (0, count);
     while low < high {
@@ -94,7 +94,7 @@ pub fn row_sounding_loaded(
     let empty = if note_mode {
         loaded.display_rows[track].is_empty()
     } else {
-        loaded.music.tracks[track].events.is_empty()
+        loaded.visible().tracks[track].events.is_empty()
     };
     if empty {
         row
@@ -109,7 +109,7 @@ pub fn go(app: &mut App, track: usize, tick: u64) {
     if app
         .loaded
         .as_ref()
-        .is_none_or(|l| track >= l.music.tracks.len())
+        .is_none_or(|l| track >= l.visible().tracks.len())
     {
         return;
     }
@@ -142,6 +142,7 @@ pub fn go(app: &mut App, track: usize, tick: u64) {
     app.reset_scroll = false;
     app.reveal_cursor = true;
     app.track_view.go_open = false;
+    crate::view::patterns::track_selected(app);
 }
 
 pub(crate) fn go_edge(app: &mut App, end: bool) {
@@ -154,7 +155,7 @@ pub(crate) fn go_edge(app: &mut App, end: bool) {
 }
 
 pub(crate) fn step_track(app: &mut App, forward: bool, tick: u64) {
-    let Some(count) = app.loaded.as_ref().map(|l| l.music.tracks.len()) else {
+    let Some(count) = app.loaded.as_ref().map(|l| l.visible().tracks.len()) else {
         return;
     };
     if count > 0 {
@@ -166,7 +167,7 @@ pub(crate) fn step_track(app: &mut App, forward: bool, tick: u64) {
 pub(crate) fn split_on(app: &mut App) {
     app.track_view.split_open = false;
     let Some(loaded) = &app.loaded else { return };
-    let count = loaded.music.tracks.len();
+    let count = loaded.visible().tracks.len();
     if app.track_view.split.is_none() && count > 0 {
         app.track_view.split = Some([app.track, (app.track + 1) % count]);
         app.track_view.active = 0;

@@ -26,10 +26,26 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         if a.loaded.is_some() {
             out.push(Command::plain(
                 s,
-                "insert-event",
-                "Insert event…",
+                "export-performance",
+                "Export performance SMF",
                 &[],
-                |_, _| {},
+                |a, _| files::performance::dialog(a),
+            ));
+            for (id, name) in [
+                ("insert-event", "Insert event…"),
+                ("insert-tempo", "Insert tempo"),
+                ("insert-key-signature", "Insert key signature"),
+            ] {
+                out.push(Command::plain(s, id, name, &[], |_, _| {}));
+            }
+            out.push(Command::plain(
+                s,
+                "insert-same-measure",
+                "Insert same measure",
+                &[],
+                |a, c| {
+                    super::super::palette::open_same_measure(a, c, false);
+                },
             ));
             out.push(
                 Command::new(s, "save", "保存", &[(Key::S, Modifiers::CTRL)], |a, _| {
@@ -214,11 +230,6 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 });
             }
             if s == Screen::Main {
-                add("view-mode", "Notes / Raw", &[Key::V], |a, _| {
-                    a.note_mode = !a.note_mode;
-                    crate::cursor::moves::sync_mode(a);
-                    a.reset_scroll = true;
-                });
                 add("edit", "編集menu", &[Key::E], |a, _| {
                     a.edit_menu.open = true
                 });
@@ -239,7 +250,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                     a.track_view.split_open = true
                 });
                 add("mml-open", "MML / コード進行", &[Key::I], |a, c| {
-                    busy::request(a, c, busy::Task::MmlInput)
+                    super::super::drums::input(a, c)
                 });
                 add(
                     "mml-measure",
@@ -352,6 +363,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             | Screen::Tracks
             | Screen::Split
             | Screen::Play
+            | Screen::Patterns
     ) {
         out.push(
             Command::new(

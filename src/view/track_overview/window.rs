@@ -5,8 +5,6 @@ use crate::view::timeline_repeat as repeat;
 use eframe::egui::Color32;
 use eframe::emath::GuiRounding;
 
-/// Unzoomed height of one track's pane.
-const PANE_HEIGHT: f32 = 60.0;
 const NAMES_WIDTH: f32 = 120.0;
 const EMPTY_FILL: Color32 = Color32::from_gray(40);
 /// Space between two tracks' panes.
@@ -38,17 +36,14 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let tick = crate::play::playback::location(app).0;
-    let mut overview = piano_roll::layout_of(loaded, &tracks, app.track, tick);
-    let mut layouts: Vec<_> = tracks
-        .iter()
-        .map(|&track| {
-            let mut layout = piano_roll::layout(loaded, track, tick);
-            layout.references.clear();
-            piano_roll::panes::fit_height(&mut layout, PANE_HEIGHT);
-            layout
-        })
-        .collect();
-    let kinds: Vec<_> = tracks.iter().map(|&t| kind(loaded, t)).collect();
+    let Some(super::panes::Panes {
+        mut overview,
+        mut layouts,
+        kinds,
+    }) = super::panes::Panes::read(app, tick)
+    else {
+        return;
+    };
     let heads: Vec<_> = tracks.iter().map(|&t| drum_head(loaded, t)).collect();
     let curves = super::curves::read(loaded);
     let playing = crate::play::transport::tick_for(app, app.track);

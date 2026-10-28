@@ -11,7 +11,11 @@ pub mod key_signature;
 pub mod layer_track;
 pub mod musical_time;
 pub mod note_view;
+pub mod pattern;
+pub mod performance;
 pub mod program_name;
+pub mod same_measure;
+pub mod scene;
 pub mod state_cache;
 
 pub mod macro_values;

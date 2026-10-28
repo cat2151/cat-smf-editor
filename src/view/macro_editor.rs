@@ -256,7 +256,15 @@ fn finish(app: &mut App, confirm: bool) {
         Ok(None)
     };
     let result = prepared.and_then(|values| match values {
-        Some(values) => app.edit_music(|m| macro_values::write(&mut m.tracks[owner], &values)),
+        Some(values) => {
+            if app.patterns.editing.as_ref().is_some_and(|c| c.standalone) {
+                super::patterns::workspace::mutate(app, |m| {
+                    macro_values::write(&mut m.tracks[owner], &values)
+                })
+            } else {
+                app.edit_music(|m| macro_values::write(&mut m.tracks[owner], &values))
+            }
+        }
         None => Ok(()),
     });
     if let Err(error) = result {

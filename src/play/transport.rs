@@ -22,31 +22,88 @@ pub struct Prepared {
         crate::play::audio_sequence::Sequence,
     )>,
     pub active: Active,
+    /// Pattern, Scene and Song playback: what each container track sounds, before any skip.
+    /// `None` plays the tracks as stored.
+    pub origin: Option<Origin>,
+}
+
+/// The expanded events each track sounds, timed by `tempo` from second 0.
+pub struct Origin {
+    pub events: std::collections::BTreeMap<usize, Vec<cat_smf_editor::model::Event>>,
+    pub tempo: TempoMap,
 }
 
 // Capture the source and range at the start request, independent of later view changes.
 pub fn prepare(app: &App, mode: Mode) -> Option<Prepared> {
+    if let Mode::Pattern(id) = mode {
+        return crate::view::patterns::preview::prepare(app, id).ok();
+    }
+    if let Mode::Arrangement(scene) = mode {
+        return super::arrangement::prepare(app, scene).ok();
+    }
+    let standalone = app.patterns.editing.as_ref().is_some_and(|c| c.standalone);
+    if standalone
+        && matches!(
+            mode,
+            Mode::Track | Mode::AllTracks | Mode::AllTracksFromMeasure
+        )
+    {
+        return crate::view::patterns::preview::prepare(
+            app,
+            app.patterns.editing.as_ref()?.pattern,
+        )
+        .ok();
+    }
     let _span = cat_smf_editor::startup_trace::span("sequence_prepare");
     if mode == Mode::AllTracksFromMeasure {
         let all = prepare(app, Mode::AllTracks)?;
         let seconds = all.active.tempos[app.track].duration(0, start_tick(app, Mode::MeasureStart));
         let mut prepared = crate::play::selection_playback::skip(app, all.active, seconds)?;
-        prepared.active.mode = mode;
+        if !matches!(prepared.active.mode, Mode::Arrangement(_)) {
+            prepared.active.mode = mode;
+        }
         return Some(prepared);
     }
     let loaded = app.loaded.as_ref()?;
+    if mode == Mode::AllTracks
+        && !cat_smf_editor::score::scene::read(&loaded.music)
+            .ok()?
+            .song
+            .is_empty()
+    {
+        return super::arrangement::prepare(app, None).ok();
+    }
     let parts = playback::parts(app, mode);
     let end = parts.iter().map(|(_, _, s)| s.end).fold(0.0, f64::max);
     let start = start_tick(app, mode);
+    let local_tempo = standalone
+        .then(|| TempoMap::constant(loaded.music.division, app.patterns.tempo.0))
+        .transpose()
+        .ok()?;
     let tempos: Vec<_> = (0..loaded.music.tracks.len())
-        .map(|t| TempoMap::new(&loaded.music, t))
+        .map(|t| {
+            local_tempo
+                .clone()
+                .unwrap_or_else(|| TempoMap::new(&loaded.music, t))
+        })
         .collect();
     let start_seconds = tempos.get(app.track)?.duration(0, start);
     let sources = parts
         .iter()
         .map(|(track, _, sequence)| (*track, sequence.clone()))
         .collect();
-    let automation = super::automation::Automation::prepare(app, &parts, mode == Mode::AllTracks);
+    let mut automation =
+        super::automation::Automation::prepare(app, &parts, mode == Mode::AllTracks);
+    if standalone {
+        automation =
+            crate::view::patterns::preview::prepare(app, app.patterns.editing.as_ref()?.pattern)
+                .ok()?
+                .active
+                .automation;
+    }
+    if let Err(error) = cat_smf_editor::score::same_measure::validate(&loaded.music) {
+        automation.error = Some(error);
+    }
     Some(Prepared {
         parts,
         active: Active {
@@ -58,6 +115,7 @@ pub fn prepare(app: &App, mode: Mode) -> Option<Prepared> {
             end,
             sources,
         },
+        origin: None,
     })
 }
 
@@ -105,7 +163,7 @@ pub fn jump(app: &mut App, tick: u64) {
         return;
     };
     // These modes start at tick 0 whatever the cursor; the others start at the cursor.
-    let prepared = if matches!(mode, Mode::Track | Mode::AllTracks) {
+    let prepared = if matches!(mode, Mode::Track | Mode::AllTracks | Mode::Pattern(_)) {
         let seconds = prepared.active.tempos[app.track].duration(0, tick);
         crate::play::selection_playback::skip(app, prepared.active, seconds)
     } else {
@@ -122,6 +180,13 @@ pub fn advance(app: &mut App) {
     crate::view::macro_editor::validate(app);
     crate::view::parameter_editor::preview::validate(app);
     if let Some(prepared) = app.playback.pending.take() {
+        if let Some(loaded) = &app.loaded
+            && let Err(error) = cat_smf_editor::score::same_measure::validate(&loaded.music)
+        {
+            stop(app);
+            app.load_error = Some(error);
+            return;
+        }
         if let Some(error) = &prepared.active.automation.error {
             app.audition.stop();
             app.playback.active = None;
@@ -222,7 +287,7 @@ pub fn marker_for(app: &App, track: usize) -> Option<usize> {
 /// Last row at or before `tick`.
 fn row_for_tick(app: &App, track: usize, tick: u64) -> Option<usize> {
     let loaded = app.loaded.as_ref()?;
-    let events = &loaded.music.tracks[track].events;
+    let events = &loaded.visible().tracks[track].events;
     let count = if app.note_mode {
         loaded.display_rows[track].len()
     } else {
@@ -255,6 +320,7 @@ pub fn stop_shortcut(app: &mut App, ctx: &egui::Context) {
 }
 
 pub fn stop(app: &mut App) {
+    app.patterns.preview = None;
     let preview = app.playback.parameter_preview.take().is_some();
     app.playback.pending = None;
     app.playback.active = None;

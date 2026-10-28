@@ -56,6 +56,51 @@ pub(crate) fn prepare(
     if start >= end {
         return None;
     }
+    if let Mode::Pattern(id) = mode {
+        let loaded = app.loaded.as_ref()?;
+        let tempo = cat_smf_editor::score::audition_timing::TempoMap::constant(
+            loaded.music.division,
+            app.patterns.tempo.0,
+        )
+        .ok()?;
+        return crate::view::patterns::preview::remaining(
+            app,
+            id,
+            tempo.seconds_at(start),
+            tempo.duration(start, end - start),
+        );
+    }
+    if let Mode::Arrangement(scene) = mode {
+        let music = &app.loaded.as_ref()?.music;
+        let map = cat_smf_editor::score::audition_timing::TempoMap::new(music, 0);
+        return crate::play::arrangement::remaining(
+            app,
+            scene,
+            map.seconds_at(start),
+            map.duration(start, end - start),
+        );
+    }
+    if app.patterns.editing.as_ref().is_some_and(|c| c.standalone) {
+        let mut prepared = super::prepare(app, Mode::Track)?;
+        let map = prepared.active.tempos.get(clock)?;
+        let absolute = map.duration(0, start);
+        let offset = (absolute - prepared.active.start_seconds).max(0.0);
+        let duration = map.duration(start, end - start);
+        for (_, _, seq) in &mut prepared.parts {
+            seq.skip(offset);
+            seq.truncate(duration);
+        }
+        prepared.active.mode = mode;
+        prepared.active.clock_track = clock;
+        prepared.active.start_seconds = absolute;
+        prepared.active.end = duration;
+        prepared.active.sources = prepared
+            .parts
+            .iter()
+            .map(|(t, _, s)| (*t, s.clone()))
+            .collect();
+        return Some(prepared);
+    }
     let mut all = super::prepare(app, Mode::AllTracks)?;
     let map = all.active.tempos.get(clock)?;
     let offset = map.duration(0, start);
@@ -142,9 +187,10 @@ pub(crate) fn resume(app: &mut App, saved: Resume) {
             sequence
                 .notes
                 .retain(|n| n.start == 0.0 && pitches.contains(&(*track, n.pitch)));
-            sequence
-                .events
-                .retain(|event| pitches.contains(&(*track, ((event.word >> 8) & 127) as u8)));
+            sequence.events.retain(|event| {
+                !matches!((event.word >> 20) & 15, 8 | 9)
+                    || pitches.contains(&(*track, ((event.word >> 8) & 127) as u8))
+            });
         }
         prepared.active.sources = prepared
             .parts
@@ -157,9 +203,26 @@ pub(crate) fn resume(app: &mut App, saved: Resume) {
 
 fn end_at(app: &App, track: usize, tick: u64, mode: Mode, tracks: &[usize]) -> Option<u64> {
     let loaded = app.loaded.as_ref()?;
+    if let Mode::Pattern(id) = mode {
+        return cat_smf_editor::score::pattern::Catalog::read(&loaded.music)
+            .ok()?
+            .patterns
+            .get(&id)?
+            .length()
+            .ok();
+    }
+    if let Mode::Arrangement(scene) = mode {
+        return cat_smf_editor::score::scene::arrangement::occurrences(&loaded.music, scene)
+            .ok()
+            .map(|(_, end)| end);
+    }
     let last = tracks
         .iter()
-        .filter_map(|&t| loaded.music.tracks.get(t)?.events.last().map(|e| e.tick))
+        .filter_map(|&t| {
+            cat_smf_editor::score::same_measure::expand(&loaded.music, t)
+                .ok()
+                .map(|(_, end)| end)
+        })
         .max()?;
     if !matches!(
         mode,

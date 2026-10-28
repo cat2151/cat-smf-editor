@@ -18,7 +18,7 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
             ("Ctrl+S", "保存"),
             ("Ctrl+Z", "元に戻す"),
             ("V", "Notes / Raw"),
-            ("i / e / .", "MML・コード進行 / 編集menu / 反復"),
+            ("i / e / .", "MML・ドラム / 編集menu / 反復"),
             ("r", "ピアノロール / カーブ / ドラム"),
             ("Shift+D", "Drum sequencer"),
             ("左ドラッグ", "A-B repeat"),

@@ -46,7 +46,6 @@ fn global_conductor_ties_and_format_two() {
     let time = MusicalTime::new(&m);
     assert_eq!(time.map(1).unwrap().position(480).to_string(), "1:2:0");
     assert_eq!(time.map(0).unwrap().warnings.len(), 1);
-    assert!(!time.map(0).unwrap().assumed_four_four);
     let m = music(2, 480, m.tracks.into_iter().map(|t| t.events).collect());
     let time = MusicalTime::new(&m);
     assert_eq!(time.map(0).unwrap().position(480).to_string(), "1:3:0");
@@ -64,7 +63,6 @@ fn defaults_smpte_invalid_and_exact_fractions() {
     let m = music(1, 480, vec![vec![bad, meter(0, 0, 2), meter(0, 4, 255)]]);
     let time = MusicalTime::new(&m);
     let map = time.map(0).unwrap();
-    assert!(map.assumed_four_four);
     assert_eq!(map.warnings.len(), 3);
     assert_eq!(map.position(480).to_string(), "1:2:0");
     assert!(MusicalTime::new(&music(1, 0xe728, vec![vec![]]))

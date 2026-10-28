@@ -157,3 +157,142 @@ fn singer_header_uses_character_and_style_without_hiding_effects() {
         }
     }
 }
+
+fn song(meter: Option<&[u8]>) -> App {
+    crate::view::tests::app(Music {
+        format: 1,
+        division: 480,
+        tracks: vec![Track {
+            events: meter
+                .map(|m| event(0, 0xff, 0x58, m))
+                .into_iter()
+                .chain([
+                    event(0, 0x90, 0, &[60, 100]),
+                    event(480, 0x80, 0, &[60, 0]),
+                    event(480, 0xff, 0x2f, &[]),
+                ])
+                .collect(),
+        }],
+    })
+}
+
+/// Runs the whole view for one frame and returns every drawn text with its position.
+fn frame(
+    app: &mut App,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+) -> Vec<(String, egui::Pos2)> {
+    let output = ctx.run(
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1400.0, 900.0),
+            )),
+            events,
+            ..Default::default()
+        },
+        |ctx| crate::view::show(app, ctx),
+    );
+    output
+        .shapes
+        .into_iter()
+        .filter_map(|s| match s.shape {
+            egui::Shape::Text(t) => Some((t.galley.text().to_owned(), t.pos)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn click(at: egui::Pos2) -> [Vec<egui::Event>; 2] {
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    [
+        vec![egui::Event::PointerMoved(at), button(true)],
+        vec![button(false)],
+    ]
+}
+
+fn popup_shown(texts: &[(String, egui::Pos2)]) -> bool {
+    texts
+        .iter()
+        .any(|(t, _)| t.starts_with("Invalid time signature"))
+}
+
+#[test]
+fn default_four_four_is_not_a_warning() {
+    let mut app = song(None);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    assert!(texts.iter().any(|(t, _)| t == "C4"), "{texts:?}");
+    assert!(
+        !texts.iter().any(|(t, _)| t.starts_with("Warnings")),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn warnings_popup_opens_on_click_and_closes_without_touching_the_view() {
+    let mut app = song(Some(&[0, 2, 24, 8]));
+    let ctx = egui::Context::default();
+    // Tooltips repeat the same text; keep them out so only the popup can draw it.
+    ctx.style_mut(|s| s.interaction.tooltip_delay = f32::INFINITY);
+    frame(&mut app, &ctx, vec![]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    assert!(!popup_shown(&texts));
+    let label = texts.iter().find(|(t, _)| t == "Warnings 1").unwrap().1 + egui::vec2(4.0, 4.0);
+    let toggle = |app: &mut App| {
+        let [press, release] = click(label);
+        frame(app, &ctx, press);
+        frame(app, &ctx, release);
+        frame(app, &ctx, vec![])
+    };
+    assert!(popup_shown(&toggle(&mut app)), "click opens the popup");
+    assert!(!popup_shown(&toggle(&mut app)), "a second click closes it");
+
+    assert!(popup_shown(&toggle(&mut app)));
+    let [press, release] = click(label + egui::vec2(500.0, 0.0));
+    frame(&mut app, &ctx, press);
+    frame(&mut app, &ctx, release);
+    assert!(
+        !popup_shown(&frame(&mut app, &ctx, vec![])),
+        "a click outside closes it"
+    );
+
+    crate::view::event_selection::begin(&mut app);
+    assert!(crate::view::event_selection::valid(&app));
+    assert!(popup_shown(&toggle(&mut app)));
+    let before = (app.track, app.cursor_row, app.selected_event, app.note_mode);
+    let escape = || {
+        [true, false].map(|pressed| egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        })
+    };
+    frame(&mut app, &ctx, escape().into());
+    assert!(
+        !popup_shown(&frame(&mut app, &ctx, vec![])),
+        "Esc closes it"
+    );
+    assert!(
+        crate::view::event_selection::valid(&app),
+        "Esc stays with the popup"
+    );
+    assert!(!app.help_open);
+    assert_eq!(
+        before,
+        (app.track, app.cursor_row, app.selected_event, app.note_mode)
+    );
+    frame(&mut app, &ctx, escape().into());
+    assert!(
+        !crate::view::event_selection::valid(&app),
+        "with the popup closed, Esc reaches the selection again"
+    );
+}

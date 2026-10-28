@@ -8,12 +8,28 @@ use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone)]
 pub struct Binding {
+    pub windows: Arc<Vec<cat_smf_editor::score::pattern::render::ParameterInterval>>,
     pub live: Option<Arc<std::sync::atomic::AtomicU64>>,
     pub curve: Arc<Curve>,
     pub value: cat_smf_editor::host::parameters::ParameterValue,
 }
 impl Binding {
     pub fn at(&self, tick: f64) -> Option<f64> {
+        if !self.windows.is_empty() {
+            let index = self.windows.partition_point(|w| w.start as f64 <= tick);
+            if let Some(w) = index
+                .checked_sub(1)
+                .and_then(|i| self.windows.get(i))
+                .filter(|w| tick < w.end as f64)
+            {
+                return w.curve.value_at(tick - w.start as f64);
+            }
+            return self
+                .live
+                .as_ref()
+                .map(|v| f64::from_bits(v.load(std::sync::atomic::Ordering::Relaxed)))
+                .or_else(|| self.windows.first().map(|w| w.baseline));
+        }
         self.live
             .as_ref()
             .map(|v| f64::from_bits(v.load(std::sync::atomic::Ordering::Relaxed)))
@@ -29,6 +45,11 @@ pub struct LayerBindings {
 
 #[derive(Clone)]
 pub struct OwnerPlan {
+    pub windows: BTreeMap<
+        parameter_curve::Target,
+        Arc<Vec<cat_smf_editor::score::pattern::render::ParameterInterval>>,
+    >,
+    pub midi: bool,
     pub live: BTreeMap<parameter_curve::Target, Arc<std::sync::atomic::AtomicU64>>,
     pub owner: usize,
     pub curves: Vec<Arc<Curve>>,
@@ -122,7 +143,16 @@ fn prepare(
             .push(Arc::new(curve.clone()));
     }
     crate::view::macro_editor::plans(app, parts, &mut owners)?;
-    Ok(owners
+    let midi_owners: Vec<_> = parts
+        .iter()
+        .filter(|(_, _, s)| {
+            s.events
+                .iter()
+                .any(|e| matches!((e.word >> 20) & 15, 11 | 14))
+        })
+        .map(|(owner, _, _)| *owner)
+        .collect();
+    let mut plans = owners
         .into_iter()
         .map(|(owner, curves)| {
             let tempo = Arc::new(TempoMap::new(&loaded.music, owner));
@@ -140,6 +170,8 @@ fn prepare(
                 .map(|tick| (tick, tempo.seconds_at(tick)))
                 .collect();
             Arc::new(OwnerPlan {
+                windows: Default::default(),
+                midi: midi_owners.contains(&owner),
                 live: crate::view::macro_editor::live(app, owner),
                 owner,
                 curves,
@@ -147,9 +179,13 @@ fn prepare(
                 boundaries,
             })
         })
-        .collect())
+        .collect();
+    performance::prepare(app, parts, &collection, &mut plans)?;
+    Ok(plans)
 }
 
+pub(crate) mod pattern;
+mod performance;
 mod runtime;
 pub use runtime::RuntimePlan;
 
@@ -161,6 +197,14 @@ pub fn audition_notes(
     notes: &[(u8, u8, Option<f64>)],
     take: Option<Arc<crate::play::sung::Take>>,
 ) -> bool {
+    if app
+        .patterns
+        .editing
+        .as_ref()
+        .is_some_and(|c| c.standalone && c.track == track)
+    {
+        return pattern::audition_notes(app, tick, notes, take);
+    }
     let Some(loaded) = &app.loaded else {
         return false;
     };

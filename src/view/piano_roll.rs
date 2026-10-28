@@ -1,10 +1,12 @@
 //! `r` overlay: the current track's notes as rectangles over a staff and beat grid.
 use crate::{
     app::{App, Loaded},
+    play::playback::Sounding,
     view::row::beat_color,
 };
 use cat_smf_editor::score::{musical_time::Position, note_view::note_on};
 use eframe::egui::{self, emath::GuiRounding, Color32};
+use std::borrow::Cow;
 
 /// Width of one quarter note.
 pub(crate) const PX_PER_QUARTER: f32 = 96.0;
@@ -23,6 +25,7 @@ pub struct State {
     /// Scrolls to the cursor's measure on the next frame.
     reveal: bool,
     drag: Option<drag::Drag>,
+    generation: u64,
     viewport: viewport::Viewport,
     drag_pane: Option<usize>,
     range_drag: Option<(usize, f32)>,
@@ -62,12 +65,12 @@ pub(crate) fn open(app: &mut App) {
     app.parameter_editor.close();
     let conductor = app.track == 0
         && app.loaded.as_ref().is_some_and(|l| {
-            l.music
+            l.visible()
                 .tracks
                 .first()
                 .is_some_and(|t| !t.events.iter().any(note_on))
         });
-    if conductor && app.loaded.as_ref().is_some_and(|l| l.music.format == 1) {
+    if conductor && app.loaded.as_ref().is_some_and(|l| l.visible().format == 1) {
         app.tempo_curve = crate::view::tempo_curve::State::opened();
     } else {
         app.piano_roll = State {
@@ -92,14 +95,39 @@ pub(crate) struct Layout {
     pub(crate) colors: Vec<Color32>,
     /// Lyric at each editable note's onset, in the same order as `notes`.
     lyrics: Vec<Option<String>>,
-    /// Other tracks' notes, drawn behind the editable notes and never hit-tested.
+    /// Sounding notes that are not editable here, drawn behind the editable notes and never hit-tested.
     pub(crate) references: Vec<egui::Rect>,
+    /// Lyric at each reference's onset, in the same order as `references`.
+    reference_lyrics: Vec<Option<String>>,
     /// x where the measure holding `cursor_tick` begins.
     pub(crate) start: f32,
     /// Width of one tick.
     pub(crate) scale: f32,
 }
 
+impl Layout {
+    /// Rectangle and lyric of each labeled note, references first, placed by `reference`
+    /// and by `note` from the index into `notes`.
+    pub(crate) fn labels<'a>(
+        &'a self,
+        reference: impl Fn(egui::Rect) -> egui::Rect + 'a,
+        note: impl Fn(usize) -> egui::Rect + 'a,
+    ) -> impl Iterator<Item = (egui::Rect, &'a str)> + 'a {
+        let references = self
+            .references
+            .iter()
+            .zip(&self.reference_lyrics)
+            .filter_map(move |(rect, text)| Some((reference(*rect), text.as_deref()?)));
+        let notes = self
+            .lyrics
+            .iter()
+            .enumerate()
+            .filter_map(move |(i, text)| Some((note(i), text.as_deref()?)));
+        references.chain(notes)
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn layout(loaded: &Loaded, track: usize, cursor_tick: u64) -> Layout {
     layout_of(loaded, &[track], track, cursor_tick)
 }
@@ -111,8 +139,67 @@ pub(crate) fn layout_of(
     meter: usize,
     cursor_tick: u64,
 ) -> Layout {
-    let music = &loaded.music;
-    let division = music.division;
+    layout_from(loaded, &shown(loaded), tracks, meter, cursor_tick)
+}
+
+/// The Piano roll window's roll: notes the event list shows stay editable, and the rest of
+/// what `tracks` sound, taken from `sounding`, joins the other tracks' notes as references.
+pub(crate) fn roll(
+    loaded: &Loaded,
+    sounding: &[Sounding],
+    tracks: &[usize],
+    meter: usize,
+    cursor_tick: u64,
+) -> Layout {
+    layout_with(loaded, &shown(loaded), sounding, tracks, meter, cursor_tick)
+}
+
+/// Every track's events as the event list shows them.
+pub(crate) fn shown(loaded: &Loaded) -> Vec<Sounding<'_>> {
+    loaded
+        .visible()
+        .tracks
+        .iter()
+        .zip(&loaded.note_views)
+        .map(|(track, view)| Sounding {
+            events: Cow::Borrowed(&track.events),
+            durations: Cow::Borrowed(&view.durations),
+            end: track.events.last().map_or(0, |e| e.tick),
+        })
+        .collect()
+}
+
+/// Like [`layout_of`], with the notes of each track taken from `sources`.
+pub(crate) fn layout_from(
+    loaded: &Loaded,
+    sources: &[Sounding],
+    tracks: &[usize],
+    meter: usize,
+    cursor_tick: u64,
+) -> Layout {
+    layout_with(loaded, sources, sources, tracks, meter, cursor_tick)
+}
+
+/// `(tick, duration, pitch)` of each Note On in `source` that has a Note Off.
+fn notes_of<'a>(source: &'a Sounding) -> impl Iterator<Item = (u64, u64, u8)> + 'a {
+    source
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| note_on(e))
+        .filter_map(|(i, e)| source.durations[i].map(|d| (e.tick, d, e.data[0])))
+}
+
+/// Notes of `tracks` from `editable`; references from what `sounding` plays beyond them.
+fn layout_with(
+    loaded: &Loaded,
+    editable: &[Sounding],
+    sounding: &[Sounding],
+    tracks: &[usize],
+    meter: usize,
+    cursor_tick: u64,
+) -> Layout {
+    let division = loaded.visible().division;
     // SMPTE division has no quarter note; 480 only sizes the drawing.
     let ppqn = if division == 0 || division & 0x8000 != 0 {
         480
@@ -124,8 +211,8 @@ pub(crate) fn layout_of(
     let ons: Vec<(usize, u64, u64, u8)> = tracks
         .iter()
         .flat_map(|&t| {
-            let durations = &loaded.note_views[t].durations;
-            music.tracks[t]
+            let durations = &editable[t].durations;
+            editable[t]
                 .events
                 .iter()
                 .enumerate()
@@ -133,29 +220,35 @@ pub(crate) fn layout_of(
                 .filter_map(move |(i, e)| durations[i].map(|d| (i, e.tick, d, e.data[0])))
         })
         .collect();
-    let mut references: Vec<_> = (0..music.tracks.len())
-        .filter(|t| !ons.is_empty() && !tracks.contains(t))
-        .flat_map(|t| {
-            music.tracks[t]
-                .events
-                .iter()
-                .enumerate()
-                .filter_map(move |(i, e)| {
-                    if note_on(e) {
-                        loaded.note_views[t].durations[i].map(|d| (e.tick, d, e.data[0]))
-                    } else {
-                        None
-                    }
-                })
+    // Lyrics come from what each track sings, so every placement of a pattern gets them.
+    let sung: Vec<_> = tracks
+        .iter()
+        .map(|&t| super::note_lyrics::read(&loaded.music, t, &sounding[t]))
+        .collect();
+    let mut unmatched: Vec<(u64, u8)> = ons.iter().map(|n| (n.1, n.3)).collect();
+    let own: Vec<_> = tracks
+        .iter()
+        .zip(&sung)
+        .flat_map(|(&t, lyrics)| {
+            notes_of(&sounding[t]).map(move |(tick, d, p)| (tick, d, p, lyrics.get(&tick)))
+        })
+        .filter(|&(tick, _, pitch, _)| {
+            let found = unmatched.iter().position(|&n| n == (tick, pitch));
+            found.map(|i| unmatched.swap_remove(i)).is_none()
         })
         .collect();
-    let low = ons.iter().map(|n| n.3).min().unwrap_or(60);
-    let high = ons.iter().map(|n| n.3).max().unwrap_or(60);
+    let others = (0..sounding.len())
+        .filter(|t| !(ons.is_empty() && own.is_empty()) && !tracks.contains(t))
+        .flat_map(|t| notes_of(&sounding[t]).map(|(tick, d, p)| (tick, d, p, None)));
+    let pitches = || ons.iter().map(|n| n.3).chain(own.iter().map(|n| n.2));
+    let low = pitches().min().unwrap_or(60);
+    let high = pitches().max().unwrap_or(60);
+    let mut references: Vec<_> = own.iter().cloned().chain(others).collect();
     let (low, high) = (
         low.saturating_sub(MARGIN),
         high.saturating_add(MARGIN).min(127),
     );
-    references.retain(|&(_, _, pitch)| (low..=high).contains(&pitch));
+    references.retain(|&(_, _, pitch, _)| (low..=high).contains(&pitch));
     let top = |p: u8| f32::from(high - p) * ROW_HEIGHT;
     let note_rect = |tick: u64, duration: u64, pitch: u8| {
         let left = tick as f32 * scale;
@@ -164,11 +257,10 @@ pub(crate) fn layout_of(
             egui::pos2(left + duration as f32 * scale, top(pitch) + ROW_HEIGHT),
         )
     };
-    let end = music
-        .tracks
+    let end = editable
         .iter()
-        .filter_map(|t| t.events.last())
-        .map(|e| e.tick)
+        .chain(sounding)
+        .map(|s| s.events.last().map_or(s.end, |e| e.tick.max(s.end)))
         .max()
         .unwrap_or(0);
     let map = loaded.time.map(meter);
@@ -193,15 +285,13 @@ pub(crate) fn layout_of(
         beats,
         lyrics: tracks
             .iter()
-            .flat_map(|&t| {
-                let lyrics = super::note_lyrics::read(loaded, t);
-                music.tracks[t]
+            .zip(&sung)
+            .flat_map(|(&t, lyrics)| {
+                editable[t]
                     .events
                     .iter()
                     .enumerate()
-                    .filter(move |(i, e)| {
-                        note_on(e) && loaded.note_views[t].durations[*i].is_some()
-                    })
+                    .filter(move |(i, e)| note_on(e) && editable[t].durations[*i].is_some())
                     .map(move |(_, e)| lyrics.get(&e.tick).cloned())
             })
             .collect(),
@@ -213,13 +303,11 @@ pub(crate) fn layout_of(
         colors: tracks
             .iter()
             .flat_map(|&t| {
-                music.tracks[t]
+                editable[t]
                     .events
                     .iter()
                     .enumerate()
-                    .filter(move |(i, e)| {
-                        note_on(e) && loaded.note_views[t].durations[*i].is_some()
-                    })
+                    .filter(move |(i, e)| note_on(e) && editable[t].durations[*i].is_some())
                     .map(move |(_, e)| {
                         super::pitch_keyboard::roll_color(
                             e.data[0],
@@ -234,7 +322,11 @@ pub(crate) fn layout_of(
             .collect(),
         references: references
             .iter()
-            .map(|&(tick, duration, pitch)| note_rect(tick, duration, pitch))
+            .map(|&(tick, duration, pitch, _)| note_rect(tick, duration, pitch))
+            .collect(),
+        reference_lyrics: references
+            .into_iter()
+            .map(|(.., lyric)| lyric.cloned())
             .collect(),
         start: start as f32 * scale,
         scale,
@@ -323,7 +415,10 @@ fn draw(
         );
     }
     // Paint after the hover highlight so the mora stays readable while editing.
-    lyrics::draw(painter, layout, |i| note(i).translate(origin));
+    lyrics::draw(
+        painter,
+        layout.labels(|r| r.translate(origin), |i| note(i).translate(origin)),
+    );
 }
 
 mod drag;

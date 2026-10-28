@@ -1,10 +1,12 @@
 //! Command palette `Track Overview`: every track's piano roll stacked, for playing or jumping to any track's measure.
 use crate::app::{App, Loaded};
 use crate::view::commands::{Command, Screen};
+use cat_smf_editor::model::Event;
 use cat_smf_editor::score::{musical_time::Position, note_view::note_on};
 use eframe::egui::{self, Key};
 
 mod curves;
+mod panes;
 mod window;
 pub(crate) use window::show;
 
@@ -31,8 +33,7 @@ pub(crate) enum Kind {
     Empty,
 }
 
-pub(crate) fn kind(loaded: &Loaded, track: usize) -> Kind {
-    let events = &loaded.music.tracks[track].events;
+pub(crate) fn kind(events: &[Event]) -> Kind {
     if events.iter().any(note_on) {
         Kind::Notes
     } else if events

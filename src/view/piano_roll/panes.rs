@@ -1,18 +1,17 @@
 use super::*;
 
-/// Stable ordering by the midpoint of each track's playable note range; empty tracks last.
-pub(super) fn tracks(app: &App, loaded: &Loaded) -> Vec<usize> {
+/// Stable ordering by the midpoint of each track's editable and sounding note range;
+/// empty tracks last.
+pub(super) fn tracks(app: &App, loaded: &Loaded, sounding: &[Sounding]) -> Vec<usize> {
     let mut tracks = app
         .track_view
         .split
         .map_or_else(|| vec![app.track], |tracks| tracks.to_vec());
+    let editable = shown(loaded);
     let midpoint = |track: usize| {
-        let pitches: Vec<_> = loaded.music.tracks[track]
-            .events
-            .iter()
-            .enumerate()
-            .filter(|(i, e)| note_on(e) && loaded.note_views[track].durations[*i].is_some())
-            .map(|(_, e)| u16::from(e.data[0]))
+        let pitches: Vec<_> = notes_of(&editable[track])
+            .chain(notes_of(&sounding[track]))
+            .map(|(_, _, pitch)| u16::from(pitch))
             .collect();
         pitches
             .iter()

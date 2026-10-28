@@ -20,6 +20,22 @@ pub fn skip(app: &App, mut active: Active, elapsed: f64) -> Option<Prepared> {
     if elapsed >= active.end {
         return None;
     }
+    if let super::playback::Mode::Pattern(id) = active.mode {
+        return crate::view::patterns::preview::remaining(
+            app,
+            id,
+            active.start_seconds + elapsed,
+            active.end - elapsed,
+        );
+    }
+    if let super::playback::Mode::Arrangement(scene) = active.mode {
+        return super::arrangement::remaining(
+            app,
+            scene,
+            active.start_seconds + elapsed,
+            active.end - elapsed,
+        );
+    }
     active.sources = active
         .sources
         .into_iter()
@@ -33,7 +49,11 @@ pub fn skip(app: &App, mut active: Active, elapsed: f64) -> Option<Prepared> {
         .iter()
         .map(|(track, sequence)| (*track, loaded.patches[*track].clone(), sequence.clone()))
         .collect();
-    Some(Prepared { parts, active })
+    Some(Prepared {
+        parts,
+        active,
+        origin: None,
+    })
 }
 
 fn remaining(mut sequence: Sequence, elapsed: f64) -> Sequence {
@@ -42,6 +62,24 @@ fn remaining(mut sequence: Sequence, elapsed: f64) -> Sequence {
 }
 
 pub fn restore(app: &mut App, mut prepared: Prepared) {
+    if let super::playback::Mode::Pattern(id) = prepared.active.mode {
+        app.playback.pending = crate::view::patterns::preview::remaining(
+            app,
+            id,
+            prepared.active.start_seconds,
+            prepared.active.end,
+        );
+        return;
+    }
+    if let super::playback::Mode::Arrangement(scene) = prepared.active.mode {
+        app.playback.pending = super::arrangement::remaining(
+            app,
+            scene,
+            prepared.active.start_seconds,
+            prepared.active.end,
+        );
+        return;
+    }
     let Some(loaded) = &app.loaded else {
         return;
     };

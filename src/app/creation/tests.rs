@@ -53,6 +53,7 @@ fn windows_control_modifier_creates_song_and_adds_track() {
     };
     key(&mut app, &ctx, Key::N, ctrl);
     assert!(app.loaded.is_some(), "Windows Ctrl+N must create a song");
+    key(&mut app, &ctx, Key::Escape, Modifiers::NONE);
     key(&mut app, &ctx, Key::N, ctrl | Modifiers::SHIFT);
     assert_eq!(app.track, 1);
     assert_eq!(app.loaded.as_ref().unwrap().music.tracks.len(), 2);
@@ -74,6 +75,7 @@ fn keyboard_new_add_play_and_undo_keep_unsaved_song_in_memory() {
         app.config.navigation.last_mid.as_ref().unwrap().to_str(),
         Some("X:/music/previous.mid")
     );
+    key(&mut app, &ctx, Key::Escape, Modifiers::NONE);
     key(&mut app, &ctx, Key::N, Modifiers::CTRL | Modifiers::SHIFT);
     assert_eq!(app.track, 1);
     let loaded = app.loaded.as_ref().unwrap();
@@ -100,6 +102,8 @@ fn keyboard_new_add_play_and_undo_keep_unsaved_song_in_memory() {
 fn new_song_respects_departure_and_overlay_ownership() {
     let mut app = empty();
     app.new_smf_unchecked();
+    app.edit_style = None;
+    app.edit_start = Default::default();
     app.add_track().unwrap();
     let ctx = egui::Context::default();
     app.help_open = true;
@@ -145,6 +149,8 @@ fn first_save_roundtrips_and_registers_real_path() {
 fn plus_is_below_tracks_and_click_selects_and_plays_appended_track() {
     let mut app = empty();
     app.new_smf_unchecked();
+    app.edit_style = None;
+    app.edit_start = Default::default();
     let ctx = egui::Context::default();
     let render = |app: &mut App, events| {
         ctx.run(

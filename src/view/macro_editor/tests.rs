@@ -71,12 +71,14 @@ fn draft_cancel_preserves_document_and_confirm_roundtrips_in_one_undo() {
     );
     assert!(!app.undo.available());
 }
+
 #[test]
 fn live_binding_updates_without_restarting_transport_and_commands_own_input() {
     let mut app = crate::view::tests::app(tracks::new_song());
     app.macro_editor.session = Some(session(&app));
     let row = &app.macro_editor.session.as_ref().unwrap().rows[0];
     let binding = crate::play::automation::Binding {
+        windows: Default::default(),
         curve: Arc::new(row.curve.clone()),
         live: Some(row.value.clone()),
         value: Default::default(),
@@ -401,3 +403,6 @@ mod randomize_tests;
 mod level_tests;
 
 mod keyboard;
+
+#[path = "tests/pattern.rs"]
+mod pattern_tests;

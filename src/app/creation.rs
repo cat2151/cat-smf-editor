@@ -25,12 +25,16 @@ impl App {
                     return false;
                 }
             };
-        self.install_document(
+        let installed = self.install_document(
             "untitled.mid".into(),
             "untitled.mid".into(),
             music,
             document,
-        )
+        );
+        if installed {
+            self.edit_start.new_document(self.song_id);
+        }
+        installed
     }
 
     pub(crate) fn add_track(&mut self) -> Result<(), String> {
@@ -75,8 +79,24 @@ impl App {
             .clone();
         let mut music = before.clone();
         edit(&mut music)?;
+        let scenes = cat_smf_editor::score::scene::read(&before)?;
+        if (!scenes.scenes.is_empty() || !scenes.lanes.is_empty())
+            && !music
+                .tracks
+                .iter()
+                .any(|t| t.events.iter().any(cat_smf_editor::score::scene::owned))
+        {
+            cat_smf_editor::score::scene::write(&mut music, &scenes)?;
+        }
+        cat_smf_editor::score::same_measure::validate(&music)?;
         cat_smf_editor::smf_io::encode(&music)?;
         let sound = self.resolve_sound(&music)?;
+        crate::view::parameter_editor::pattern_targets::changes(
+            self,
+            &before,
+            &music,
+            &sound.patches,
+        )?;
         self.saved
             .remember(&self.loaded.as_ref().unwrap().original, &music)?;
         crate::play::transport::stop(self);

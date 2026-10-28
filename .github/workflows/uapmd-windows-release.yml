@@ -39,7 +39,7 @@ jobs:
           CONFIG: ${{ inputs.config }}
           SKIP_UNCHANGED: ${{ inputs.skip-unchanged }}
           # Bump when changing the shared engine, including after centralization.
-          ENGINE_REVISION: '1'
+          ENGINE_REVISION: '2'
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: python
@@ -117,11 +117,14 @@ jobs:
       VERSION: ${{ needs.resolve.outputs.version }}
     steps:
       - run: git config --global core.longpaths true
+        id: longpaths
       - uses: actions/checkout@v7
+        id: checkout
         with:
           path: app
           persist-credentials: false
       - name: Checkout resolved sibling commits
+        id: siblings
         shell: python
         run: |
           import json, os, subprocess
@@ -133,6 +136,7 @@ jobs:
               git('-C', dep['path'], 'fetch', '--depth=1', 'origin', dep['sha'])
               git('-C', dep['path'], 'checkout', '--detach', 'FETCH_HEAD')
       - name: Update Rust and show tool versions
+        id: tools
         run: |
           rustup update stable --no-self-update
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -142,14 +146,33 @@ jobs:
           cargo -V
           cmake --version
       - name: Project build and checks
+        id: project
         working-directory: app
+        env:
+          DIAGNOSTICS_DIR: ${{ runner.temp }}/release-diagnostics
         run: |
-          & (Join-Path (Get-Location) $env:BUILD_SCRIPT)
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force $env:DIAGNOSTICS_DIR | Out-Null
+          $log = Join-Path $env:DIAGNOSTICS_DIR 'build.log'
+          try {
+            & (Join-Path (Get-Location) $env:BUILD_SCRIPT) *>&1 | Tee-Object -FilePath $log
+            $code = $LASTEXITCODE
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath $log -Append
+            throw
+          }
+          if ($code) { exit $code }
       - name: Test
+        id: test
         working-directory: app
-        run: cargo test --release --locked
+        env:
+          DIAGNOSTICS_DIR: ${{ runner.temp }}/release-diagnostics
+          RUST_BACKTRACE: '1'
+        run: |
+          New-Item -ItemType Directory -Force $env:DIAGNOSTICS_DIR | Out-Null
+          cargo test --release --locked *>&1 | Tee-Object -FilePath (Join-Path $env:DIAGNOSTICS_DIR 'test.log')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Package
+        id: package
         working-directory: app
         shell: python
         run: |
@@ -166,10 +189,72 @@ jobs:
                       raise ValueError('Invalid/missing package file: ' + file)
                   out.write(path, path.name)
       - uses: actions/upload-artifact@v7
+        id: archive
         with:
           name: windows-x64
           path: app/dist/*.zip
           if-no-files-found: error
+      - name: Write build diagnostics
+        if: always()
+        env:
+          DIAGNOSTICS_DIR: ${{ runner.temp }}/release-diagnostics
+          STEP_RESULTS: ${{ toJSON(steps) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: python
+        run: |
+          import html, json, os, pathlib, re, shutil, subprocess
+          root = pathlib.Path(os.environ['DIAGNOSTICS_DIR'])
+          root.mkdir(parents=True, exist_ok=True)
+          steps = json.loads(os.environ['STEP_RESULTS'])
+          metadata = {key: os.environ.get(key, '') for key in
+                      ['RUN_URL', 'GITHUB_SHA', 'GITHUB_RUN_ATTEMPT', 'RUNNER_OS', 'RUNNER_ARCH',
+                       'ImageOS', 'ImageVersion', 'PACKAGE', 'VERSION', 'BUILD_SCRIPT']}
+          metadata['steps'] = steps
+          metadata['dependencies'] = json.loads(os.environ['DEPENDENCIES'])
+          for dep in metadata['dependencies']:
+              result = subprocess.run(['git', '-C', dep['path'], 'rev-parse', 'HEAD'],
+                                      capture_output=True, text=True)
+              dep['checked_out_sha'] = result.stdout.strip() if result.returncode == 0 else None
+          (root / 'context.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
+          for name in ['CMakeCache.txt', 'CMakeFiles/CMakeConfigureLog.yaml']:
+              source = pathlib.Path('app/target/shim') / name
+              if source.is_file():
+                  shutil.copyfile(source, root / source.name)
+          lines = ['## Release build diagnostics', '', os.environ['RUN_URL'],
+                   '', 'App SHA: `' + os.environ['GITHUB_SHA'] + '`', '', '| Step | Outcome |', '| --- | --- |']
+          for name, result in steps.items():
+              lines.append(f'| {name} | {result["outcome"]} |')
+              if result['outcome'] == 'failure':
+                  print(f'::error title=Release step failed::{name}: see release-diagnostics artifact and job log.')
+          lines += ['', 'Full logs, dependency SHAs and CMake diagnostics: `release-diagnostics` artifact.',
+                    'Earlier checkout/tool failures: open the failed step in the job log.', '']
+          for name in ['build', 'test']:
+              path = root / (name + '.log')
+              if not path.is_file():
+                  continue
+              log = path.read_text(encoding='utf-8-sig', errors='replace').splitlines()
+              # Include the message after a panic, not only the assertion location.
+              hits = [i for i, line in enumerate(log) if re.search(
+                  r'(?i)(^\s*(?:error[\[:]|fatal:|CMake Error|FAILED:|failures:|test result: FAILED|---- .* stdout ----)|panicked at|^Exception:)', line)]
+              selected = sorted({j for i in hits for j in range(max(0, i - 1), min(len(log), i + 7))})
+              excerpt = [log[i] for i in selected][:160]
+              if not excerpt and steps.get('project' if name == 'build' else 'test', {}).get('outcome') == 'failure':
+                  excerpt = log[-80:]
+              if excerpt:
+                  lines += ['### ' + name + ' log excerpt', '', '<pre>',
+                            html.escape('\n'.join(excerpt)[:24000]), '</pre>', '']
+          report = '\n'.join(lines)
+          (root / 'summary.md').write_text(report, encoding='utf-8')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write(report)
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-diagnostics
+          path: ${{ runner.temp }}/release-diagnostics/
+          if-no-files-found: warn
+          retention-days: 14
   publish:
     needs: [resolve, build]
     if: inputs.publish
@@ -183,8 +268,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
+          name: windows-x64
           path: dist
-          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+          path: dist
       - name: Replace release after successful checks
         shell: bash
         run: |
@@ -200,3 +289,32 @@ jobs:
             cat error.txt >&2; exit 1
           fi
           gh release create "$TAG" dist/*.zip --target "$GITHUB_SHA" --title "$TAG" --notes-file dist/notes.md
+  report:
+    needs: [resolve, build, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release result
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: python
+        run: |
+          import json, os
+          jobs = json.loads(os.environ['JOB_RESULTS'])
+          lines = ['## Release result', '', os.environ['RUN_URL'], '',
+                   'App SHA: `' + os.environ['GITHUB_SHA'] + '`', '',
+                   '| Job | Result |', '| --- | --- |']
+          for name, job in jobs.items():
+              lines.append(f'| {name} | {job["result"]} |')
+              if job['result'] == 'failure':
+                  print(f'::error title=Release {name} failed::Open the {name} job log. '
+                        'For build/test failures, see the build summary and release-diagnostics artifact.')
+          build = jobs['resolve'].get('outputs', {}).get('build')
+          if build == 'false':
+              lines += ['', 'Build skipped: published inputs are unchanged.']
+          elif jobs['build']['result'] == 'failure':
+              lines += ['', 'Build/check/test/package pipeline failed; publication was skipped.',
+                        'See build summary and release-diagnostics artifact for step outcomes and error excerpts.']
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('\n'.join(lines) + '\n')

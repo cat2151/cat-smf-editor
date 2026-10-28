@@ -24,7 +24,7 @@ fn sources(app: &App) -> Vec<usize> {
 pub(super) fn ticks(app: &App) -> Option<(u64, u64)> {
     let range = range(app)?;
     let l = app.loaded.as_ref()?;
-    let events = &l.music.tracks[app.track].events;
+    let events = &l.visible().tracks[app.track].events;
     let tick = |r| crate::cursor::split::row_tick_loaded(l, app.note_mode, app.track, r);
     let a = tick(range.start);
     let mut b = tick(range.end - 1);
@@ -64,14 +64,25 @@ pub(super) fn apply(app: &mut App, action: Action) {
     let track = app.track;
     let selected = sources(app);
     let notes = app.note_mode;
+    if matches!(action, Action::DeleteEvents) {
+        let result = app.edit_music(|music| {
+            edit::event_range::delete(&mut music.tracks[track], &selected, notes)
+        });
+        match result {
+            Ok(()) => {
+                app.event_selection = State::default();
+                crate::cursor::moves::at_tick(app, start);
+            }
+            Err(error) => app.load_error = Some(error),
+        }
+        return;
+    }
     let all = whole(app);
     if matches!(action, Action::Init | Action::DeleteTrack) && !all {
         return;
     }
     let result = app.edit_tracks(|music| match action {
-        Action::DeleteEvents => {
-            edit::event_range::delete(&mut music.tracks[track], &selected, notes)
-        }
+        Action::DeleteEvents => unreachable!(),
         Action::Init => edit::event_range::initialize(music, track),
         Action::DeleteTrack => {
             if music.tracks.len() == 1 {

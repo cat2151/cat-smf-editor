@@ -16,6 +16,9 @@ use std::sync::{
 };
 use std::thread::JoinHandle;
 
+mod scores;
+pub(crate) use scores::scores;
+
 #[derive(Default)]
 pub struct State {
     job: Option<JoinHandle<Outcome>>,
@@ -113,15 +116,7 @@ pub fn takes(app: &mut App, prepared: &Prepared) -> Option<Vec<(usize, Arc<Take>
     if crate::view::voicevox::singer::running(app) {
         return None;
     }
-    let Some(loaded) = &app.loaded else {
-        return Some(Vec::new());
-    };
-    let singers: Vec<(usize, Score)> = prepared
-        .parts
-        .iter()
-        .filter(|(track, _, _)| loaded.music.tracks.get(*track).is_some_and(is_singer))
-        .filter_map(|(track, _, _)| Some((*track, score::from_track(&loaded.music, *track)?)))
-        .collect();
+    let singers = scores(app, prepared);
     if singers.is_empty() {
         return Some(Vec::new());
     }
@@ -244,7 +239,7 @@ pub fn note(app: &mut App, voice: Voice, pitch: (u8, u64)) -> Option<Arc<Vec<f32
 /// `track` の譜面と、その歌った WAV。まだなら一度だけ [`ahead`] で歌わせ始めて `None`。
 pub fn song(app: &mut App, track: usize) -> Option<(Score, Arc<Vec<f32>>)> {
     let loaded = app.loaded.as_ref()?;
-    if !loaded.music.tracks.get(track).is_some_and(is_singer) {
+    if !singer(app, track) {
         return None;
     }
     let score = score::from_track(&loaded.music, track)?;
@@ -261,10 +256,7 @@ pub fn song(app: &mut App, track: usize) -> Option<(Score, Arc<Vec<f32>>)> {
 
 /// 歌詞を確定したとき、`track` が歌う track なら、再生を待たずに裏で歌わせておく。
 pub fn ahead(app: &mut App, track: usize) {
-    let Some(loaded) = &app.loaded else {
-        return;
-    };
-    if !loaded.music.tracks.get(track).is_some_and(is_singer) {
+    if !singer(app, track) {
         return;
     }
     if running(app) {
@@ -315,7 +307,7 @@ fn start(app: &mut App, song: bool) {
         let state = &app.voicevox.prerender;
         missing.extend(
             (0..loaded.music.tracks.len())
-                .filter(|&track| is_singer(&loaded.music.tracks[track]))
+                .filter(|&track| singer(app, track))
                 .filter_map(|track| score::from_track(&loaded.music, track))
                 .map(|score| (cache::key(&score, rate), score))
                 .filter(|(key, _)| !state.sung.contains_key(key)),
@@ -328,6 +320,16 @@ fn start(app: &mut App, song: bool) {
         app.voicevox.prerender.singing.clear();
         app.voicevox.error = Some(error);
     }
+}
+
+/// Whether `track` sings when played: it has a voice and is not a pattern container that
+/// playback keeps silent.
+fn singer(app: &App, track: usize) -> bool {
+    app.loaded.as_ref().is_some_and(|loaded| {
+        track < loaded.music.tracks.len()
+            && is_singer(&loaded.music.tracks[track])
+            && !crate::play::playback::silent(app, track)
+    })
 }
 
 fn silent(keyed: &[(usize, String, Score)]) -> Vec<(usize, Arc<Take>)> {

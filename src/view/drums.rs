@@ -17,6 +17,7 @@ mod grid;
 mod layout_tests;
 #[cfg(test)]
 mod native_tests;
+mod pattern;
 pub(crate) mod playback;
 #[cfg(test)]
 mod tests;
@@ -100,6 +101,10 @@ pub fn open(app: &mut App) {
     if app.loaded.is_none() || super::parameter_editor::is_track(app) {
         return;
     }
+    if let Err(error) = pattern::edit(app) {
+        app.load_error = Some(error);
+        return;
+    }
     let division = app.loaded.as_ref().unwrap().music.division;
     if let Err(e) = drums::tick(division, 0) {
         app.load_error = Some(e);
@@ -177,7 +182,8 @@ fn ensure(app: &mut App) -> Result<(), String> {
 }
 
 type Catalog = [Vec<PatchReference>; 4];
-fn prepare(app: &mut App) -> Result<(Patch, Catalog), String> {
+pub(crate) use pattern::input;
+pub(crate) fn prepare(app: &mut App) -> Result<(Patch, Catalog), String> {
     let catalog = catalog::load(app)?;
     let settings = drums::Settings::default();
     let mut patch = Patch {

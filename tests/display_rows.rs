@@ -102,3 +102,19 @@ fn empty_measures_collapse_to_one_row_and_occupied_measures_keep_their_beats() {
         [4, 5, 6, 7]
     );
 }
+
+#[test]
+fn same_measure_keeps_real_events_without_synthetic_beats() {
+    let (_, r) = rows(
+        vec![
+            cat_smf_editor::score::same_measure::event(0, 3),
+            event(960, 0xb0, vec![1, 20]),
+            event(1920, 0x90, vec![60, 90]),
+        ],
+        480,
+    );
+    assert_eq!(
+        (0..r.len()).map(|i| label(&r, i)).collect::<Vec<_>>(),
+        ["event0", "event1", "event2"]
+    );
+}

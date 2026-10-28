@@ -76,6 +76,13 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             ] {
                 out.push(Command::plain(s, id, name, &[key], run));
             }
+            out.push(Command::plain(
+                s,
+                "pattern-windows-reset",
+                "Reset pattern windows position",
+                &[],
+                super::super::patterns::windows::reset,
+            ));
             if a.loaded.is_some() {
                 out.push(Command::plain(
                     s,
@@ -131,12 +138,27 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             }
             if let Some(l) = &a.loaded
                 && let Some(e) = a.selected_event
-                && l.music.tracks[a.track]
+                && l.visible().tracks[a.track]
                     .events
                     .get(e)
                     .is_some_and(cat_smf_editor::score::note_view::note_on)
-                && cat_smf_editor::edit::trill::ensure_note_editable(&l.music, a.track, e).is_ok()
+                && cat_smf_editor::edit::trill::ensure_note_editable(l.visible(), a.track, e)
+                    .is_ok()
             {
+                out.push(Command::plain(
+                    s,
+                    "edit-pitch",
+                    "Pitch",
+                    &[Key::P],
+                    |a, _| edit_menu::choose(a, Field::Pitch),
+                ));
+                out.push(Command::plain(
+                    s,
+                    "edit-velocity",
+                    "Velocity",
+                    &[Key::V],
+                    |a, _| edit_menu::choose(a, Field::Velocity),
+                ));
                 out.push(Command::plain(s, "edit-mbt", "MBT", &[Key::M], |a, _| {
                     edit_menu::choose(a, Field::Mbt)
                 }));

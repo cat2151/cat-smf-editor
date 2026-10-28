@@ -1,7 +1,6 @@
 //! Transient picker sweep; never writes a curve or changes the patch baseline.
 use super::*;
 use crate::play::{automation::OwnerPlan, transport};
-use cat_smf_editor::score::audition_timing::TempoMap;
 use std::sync::Arc;
 
 pub(crate) struct Preview {
@@ -138,10 +137,7 @@ pub(crate) fn apply(app: &App, prepared: &mut transport::Prepared) {
             || c.target.parameter_id != preview.curve.target.parameter_id
     });
     curves.push(preview.curve.clone());
-    let tempo = Arc::new(TempoMap::new(
-        &app.loaded.as_ref().unwrap().music,
-        preview.owner,
-    ));
+    let tempo = Arc::new(prepared.active.tempos[preview.owner].clone());
     let mut boundaries = previous
         .as_ref()
         .map_or_else(Vec::new, |o| o.boundaries.clone());
@@ -154,8 +150,25 @@ pub(crate) fn apply(app: &App, prepared: &mut transport::Prepared) {
     );
     boundaries.sort_by_key(|p| p.0);
     boundaries.dedup_by_key(|p| p.0);
+    let mut windows = previous
+        .as_ref()
+        .map_or_else(Default::default, |p| p.windows.clone());
+    windows.retain(|target, _| {
+        target.layer != preview.curve.target.layer
+            || target.parameter_id != preview.curve.target.parameter_id
+    });
+    let midi = previous.as_ref().is_some_and(|p| p.midi);
+    let mut live = previous
+        .as_ref()
+        .map_or_else(Default::default, |p| p.live.clone());
+    live.retain(|target, _| {
+        target.layer != preview.curve.target.layer
+            || target.parameter_id != preview.curve.target.parameter_id
+    });
     owners.push(Arc::new(OwnerPlan {
-        live: Default::default(),
+        windows,
+        midi,
+        live,
         owner: preview.owner,
         curves,
         tempo,

@@ -186,24 +186,34 @@ pub fn store_master(
 /// Writes one track's chain settings into the loaded SMF, keeping the playback position.
 pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(), String> {
     let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
-    if loaded.patches[track] == *settings {
+    let old = loaded
+        .patches
+        .get(track)
+        .ok_or("Missing sound owner")?
+        .clone();
+    if old == *settings {
         return Ok(());
     }
-    let session = app.session();
     let before = loaded.music.clone();
+    let original = loaded.original.clone();
+    let session = app.session();
     let mut music = before.clone();
-    let roots = &mut app
-        .patch_roots
-        .lookup(app.player_selection.executable.clone());
-    chain_settings::write(&mut music.tracks[track], settings, roots)?;
+    chain_settings::write(
+        &mut music.tracks[track],
+        settings,
+        &mut app
+            .patch_roots
+            .lookup(app.player_selection.executable.clone()),
+    )?;
     cat_smf_editor::score::macro_values::retain_unchanged_layers(
         &mut music.tracks[track],
-        &loaded.patches[track],
+        &old,
         settings,
     )?;
-    app.saved.remember(&loaded.original, &music)?;
-    // Playback continues through a bypass change so that it can be compared by ear.
-    let live = loaded.patches[track].same_except_bypass(settings);
+    cat_smf_editor::score::same_measure::validate(&music)?;
+    crate::view::parameter_editor::pattern_targets::sound(app, &music, track, settings)?;
+    app.saved.remember(&original, &music)?;
+    let live = old.same_except_bypass(settings);
     let resume = if live {
         app.audition.set_effect_bypass(track, settings);
         None
@@ -214,10 +224,11 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
     };
     let loaded = app.loaded.as_mut().unwrap();
     loaded.music = music;
-    app.undo.push(before);
     loaded.patches[track] = settings.clone();
     loaded.refresh();
+    app.undo.push(before);
     app.generation += 1;
+    crate::view::patterns::refresh(app);
     if let Some(session) = session {
         app.restore_position(&session);
     }

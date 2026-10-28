@@ -210,16 +210,26 @@ impl Native {
             }
             result[index].values.push(parameter.binding);
             result[index].lanes.push(Binding {
+                windows: plan.windows.get(&curve.target).cloned().unwrap_or_default(),
                 live: plan.live.get(&curve.target).cloned(),
                 curve: curve.clone(),
                 value: parameter.binding,
             });
         }
-        self.automated = !result.is_empty();
+        self.automated = !result.is_empty() || plan.midi;
         self.automated_layers = result
             .iter()
             .map(|b| (b.layer, self.layers[b.layer].parameter_list_changes()))
             .collect();
+        if plan.midi {
+            for (index, layer) in self.layers.iter().enumerate() {
+                if !self.automated_layers.iter().any(|&(i, _)| i == index) {
+                    layer.prepare_parameters()?;
+                    self.automated_layers
+                        .push((index, layer.parameter_list_changes()));
+                }
+            }
+        }
         Ok(result)
     }
 
@@ -264,10 +274,10 @@ impl Native {
             .iter()
             .zip(&self.settings.layers)
             .map(|(chain, layer)| {
-                (
-                    cat_smf_editor::note_render::Render::new(unsafe { chain.audio_ref() }),
-                    layer.settings.clone(),
-                )
+                let mut render =
+                    cat_smf_editor::note_render::Render::new(unsafe { chain.audio_ref() });
+                render.set_ordered_controls(self.automated);
+                (render, layer.settings.clone())
             })
             .collect();
         let mut render = super::layer_render::Render::new(
@@ -281,9 +291,10 @@ impl Native {
     }
 
     pub fn silence(&self, out: &mut [f32]) -> bool {
+        let words = std::array::from_fn::<_, 16, _>(|ch| 0x20b0_7800 | ((ch as u32) << 16));
         self.layers
             .iter()
-            .all(|chain| unsafe { chain.audio_ref() }.process(&[0x20b0_7800], out, 2))
+            .all(|chain| unsafe { chain.audio_ref() }.process(&words, out, 2))
     }
 }
 

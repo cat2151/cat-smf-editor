@@ -2,7 +2,9 @@
 use crate::{app::App, view::note_edit::Field};
 use eframe::egui;
 
-const CHOICES: [(egui::Key, Field, &str); 3] = [
+const CHOICES: [(egui::Key, Field, &str); 5] = [
+    (egui::Key::P, Field::Pitch, "p: Pitch"),
+    (egui::Key::V, Field::Velocity, "v: Velocity"),
     (egui::Key::M, Field::Mbt, "m: MBT"),
     (egui::Key::D, Field::Duration, "d: Duration"),
     (egui::Key::L, Field::Lyrics, "l: Lyrics"),
@@ -44,7 +46,7 @@ fn step_off_lyric_row(app: &mut App) {
     let (Some(loaded), Some(selected)) = (&app.loaded, app.selected_event) else {
         return;
     };
-    let events = &loaded.music.tracks[app.track].events;
+    let events = &loaded.visible().tracks[app.track].events;
     let lyric = events
         .get(selected)
         .is_some_and(|e| e.status == 0xff && e.meta_type == cat_smf_editor::edit::lyric::LYRIC);

@@ -60,6 +60,9 @@ pub struct Status {
     pub analysis_window: Option<[f32; 4]>,
     #[serde(default)]
     pub analysis_open: bool,
+    /// Pattern companion windows: outer x/y and inner width/height.
+    #[serde(default)]
+    pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
     /// VOICEVOX engine の `run.exe`。
     #[serde(default)]
     pub voicevox_engine: Option<PathBuf>,
@@ -86,6 +89,7 @@ pub struct Store {
     pub patch_cursors: std::collections::BTreeMap<String, PatchIdentity>,
     pub analysis_window: Option<[f32; 4]>,
     pub analysis_open: bool,
+    pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
     pub voicevox_engine: Option<PathBuf>,
     pub mascot_enabled: bool,
     pub error: Option<String>,
@@ -111,6 +115,7 @@ impl Default for Status {
             patch_cursors: Default::default(),
             analysis_window: None,
             analysis_open: false,
+            pattern_windows: Default::default(),
             voicevox_engine: None,
             mascot_enabled: false,
         }
@@ -137,6 +142,7 @@ impl Default for Store {
             patch_cursors: Default::default(),
             analysis_window: None,
             analysis_open: false,
+            pattern_windows: Default::default(),
             voicevox_engine: None,
             mascot_enabled: false,
             error: None,
@@ -193,6 +199,7 @@ impl Store {
                     patch_cursors,
                     analysis_window,
                     analysis_open,
+                    pattern_windows,
                     voicevox_engine,
                     mascot_enabled,
                 }) => {
@@ -211,6 +218,12 @@ impl Store {
                         window.iter().all(|n| n.is_finite()) && window[2] > 0.0 && window[3] > 0.0
                     });
                     store.analysis_open = analysis_open;
+                    store.pattern_windows = pattern_windows
+                        .into_iter()
+                        .filter(|(_, w)| {
+                            w.iter().all(|v| v.is_finite()) && w[2] > 0.0 && w[3] > 0.0
+                        })
+                        .collect();
                     store.voicevox_engine = voicevox_engine;
                     store.mascot_enabled = mascot_enabled;
                 }
@@ -362,6 +375,7 @@ impl Store {
                 patch_cursors: self.patch_cursors.clone(),
                 analysis_window: self.analysis_window,
                 analysis_open: self.analysis_open,
+                pattern_windows: self.pattern_windows.clone(),
                 voicevox_engine: self.voicevox_engine.clone(),
                 mascot_enabled: self.mascot_enabled,
             })?;

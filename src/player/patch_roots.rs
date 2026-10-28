@@ -112,6 +112,7 @@ thread_local! {
     static BUNDLES: std::cell::RefCell<std::collections::HashMap<String, String>> =
         Default::default();
     static ROOT: std::cell::RefCell<String> = "X:/".to_owned().into();
+    static ACTUAL: std::cell::RefCell<Option<Table>> = const {std::cell::RefCell::new(None)};
 }
 
 /// Tests never start a player: every plugin keeps its patches under one root (`X:/` unless
@@ -120,7 +121,20 @@ thread_local! {
 pub struct Assumed;
 
 #[cfg(test)]
+pub struct ActualRoots(Option<Table>);
+#[cfg(test)]
+impl Drop for ActualRoots {
+    fn drop(&mut self) {
+        ACTUAL.set(self.0.take());
+    }
+}
+
+#[cfg(test)]
 impl Assumed {
+    /// Opt-in real-data probes use production roots without synthetic bundle guesses.
+    pub fn with_table(table: Table) -> ActualRoots {
+        ActualRoots(ACTUAL.replace(Some(table)))
+    }
     pub fn set_root(root: &std::path::Path) {
         ROOT.set(root.to_string_lossy().into_owned());
     }
@@ -129,6 +143,11 @@ impl Assumed {
 #[cfg(test)]
 impl Roots for Assumed {
     fn plugin(&mut self, key: &PluginKey, _: bool) -> Result<Plugin, String> {
+        if let Some(result) =
+            ACTUAL.with_borrow(|table| table.as_ref().map(|table| table.plugin(key)))
+        {
+            return result;
+        }
         let bundle_path = BUNDLES.with_borrow_mut(|bundles| {
             if !key.bundle_path.is_empty() {
                 bundles.insert(key.id.clone(), key.bundle_path.clone());
@@ -143,7 +162,7 @@ impl Roots for Assumed {
         })
     }
 
-    fn exists(&self, _: &std::path::Path) -> bool {
-        true
+    fn exists(&self, path: &std::path::Path) -> bool {
+        ACTUAL.with_borrow(|table| table.is_none()) || path.exists()
     }
 }

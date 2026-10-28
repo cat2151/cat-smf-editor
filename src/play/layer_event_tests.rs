@@ -36,6 +36,40 @@ impl Effect for NoEffect {
 }
 
 #[test]
+fn channel_controls_broadcast_to_drum_layers_without_pitch_routing() {
+    let records: Vec<_> = (0..4).map(|_| Rc::new(RefCell::new(Vec::new()))).collect();
+    let mut render = Render::<_, NoEffect>::new(
+        records
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                (
+                    Recorder(r.clone()),
+                    Layer {
+                        id: i as u64 + 1,
+                        octave: 2,
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect(),
+        None,
+    );
+    render.set_drums(Some(Default::default()));
+    let mut seq = Sequence::new(vec![], 1.0);
+    let expected = vec![0x20b3_077f, 0x20e3_0060, 0x20b3_407f];
+    seq.events = expected
+        .iter()
+        .map(|&word| crate::play::audio_sequence::MidiEvent { time: 0., word })
+        .collect();
+    let timeline = Timeline::new(&seq, 0., 48000);
+    assert!(render.process_scheduled(&timeline, None, 0, &mut [0.; 2], 2));
+    for record in records {
+        assert_eq!(record.borrow()[0], expected);
+    }
+}
+
+#[test]
 fn drum_rows_receive_only_their_note_on_and_off_at_the_configured_pitch() {
     let records: Vec<_> = (0..4).map(|_| Rc::new(RefCell::new(Vec::new()))).collect();
     let mut render = Render::<_, NoEffect>::new(

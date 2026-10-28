@@ -43,6 +43,7 @@ impl History {
 
 impl App {
     pub fn undo_music(&mut self) -> Result<(), String> {
+        let independent = self.patterns.editing.clone().filter(|c| c.standalone);
         let Some(music) = self.undo.entries.back().cloned() else {
             return Ok(());
         };
@@ -63,6 +64,9 @@ impl App {
         self.install_music(music, false);
         // Reject delayed browser selections prepared against the state we just left.
         self.song_id = self.song_id.wrapping_add(1);
+        self.patterns.editing = independent;
+        self.patterns.edit_song = self.song_id;
+        crate::view::patterns::refresh(self);
         self.undo.end_volume_gesture();
         self.undo.entries.pop_back();
         Ok(())
@@ -85,6 +89,22 @@ impl App {
     }
 
     fn install_music(&mut self, music: Music, restart: bool) {
+        if self.patterns.raw_context.is_some() {
+            let identity = |m: &Music| {
+                cat_smf_editor::score::pattern::Catalog::read(m)
+                    .ok()?
+                    .tracks
+                    .into_iter()
+                    .find_map(|(id, track)| (track == self.track).then_some(id))
+            };
+            let keep = self.loaded.as_ref().is_some_and(|loaded| {
+                let previous = identity(&loaded.music);
+                previous.is_some() && previous == identity(&music)
+            });
+            if !keep {
+                self.patterns.raw_context = None;
+            }
+        }
         let restore_parameters = self.loaded.as_ref().is_some_and(|loaded| {
             use cat_smf_editor::edit::parameter_curve;
             match (
@@ -108,6 +128,7 @@ impl App {
         loaded.music = music;
         loaded.refresh();
         self.generation += 1;
+        crate::view::patterns::refresh(self);
         if restore_parameters && restart {
             self.audition.restore_automated_baselines();
         }

@@ -11,7 +11,7 @@ pub(super) fn rows(ui: &mut egui::Ui) {
             (
                 Color32::from_rgb(0xa6, 0xe2, 0x2e),
                 &[
-                    ("左クリック / Enter", "全trackをその小節から演奏"),
+                    ("左クリック / Enter", "全track演奏"),
                     ("右クリック", "track play / jump"),
                     ("t / g", "track play / jump"),
                     ("p / Space", "再生menu / 前回の再生"),

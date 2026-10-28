@@ -40,12 +40,15 @@ pub(super) fn draw(
         note.max.y *= factor;
         notes_painter.rect_filled(note.translate(notes_rect.min.to_vec2()), 0.0, color);
     }
-    crate::view::piano_roll::lyrics::draw(&notes_painter, layout, |i| {
-        let mut note = layout.notes[i].1;
+    let place = |mut note: egui::Rect| {
         note.min.y *= factor;
         note.max.y *= factor;
         note.translate(notes_rect.min.to_vec2())
-    });
+    };
+    crate::view::piano_roll::lyrics::draw(
+        &notes_painter,
+        layout.labels(place, |i| place(layout.notes[i].1)),
+    );
     let painter = &painter.with_clip_rect(painter.clip_rect().intersect(roll.rect.expand(HIT)));
     let rect = roll.rect;
     draw_beats(painter, rect, &layout.beats);

@@ -145,25 +145,29 @@ fn note_rects(output: &egui::FullOutput) -> Vec<egui::Rect> {
 }
 
 #[test]
-fn r_opens_and_r_or_escape_close_while_other_keys_stay_inside() {
+fn r_and_escape_close_and_v_returns_to_the_raw_event_list() {
     let mut app = arpeggio();
     let ctx = egui::Context::default();
     render(&mut app, &ctx, vec![]);
     press(&mut app, &ctx, egui::Key::R);
     assert!(app.piano_roll.open);
-    press(&mut app, &ctx, egui::Key::V);
-    assert!(
-        app.note_mode,
-        "V must not reach the view while the roll is open"
-    );
+    press(&mut app, &ctx, egui::Key::T);
+    assert!(!app.player_selection.open);
     press(&mut app, &ctx, egui::Key::R);
     assert!(!app.piano_roll.open);
     press(&mut app, &ctx, egui::Key::R);
     assert!(app.piano_roll.open);
     press(&mut app, &ctx, egui::Key::Escape);
     assert!(!app.piano_roll.open);
+    press(&mut app, &ctx, egui::Key::R);
+    let before = cat_smf_editor::smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap();
     press(&mut app, &ctx, egui::Key::V);
     assert!(!app.note_mode);
+    assert!(!app.piano_roll.open);
+    assert_eq!(
+        cat_smf_editor::smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap(),
+        before
+    );
 }
 
 #[test]
@@ -406,6 +410,7 @@ mod colors;
 mod lyrics;
 
 mod keyboard;
+mod pattern;
 mod references;
 mod staff;
 mod tempo_layers;

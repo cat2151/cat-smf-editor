@@ -20,7 +20,9 @@ pub(crate) fn targets(music: &Music) -> Vec<usize> {
         .tracks
         .iter()
         .enumerate()
-        .filter(|(_, track)| has_notes(track))
+        .filter(|(i, track)| {
+            has_notes(track) && !cat_smf_editor::score::pattern::is_source(music, *i)
+        })
         .map(|(index, _)| index)
         .collect()
 }
@@ -40,7 +42,11 @@ pub(crate) fn same_program(music: &Music) -> bool {
 
 pub(crate) fn request(app: &mut App) {
     app.player_selection.layer = None;
-    let bulk = app.config.program_target == ProgramTarget::Auto
+    let bulk = !app
+        .loaded
+        .as_ref()
+        .is_some_and(|l| cat_smf_editor::score::pattern::is_source(&l.music, app.track))
+        && app.config.program_target == ProgramTarget::Auto
         && app.loaded.as_ref().is_some_and(|l| same_program(&l.music));
     open_mode(app, Browser::Patch, bulk, None);
 }

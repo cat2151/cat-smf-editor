@@ -36,6 +36,22 @@ fn words(timeline: &Timeline, sample: u64) -> Vec<u32> {
 }
 
 #[test]
+fn source_controls_keep_order_and_do_not_close_same_numbered_notes() {
+    let seq = sequence(music(&[
+        (0, 0x93, 7, 100),
+        (0, 0xb3, 7, 64),
+        (240, 0xe3, 0, 96),
+        (480, 0x83, 7, 37),
+        (480, 0xb3, 7, 100),
+    ]));
+    let timeline = Timeline::new(&seq, 0., 48000);
+    assert_eq!(words(&timeline, 0), vec![0x2093_0764, 0x20b3_0740]);
+    assert_eq!(words(&timeline, 12000), vec![0x20e3_0060]);
+    assert_eq!(words(&timeline, 24000), vec![0x2083_0725, 0x20b3_0764]);
+    assert_eq!(seq.events.len(), 5);
+}
+
+#[test]
 fn source_off_on_order_release_velocity_and_channels_survive_playback() {
     let seq = sequence(music(&[
         (0, 0x92, 72, 100),
@@ -180,6 +196,8 @@ fn automation_uses_the_same_note_samples_and_preserves_order() {
         (13, 0x80, 60, 0),
     ]);
     let owner = Arc::new(OwnerPlan {
+        windows: Default::default(),
+        midi: false,
         owner: 0,
         live: Default::default(),
         curves: vec![],

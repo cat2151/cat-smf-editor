@@ -13,6 +13,22 @@ pub(super) struct State {
     error: Option<String>,
 }
 
+impl State {
+    /// The input state opened by a palette command id, if the id belongs to event insertion.
+    pub(super) fn for_command(id: &str) -> Option<Self> {
+        let kind = match id {
+            "insert-event" => None,
+            "insert-tempo" => Some(Kind::Tempo),
+            "insert-key-signature" => Some(Kind::KeySignature),
+            _ => return None,
+        };
+        Some(Self {
+            kind,
+            ..Self::default()
+        })
+    }
+}
+
 fn apply(app: &mut App, kind: Kind, text: &str) -> Result<(), String> {
     let tick = crate::play::playback::location(app).0;
     let before = app.loaded.as_ref().ok_or("No SMF is loaded")?.music.clone();
@@ -304,6 +320,67 @@ mod tests {
         let bytes = cat_smf_editor::smf_io::encode(music).unwrap();
         assert!(!bytes.is_empty());
     }
+    /// Opens a direct insertion command from the palette and types `value` into its input.
+    fn direct(a: &mut App, c: &egui::Context, command: &str, value: &str) {
+        open(a, c);
+        query(a, c, command);
+        press(a, c, Key::Enter);
+        // The modal takes focus on the frame after the palette chose the command.
+        frame(a, c, vec![]);
+        assert!(a.palette.insert_event.as_ref().unwrap().kind.is_some());
+        frame(a, c, vec![egui::Event::Text(value.into())]);
+        press(a, c, Key::Enter);
+    }
+
+    #[test]
+    fn direct_commands_skip_the_kind_list_and_insert_undoably() {
+        for (command, value, meta_type, data) in [
+            ("insert tempo", "140", 0x51, vec![6, 138, 27]),
+            ("insert key signature", "D minor", 0x59, vec![255, 1]),
+        ] {
+            let mut a = app();
+            let c = egui::Context::default();
+            let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
+            direct(&mut a, &c, command, value);
+            assert!(
+                !a.palette.is_open(),
+                "{command}: state={:?}",
+                a.palette
+                    .insert_event
+                    .as_ref()
+                    .map(|s| (s.kind, &s.query, &s.error))
+            );
+            let events = &a.loaded.as_ref().unwrap().music.tracks[a.track].events;
+            assert_eq!(events[0].meta_type, meta_type, "{command}");
+            assert_eq!(events[0].data, data, "{command}");
+            assert!(a.undo.available());
+            a.undo_music().unwrap();
+            assert_eq!(
+                cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap(),
+                before
+            );
+        }
+    }
+
+    #[test]
+    fn direct_tempo_rejects_invalid_value_and_escape_closes() {
+        let mut a = app();
+        let c = egui::Context::default();
+        let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
+        direct(&mut a, &c, "insert tempo", "NaN");
+        let state = a.palette.insert_event.as_ref().unwrap();
+        assert_eq!(state.kind, Some(Kind::Tempo));
+        assert_eq!(state.query, "NaN");
+        assert!(state.error.is_some());
+        assert!(!a.undo.available());
+        press(&mut a, &c, Key::Escape);
+        assert!(!a.palette.is_open());
+        assert_eq!(
+            cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap(),
+            before
+        );
+    }
+
     #[test]
     fn keyboard_insertion_is_atomic_undoable_and_suspends_shortcuts() {
         let mut a = app();

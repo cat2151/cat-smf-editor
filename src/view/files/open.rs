@@ -49,6 +49,21 @@ mod tests {
         assert!(app.saved.is_untitled());
         assert_eq!(app.loaded.as_ref().unwrap().name, "untitled.mid");
         assert!(app.load_error.is_none());
+        assert!(app.edit_style.is_none());
+        let _ = ctx.run(Default::default(), |ctx| crate::view::show(&mut app, ctx));
+        let _ = ctx.run(
+            egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: Key::Escape,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::NONE,
+                }],
+                ..Default::default()
+            },
+            |ctx| crate::view::show(&mut app, ctx),
+        );
         press(&mut app, &ctx, Modifiers::CTRL, false);
         assert!(app.file_open_requested);
     }

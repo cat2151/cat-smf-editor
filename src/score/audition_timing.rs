@@ -6,6 +6,18 @@ pub struct TempoMap {
     segments: Vec<(u64, f64, f64)>,
 }
 impl TempoMap {
+    pub fn constant(division: u16, bpm: f64) -> Result<Self, String> {
+        if division == 0 || division & 0x8000 != 0 || !bpm.is_finite() || bpm <= 0.0 {
+            return Err("Invalid audition tempo or PPQN timing".into());
+        }
+        let slope = 60.0 / bpm / f64::from(division);
+        if !slope.is_finite() || slope <= 0.0 {
+            return Err("Unrepresentable audition tempo".into());
+        }
+        Ok(Self {
+            segments: vec![(0, 0.0, slope)],
+        })
+    }
     pub fn new(music: &Music, track: usize) -> Self {
         if music.division & 0x8000 != 0 {
             let fps = -i16::from((music.division >> 8) as i8);

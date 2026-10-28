@@ -62,7 +62,7 @@ impl App {
         } else {
             row
         };
-        let tick = loaded.music.tracks[self.track].events[source].tick;
+        let tick = loaded.visible().tracks[self.track].events[source].tick;
         (
             loaded.time.map(self.track).map(|m| m.position(tick)),
             Some(tick),
@@ -130,14 +130,14 @@ impl App {
         let Some(loaded) = &self.loaded else {
             return;
         };
-        if loaded.music.tracks.is_empty() {
+        if loaded.visible().tracks.is_empty() {
             return;
         }
         self.select_track(
             session
                 .track
                 .saturating_sub(1)
-                .min(loaded.music.tracks.len() - 1),
+                .min(loaded.visible().tracks.len() - 1),
         );
         let tracks = self.loaded.as_ref().unwrap().music.tracks.len();
         let active = session.split_active.min(1);
@@ -155,7 +155,7 @@ impl App {
         let count = if self.note_mode {
             loaded.display_rows[self.track].len()
         } else {
-            loaded.music.tracks[self.track].events.len()
+            loaded.visible().tracks[self.track].events.len()
         };
         if count == 0 || session.row.is_none() {
             return;
@@ -197,7 +197,12 @@ impl App {
                 .map(self.track)
                 .and_then(|m| m.tick_at(&position))
                 && actual != Some(tick)
-                && tick <= loaded.music.tracks[self.track].events.last().unwrap().tick
+                && tick
+                    <= loaded.visible().tracks[self.track]
+                        .events
+                        .last()
+                        .unwrap()
+                        .tick
             {
                 self.cursor_position = Some(position);
                 self.selected_event = None;

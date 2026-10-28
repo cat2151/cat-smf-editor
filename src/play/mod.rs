@@ -1,5 +1,6 @@
 //! 再生と音声: 再生範囲・transport・試聴・mixer・トラック音量。
 pub(crate) mod analysis;
+pub(crate) mod arrangement;
 mod audio_diagnostics;
 pub(crate) mod audio_sequence;
 pub(crate) mod audition;
@@ -13,6 +14,7 @@ pub(crate) mod mascot;
 pub(crate) mod mixer;
 pub(crate) mod playback;
 pub(crate) mod selection_playback;
+mod sequence_seek;
 pub(crate) mod sung;
 pub(crate) mod track_volume;
 pub(crate) mod transport;

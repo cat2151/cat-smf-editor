@@ -19,8 +19,7 @@ pub(super) fn show(app: &mut App, view: View) {
         View::Mixer => crate::play::mixer::open(app),
         View::DoubleScore => {
             if !app.note_mode {
-                app.note_mode = true;
-                crate::cursor::moves::sync_mode(app);
+                crate::view::patterns::mode::toggle(app);
             }
             crate::cursor::split::split_on(app);
         }
@@ -44,7 +43,7 @@ pub(super) fn show(app: &mut App, view: View) {
         | View::Effects(track)
         | View::Macros(track, _)
         | View::Variation(track, _) => {
-            if app.track != track {
+            if app.track != track || matches!(view, View::Score(_)) {
                 crate::cursor::split::go(app, track, crate::play::playback::location(app).0);
             }
             match view {

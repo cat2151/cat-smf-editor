@@ -19,6 +19,22 @@ pub(super) fn open(app: &mut crate::app::App) {
     }
 }
 
+pub(super) fn show_for(
+    app: &crate::app::App,
+    ui: &mut egui::Ui,
+    track: usize,
+) -> (bool, Option<usize>) {
+    if app
+        .patterns
+        .editing
+        .as_ref()
+        .is_some_and(|c| c.standalone && c.track == track)
+    {
+        (false, None)
+    } else {
+        show(app.loaded.as_ref().unwrap(), ui, track)
+    }
+}
 pub(super) fn show(loaded: &Loaded, parent: &mut egui::Ui, track: usize) -> (bool, Option<usize>) {
     let mut patch = false;
     let mut effect = None;
@@ -89,23 +105,73 @@ pub(super) fn show(loaded: &Loaded, parent: &mut egui::Ui, track: usize) -> (boo
             effect = Some(slot);
         }
     }
-    if let Some(map) = loaded.time.map(track) {
-        let warnings: Vec<&str> = map
-            .assumed_four_four
-            .then_some("有効な拍子が無いため tick 0 で 4/4 とみなした。")
-            .into_iter()
-            .chain(map.warnings.iter().map(String::as_str))
-            .collect();
-        if !warnings.is_empty() {
-            ui.label(RichText::new(format!("Warnings {}", warnings.len())).color(Color32::YELLOW))
-                .on_hover_text(warnings.join("\n"));
-        }
+    if let Some(map) = loaded.time.map(track)
+        && !map.warnings.is_empty()
+    {
+        warnings(
+            ui,
+            parent.id().with(("track-warnings", track)),
+            &map.warnings,
+        );
     }
     parent.advance_cursor_after_rect(egui::Rect::from_min_size(
         line.min,
         egui::vec2(line.width(), ui.min_rect().height()),
     ));
     (patch, effect)
+}
+
+/// Where the open warnings popup records its id for [`close_warnings_on_escape`].
+const OPEN_WARNINGS: &str = "track-warnings-open";
+
+/// `Warnings N` toggles a popup listing one warning per line.
+fn warnings(ui: &mut egui::Ui, popup: egui::Id, warnings: &[String]) {
+    let text = warnings.join("\n");
+    let response = ui
+        .add(
+            egui::Label::new(
+                RichText::new(format!("Warnings {}", warnings.len())).color(Color32::YELLOW),
+            )
+            .sense(egui::Sense::click()),
+        )
+        .on_hover_text(&text);
+    if response.clicked() {
+        ui.memory_mut(|m| m.toggle_popup(popup));
+    }
+    let shown = egui::popup_below_widget(
+        ui,
+        popup,
+        &response,
+        egui::PopupCloseBehavior::CloseOnClickOutside,
+        |ui| {
+            ui.set_min_width(ui.available_width().max(200.0));
+            for warning in warnings {
+                ui.add(egui::Label::new(warning).extend());
+            }
+        },
+    );
+    if shown.is_some() {
+        ui.data_mut(|d| d.insert_temp(egui::Id::new(OPEN_WARNINGS), popup));
+    }
+}
+
+/// Esc closes an open warnings popup and is consumed, so the screen under it keeps its state.
+pub(crate) fn close_warnings_on_escape(app: &crate::app::App, ctx: &egui::Context) {
+    use crate::view::commands::{owner, Screen};
+    let Some(popup) = ctx.data(|d| d.get_temp::<egui::Id>(egui::Id::new(OPEN_WARNINGS))) else {
+        return;
+    };
+    if !ctx.memory(|m| m.is_popup_open(popup))
+        || !matches!(
+            owner(app, ctx),
+            Screen::Main | Screen::Selection | Screen::Timeline | Screen::Mixer
+        )
+    {
+        return;
+    }
+    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        ctx.memory_mut(|m| m.close_popup());
+    }
 }
 
 /// Monokai accents apart from the effect blue, so neighboring layers differ.

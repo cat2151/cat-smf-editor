@@ -120,7 +120,13 @@ impl Mixer {
                 .parts
                 .get(i)
                 .and_then(|p| p.automation.as_deref())
-                .filter(|_| !state.cursor.finished);
+                .filter(|_| {
+                    command
+                        .parts
+                        .get(i)
+                        .and_then(|p| p.timeline.as_ref())
+                        .map_or(!state.cursor.finished, |t| frame <= t.end)
+                });
             let timeline = command
                 .parts
                 .get(i)

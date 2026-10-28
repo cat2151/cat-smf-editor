@@ -4,7 +4,7 @@ mod feedback;
 mod migemo;
 mod navigation;
 mod ranking;
-pub(super) fn app() -> App {
+pub(crate) fn app() -> App {
     crate::view::tests::app(Music {
         format: 1,
         division: 480,

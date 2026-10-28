@@ -313,6 +313,7 @@ fn automation_layer_batch_precedes_notes_and_preserves_other_layers_and_effect_s
     render.set_automation(vec![LayerBindings {
         layer: 0,
         lanes: vec![Binding {
+            windows: Default::default(),
             live: None,
             curve: owner.curves[0].clone(),
             value: token,

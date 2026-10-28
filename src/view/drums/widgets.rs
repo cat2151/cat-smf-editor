@@ -28,6 +28,9 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
         return;
     };
     let track = app.track;
+    let beacon = crate::view::patterns::beacon::focused(ctx)
+        && crate::view::patterns::mode::editing(app, track)
+            .is_some_and(|c| crate::view::patterns::beacon::empty(&loaded.music, c.pattern));
     let patch = &loaded.patches[track];
     let state = &mut app.drum_editor;
     let mut open = state.open;
@@ -122,7 +125,16 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
                 });
                 match &measure {
                     Ok(measure) => {
-                        super::grid::show(ui, &loaded.music, track, patch, state, measure, action);
+                        super::grid::show(
+                            ui,
+                            loaded.visible(),
+                            track,
+                            patch,
+                            state,
+                            measure,
+                            beacon,
+                            action,
+                        );
                     }
                     Err(e) => {
                         ui.colored_label(Color32::LIGHT_RED, e);

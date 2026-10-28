@@ -102,6 +102,7 @@ fn pending_and_audio_before_first_callback_do_not_play() {
     app.playback.pending = Some(super::super::transport::Prepared {
         parts: vec![],
         active,
+        origin: None,
     });
     assert!(!snapshot(&app).playing);
     app.playback.active = app.playback.pending.take().map(|p| p.active);

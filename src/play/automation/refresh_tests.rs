@@ -168,6 +168,8 @@ fn fixture() -> (Patch, Automation) {
     });
     let automation = Automation {
         owners: Arc::new(vec![Arc::new(OwnerPlan {
+            windows: Default::default(),
+            midi: false,
             live: Default::default(),
             owner: 0,
             curves: vec![Arc::new(Curve {

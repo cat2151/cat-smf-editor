@@ -6,6 +6,7 @@ import contextlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import tomllib
@@ -233,6 +234,110 @@ class ReleaseWorkflowTests(unittest.TestCase):
                           ['first/LICENSE', 'second/license']]:
                 with self.assertRaises(ValueError):
                     self.package(files)
+
+
+class ReleaseDiagnosticsTests(unittest.TestCase):
+    def diagnostics(self, outcomes, dependencies=None):
+        env = {'DIAGNOSTICS_DIR': str(Path('diagnostics').resolve()),
+               'STEP_RESULTS': json.dumps({name: {'outcome': result} for name, result in outcomes.items()}),
+               'DEPENDENCIES': json.dumps(dependencies or []), 'GITHUB_SHA': SHA,
+               'RUN_URL': 'https://github.com/example/app/actions/runs/123',
+               'GITHUB_STEP_SUMMARY': str(Path('summary').resolve())}
+        with patch.dict(os.environ, env):
+            exec(compile(step('build', 'Write build diagnostics'), '<diagnostics>', 'exec'), {})
+        return Path('summary').read_text(encoding='utf-8')
+
+    def test_failed_tests_keep_panic_cause_and_full_log(self):
+        with workspace():
+            Path('diagnostics').mkdir()
+            # Successful tests containing "error" must not crowd the real failure out.
+            log = ('test error_handling ... ok\n' * 300
+                   + "thread 'variation' panicked at src/view/fixture.rs:10:5:\n"
+                   + 'Default instrument missing: Surge XT.clap <missing>\n'
+                   + 'test result: FAILED. 8 failed\n')
+            Path('diagnostics/test.log').write_text(log, encoding='utf-8')
+            summary = self.diagnostics({'project': 'success', 'test': 'failure', 'package': 'skipped'})
+            self.assertIn('| test | failure |', summary)
+            self.assertIn('src/view/fixture.rs:10:5', summary)
+            self.assertIn('Default instrument missing: Surge XT.clap &lt;missing&gt;', summary)
+            self.assertIn('test result: FAILED', summary)
+            self.assertEqual(Path('diagnostics/test.log').read_text(encoding='utf-8'), log)
+
+    def test_early_checkout_failure_still_writes_context(self):
+        dependency = {'repository': 'example/shared', 'path': 'shared', 'sha': OTHER_SHA}
+        with workspace(), patch('subprocess.run', return_value=subprocess.CompletedProcess([], 128, '', 'missing')):
+            summary = self.diagnostics({'siblings': 'failure', 'project': 'skipped'}, [dependency])
+            context = json.loads(Path('diagnostics/context.json').read_text(encoding='utf-8'))
+            self.assertEqual(context['GITHUB_SHA'], SHA)
+            self.assertEqual(context['dependencies'][0]['sha'], OTHER_SHA)
+            self.assertIsNone(context['dependencies'][0]['checked_out_sha'])
+            self.assertIn('| siblings | failure |', summary)
+
+    def test_build_failure_keeps_cmake_evidence_and_nonstandard_error_tail(self):
+        with workspace():
+            Path('app/target/shim/CMakeFiles').mkdir(parents=True)
+            Path('app/target/shim/CMakeCache.txt').write_text('generator evidence', encoding='utf-8')
+            Path('app/target/shim/CMakeFiles/CMakeConfigureLog.yaml').write_text('configure evidence', encoding='utf-8')
+            Path('diagnostics').mkdir()
+            Path('diagnostics/build.log').write_text('custom adapter stopped\n', encoding='utf-8')
+            summary = self.diagnostics({'project': 'failure', 'test': 'skipped'})
+            self.assertIn('custom adapter stopped', summary)
+            self.assertEqual(Path('diagnostics/CMakeCache.txt').read_text(), 'generator evidence')
+            self.assertEqual(Path('diagnostics/CMakeConfigureLog.yaml').read_text(), 'configure evidence')
+
+    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell 7 required')
+    def test_build_wrapper_preserves_exit_and_terminating_errors(self):
+        for script, expected in [("Write-Output 'build output'; exit 37", 37),
+                                 ("throw 'adapter failure'", 1),
+                                 ("Write-Output 'build succeeded'", 0)]:
+            with self.subTest(script=script), workspace():
+                Path('adapter.ps1').write_text(script, encoding='utf-8')
+                Path('wrapper.ps1').write_text(
+                    "$ErrorActionPreference = 'Stop'\n" + step('build', 'Project build and checks'),
+                    encoding='utf-8')
+                env = {**os.environ, 'DIAGNOSTICS_DIR': str(Path('diagnostics').resolve()),
+                       'BUILD_SCRIPT': 'adapter.ps1'}
+                result = subprocess.run(['pwsh', '-NoProfile', '-File', 'wrapper.ps1'],
+                                        env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                log = Path('diagnostics/build.log').read_text(encoding='utf-8-sig')
+                self.assertIn('adapter failure' if expected == 1 else 'build', log)
+
+    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell 7 required')
+    def test_test_wrapper_preserves_native_exit_and_stderr(self):
+        with workspace():
+            # A child native process exercises LASTEXITCODE through Tee-Object.
+            prelude = ("$ErrorActionPreference = 'Stop'\nfunction cargo { & pwsh -NoProfile -Command "
+                       "\"[Console]::Error.WriteLine('native test failure'); exit 37\" }\n")
+            Path('wrapper.ps1').write_text(prelude + step('build', 'Test'), encoding='utf-8')
+            result = subprocess.run(['pwsh', '-NoProfile', '-File', 'wrapper.ps1'],
+                                    env={**os.environ, 'DIAGNOSTICS_DIR': str(Path('diagnostics').resolve())},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 37, result.stdout + result.stderr)
+            self.assertIn('native test failure', Path('diagnostics/test.log').read_text(encoding='utf-8-sig'))
+
+    def test_final_report_handles_all_failure_stages_and_unchanged_skip(self):
+        for failed in ['resolve', 'build', 'publish', None]:
+            with self.subTest(failed=failed), workspace():
+                jobs = {name: {'result': 'failure' if name == failed else 'skipped', 'outputs': {}}
+                        for name in ['resolve', 'build', 'publish']}
+                if failed is None:
+                    jobs['resolve'] = {'result': 'success', 'outputs': {'build': 'false'}}
+                env = {'JOB_RESULTS': json.dumps(jobs), 'GITHUB_SHA': SHA, 'RUN_URL': 'https://example.com/run',
+                       'GITHUB_STEP_SUMMARY': str(Path('summary').resolve())}
+                with patch.dict(os.environ, env):
+                    exec(compile(step('report', 'Release result'), '<report>', 'exec'), {})
+                report = Path('summary').read_text(encoding='utf-8')
+                self.assertIn(f'| {failed} | failure |' if failed else 'published inputs are unchanged', report)
+
+    def test_diagnostics_run_after_failure_and_cannot_enter_publication_inputs(self):
+        for name in ['Write build diagnostics', 'Upload build diagnostics']:
+            configured = next(s for s in WORKFLOW['jobs']['build']['steps'] if s.get('name') == name)
+            self.assertEqual(configured['if'], 'always()')
+        self.assertEqual(WORKFLOW['jobs']['report']['if'], 'always()')
+        downloads = [s['with']['name'] for s in WORKFLOW['jobs']['publish']['steps']
+                     if s.get('uses', '').startswith('actions/download-artifact@')]
+        self.assertEqual(downloads, ['windows-x64', 'release-notes'])
 
 
 if __name__ == '__main__':

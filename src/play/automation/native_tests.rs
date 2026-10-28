@@ -79,6 +79,8 @@ fn plans(format: &str, id: &str) -> Automation {
         .collect();
     Automation {
         owners: Arc::new(vec![Arc::new(OwnerPlan {
+            windows: Default::default(),
+            midi: false,
             live: Default::default(),
             owner: 0,
             curves,
@@ -286,3 +288,6 @@ fn automation_native_offline_two_ids_seek_and_baseline_restore() {
         println!("{format}: 2 IDs, held note, seek, 1 owner Native/2 layers, untouched layer, baseline restoration PASS; one second/48000 Hz: normal {normal_millis:.3} ms, automation {millis:.3} ms ({:.3}% realtime); isolated fixture/debug build, single run",millis/10.0);
     }
 }
+
+#[path = "native_pattern_tests.rs"]
+mod pattern_tests;

@@ -1,4 +1,6 @@
 mod creation;
+mod edit_start;
+mod lifecycle;
 mod loading;
 mod parameter_automation;
 pub(crate) mod sound;
@@ -8,9 +10,12 @@ use cat_smf_editor::{model::Music, score::musical_time::MusicalTime, score::note
 use eframe::egui;
 
 pub struct App {
+    pub lifecycle: lifecycle::State,
+    pub edit_start: edit_start::State,
     pub startup: startup::State,
     pub selection_history: crate::view::selection_history::State,
     pub palette: crate::view::palette::State,
+    pub patterns: crate::view::patterns::State,
     pub undo: undo::History,
     pub file_open_requested: bool,
     pub recent: crate::view::recent::State,
@@ -32,6 +37,7 @@ pub struct App {
     pub event_selection: crate::view::event_selection::State,
     pub mml_input: crate::view::mml_input::State,
     pub busy: crate::view::busy::State,
+    pub edit_style: Option<crate::view::edit_style::Style>,
     pub opening: crate::view::opening::State,
     pub note_edit: Option<crate::view::note_edit::Editing>,
     pub trill_edit: Option<crate::view::trill_edit::Editing>,
@@ -66,6 +72,7 @@ pub struct App {
     pub playback: crate::play::playback::Playback,
 }
 pub struct Loaded {
+    pub display_music: Option<Music>,
     pub patches: Vec<cat_smf_editor::score::instrument::Patch>,
     pub original: std::path::PathBuf,
     pub name: String,
@@ -74,14 +81,19 @@ pub struct Loaded {
     pub keys: cat_smf_editor::score::key_signature::KeySignatures,
     pub track_titles: Vec<String>,
     pub note_views: Vec<NoteView>,
+    /// `music`'s tracks as they sound, rebuilt with `music`.
+    pub expansions: Vec<crate::play::playback::Expansion>,
     pub time_columns: Vec<crate::view::time_columns::TimeColumns>,
     pub display_rows: Vec<cat_smf_editor::score::display_rows::DisplayRows>,
 }
 impl App {
     pub(crate) fn empty() -> Self {
         Self {
+            lifecycle: Default::default(),
+            edit_start: Default::default(),
             startup: Default::default(),
             palette: Default::default(),
+            patterns: Default::default(),
             selection_history: Default::default(),
             undo: Default::default(),
             file_open_requested: false,
@@ -106,6 +118,7 @@ impl App {
             event_selection: Default::default(),
             mml_input: Default::default(),
             busy: Default::default(),
+            edit_style: None,
             opening: Default::default(),
             note_edit: None,
             trill_edit: None,
@@ -144,9 +157,19 @@ impl App {
     ) -> Result<(), String> {
         let loaded = self.loaded.as_ref().ok_or("No SMF is loaded")?;
         let before = loaded.music.clone();
-        let mut music = before.clone();
+        if !self.can_edit_notes(self.track) {
+            return Err("Edit the pattern from its destination track".into());
+        }
+        let view = loaded.visible().clone();
+        let mut music = view.clone();
         edit(&mut music)?;
+        if let Some(context) = crate::view::patterns::mode::editing(self, self.track) {
+            music = context.map(&before, &view, &music)?;
+        }
         cat_smf_editor::edit::regenerate(&mut music)?;
+        if !self.note_mode {
+            cat_smf_editor::score::same_measure::validate(&music)?;
+        }
         if cat_smf_editor::smf_io::encode(&before)? == cat_smf_editor::smf_io::encode(&music)? {
             return Ok(());
         }
@@ -154,8 +177,17 @@ impl App {
         self.undo.push(before);
         Ok(())
     }
+    pub fn can_edit_notes(&self, track: usize) -> bool {
+        crate::view::patterns::mode::can_edit_notes(self, track)
+    }
     pub fn select_track(&mut self, track: usize) {
         if self.track != track {
+            self.patterns.workspace_open = false;
+            self.note_edit = None;
+            self.note_edit_request = None;
+            self.patterns.raw_context = None;
+            self.patterns.editing = None;
+            crate::view::patterns::refresh(self);
             crate::view::macro_editor::cancel(self);
             self.layer_editor.open = false;
             self.drum_editor.open = false;
@@ -179,8 +211,34 @@ impl App {
         self.reset_scroll = true;
     }
 }
+
+impl App {
+    pub(crate) fn apply_note_music(&mut self, music: Music, view: &Music) -> Result<(), String> {
+        let loaded = self.loaded.as_ref().ok_or("No SMF is loaded")?;
+        if !self.can_edit_notes(self.track) {
+            return Err("Edit the pattern from its destination track".into());
+        }
+        let mut music =
+            if let Some(context) = crate::view::patterns::mode::editing(self, self.track) {
+                context.map(&loaded.music, view, &music)?
+            } else {
+                music
+            };
+        if self.patterns.editing.is_some() {
+            cat_smf_editor::edit::regenerate(&mut music)?;
+        }
+        if !self.note_mode {
+            cat_smf_editor::score::same_measure::validate(&music)?;
+        }
+        self.apply_music(music)
+    }
+}
 impl Loaded {
+    pub fn visible(&self) -> &Music {
+        self.display_music.as_ref().unwrap_or(&self.music)
+    }
     pub fn refresh(&mut self) {
+        self.display_music = None;
         self.time = MusicalTime::new(&self.music);
         self.keys = cat_smf_editor::score::key_signature::KeySignatures::new(&self.music);
         self.note_views = self
@@ -189,6 +247,7 @@ impl Loaded {
             .iter()
             .map(|t| NoteView::new(&t.events))
             .collect();
+        self.expansions = crate::play::playback::expand_all(&self.music, &self.note_views);
         self.refresh_display();
     }
     pub(crate) fn refresh_display(&mut self) {
@@ -200,7 +259,7 @@ impl Loaded {
             .map(|(i, t)| format!("{} · {}", i + 1, t.name().unwrap_or_else(|| "—".into())))
             .collect();
         self.display_rows = self
-            .music
+            .visible()
             .tracks
             .iter()
             .enumerate()
@@ -213,7 +272,7 @@ impl Loaded {
             })
             .collect();
         self.time_columns = self
-            .music
+            .visible()
             .tracks
             .iter()
             .enumerate()
@@ -234,7 +293,7 @@ impl eframe::App for App {
             crate::view::recent::prefetch(self, ctx);
         }
         crate::view::show(self, ctx);
-        if !self.player_selection.setup.is_active() {
+        if !self.player_selection.setup.is_active() && !self.patterns.workspace.input_open() {
             crate::view::files::open_dialog(self, ctx, frame);
             crate::view::voicevox::pick_dialog(self, ctx, frame);
         }
@@ -248,12 +307,13 @@ impl eframe::App for App {
 
     /// editor が起動した外部プロセスを落とす。
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.config.persist();
         crate::play::mascot::shut_down(self);
         crate::play::sung::prerender::shut_down(self);
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        if !self.player_selection.setup.is_active() {
+        if !self.player_selection.setup.is_active() && !self.patterns.workspace.input_open() {
             drop_tab(raw_input);
         }
     }

@@ -8,7 +8,49 @@ use crate::{
 };
 
 pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
-    let (kind, value) = if let Some(value) = data.strip_prefix(app_meta::TRACK_VOLUME) {
+    let (kind, value) = if data.starts_with(crate::score::performance::PREFIX) {
+        (
+            "Performance parameter",
+            crate::score::performance::describe(data),
+        )
+    } else if data.starts_with(crate::score::performance::OWNER) {
+        (
+            "Performance owner",
+            if data.strip_prefix(crate::score::performance::OWNER) == Some(&[1][..]) {
+                "Container".into()
+            } else {
+                "invalid".into()
+            },
+        )
+    } else if data.starts_with(crate::score::pattern::automation::PREFIX) {
+        (
+            "Pattern parameter",
+            crate::score::pattern::automation::describe(data),
+        )
+    } else if data.starts_with(crate::score::pattern::automation::BASELINES) {
+        (
+            "Container baselines",
+            crate::score::pattern::automation::describe_baselines(data),
+        )
+    } else if data.starts_with(crate::score::scene::PREFIX) {
+        ("Scenes", crate::score::scene::describe(data))
+    } else if data.starts_with(crate::score::pattern::PREFIX) {
+        ("Pattern", crate::score::pattern::describe(data))
+    } else if data.starts_with(crate::score::same_measure::PREFIX) {
+        let event = crate::model::Event {
+            tick: 0,
+            delta: 0,
+            status: 0xff,
+            meta_type: 0x7f,
+            data: data.to_vec(),
+        };
+        (
+            "Same measure",
+            crate::score::same_measure::reference(&event)
+                .map(|m| m.unwrap().to_string())
+                .unwrap_or_else(|e| format!("invalid ({e})")),
+        )
+    } else if let Some(value) = data.strip_prefix(app_meta::TRACK_VOLUME) {
         ("Track volume", volume(value))
     } else if let Some(value) = data.strip_prefix(app_meta::AUTO_SAVE) {
         let state = if value == b"\x01\x01" {

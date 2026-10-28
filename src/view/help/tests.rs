@@ -1,5 +1,5 @@
 use crate::view::tests::app;
-use cat_smf_editor::model::{Music, Track};
+use cat_smf_editor::model::{Event, Music, Track};
 use eframe::egui;
 
 #[test]
@@ -7,7 +7,15 @@ fn help_shortcuts_and_warnings_tooltip_preserve_view_state() {
     let mut app = app(Music {
         format: 2,
         division: 480,
-        tracks: vec![Track { events: vec![] }],
+        tracks: vec![Track {
+            events: vec![Event {
+                delta: 0,
+                tick: 0,
+                status: 0xff,
+                meta_type: 0x58,
+                data: vec![0, 2, 24, 8],
+            }],
+        }],
     });
     let ctx = egui::Context::default();
     let render = |app: &mut crate::app::App, events| {
@@ -47,7 +55,7 @@ fn help_shortcuts_and_warnings_tooltip_preserve_view_state() {
     let hovered = render(&mut app, hover);
     assert!(texts(&hovered)
         .iter()
-        .any(|(t, _)| t.contains("4/4 とみなした")));
+        .any(|(t, _)| t.contains("Invalid time signature")));
     assert!(!app.help_open, "warnings are read without opening help");
     render(
         &mut app,

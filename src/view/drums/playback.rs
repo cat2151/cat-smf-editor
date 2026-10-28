@@ -3,21 +3,35 @@ use super::*;
 
 pub(super) fn measure(app: &App) -> Result<drums::Measure, String> {
     let loaded = app.loaded.as_ref().ok_or("No song")?;
-    drums::Measure::new(
+    let result = drums::Measure::new(
         loaded.time.map(app.track).ok_or("Missing measure map")?,
         loaded.music.division,
         app.drum_editor.page + 1,
-    )
+    )?;
+    if let Some(context) = crate::view::patterns::mode::editing(app, app.track) {
+        let range = context.edit_range(&loaded.music)?;
+        if result.start < range.0 || result.end > range.1 {
+            return Err("Measure is outside the pattern length".into());
+        }
+    }
+    Ok(result)
 }
 
 fn range(app: &App) -> Result<(u64, u64), String> {
     let loaded = app.loaded.as_ref().ok_or("No song")?;
     let map = loaded.time.map(app.track).ok_or("Missing measure map")?;
     let s = &app.drum_editor;
-    Ok((
+    let result = (
         drums::Measure::new(map, loaded.music.division, s.first)?.start,
         drums::Measure::new(map, loaded.music.division, s.last)?.end,
-    ))
+    );
+    if let Some(context) = crate::view::patterns::mode::editing(app, app.track) {
+        let range = context.edit_range(&loaded.music)?;
+        if result.0 < range.0 || result.1 > range.1 {
+            return Err("Drum range is outside the pattern length".into());
+        }
+    }
+    Ok(result)
 }
 
 pub(crate) fn scope(app: &App, requested: (u64, u64)) -> Option<(Vec<usize>, usize)> {

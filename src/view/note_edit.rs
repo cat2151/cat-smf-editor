@@ -8,6 +8,8 @@ pub enum Field {
     Mbt,
     Duration,
     Lyrics,
+    Pitch,
+    Velocity,
 }
 
 impl Field {
@@ -15,12 +17,37 @@ impl Field {
     pub fn column(self) -> usize {
         match self {
             Field::Mbt => 0,
-            Field::Lyrics => 1,
+            Field::Lyrics | Field::Pitch => 1,
             Field::Duration => 2,
+            Field::Velocity => 3,
         }
     }
 
     /// The field a click on `column` opens; the lyric opens only from the edit menu.
+    pub fn column_for(self, notes: bool) -> usize {
+        if notes {
+            self.column()
+        } else {
+            self.raw_column()
+        }
+    }
+    pub fn at_mode(column: usize, notes: bool) -> Option<Self> {
+        if notes {
+            Self::at(column)
+        } else {
+            [Self::Mbt, Self::Pitch, Self::Duration, Self::Velocity]
+                .into_iter()
+                .find(|f| f.raw_column() == column)
+        }
+    }
+    pub fn raw_column(self) -> usize {
+        match self {
+            Self::Mbt => 3,
+            Self::Pitch | Self::Lyrics => 5,
+            Self::Duration => 6,
+            Self::Velocity => 7,
+        }
+    }
     pub fn at(column: usize) -> Option<Self> {
         [Field::Mbt, Field::Duration]
             .into_iter()
@@ -47,6 +74,10 @@ pub fn begin(
     rect: egui::Rect,
     text: &str,
 ) {
+    if !app.can_edit_notes(track) {
+        app.load_error = Some("Edit the pattern from its destination track".into());
+        return;
+    }
     app.note_edit = Some(Editing {
         field,
         track,
@@ -64,10 +95,29 @@ pub fn begin(
 }
 
 fn apply(app: &mut App, editing: &Editing) -> Result<(), String> {
+    if editing.generation != app.generation {
+        return Err("Note edit target changed".into());
+    }
     let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
     let (track, event) = (editing.track, editing.event);
-    cat_smf_editor::edit::trill::ensure_note_editable(&loaded.music, track, event)?;
+    cat_smf_editor::edit::trill::ensure_note_editable(loaded.visible(), track, event)?;
     match editing.field {
+        Field::Pitch => {
+            let pitch = cat_smf_editor::edit::note_value::pitch(&editing.text)?;
+            app.edit_music(|music| {
+                cat_smf_editor::edit::note_value::set_pitch(&mut music.tracks[track], event, pitch)
+            })
+        }
+        Field::Velocity => {
+            let value = editing.text.parse::<u8>().map_err(|_| "Invalid velocity")?;
+            app.edit_music(|music| {
+                cat_smf_editor::edit::note_value::set_velocity(
+                    &mut music.tracks[track],
+                    event,
+                    value,
+                )
+            })
+        }
         Field::Mbt => {
             let tick = crate::store::session::parse_mbt(&editing.text)
                 .and_then(|position| loaded.time.map(track)?.tick_at(&position))
@@ -90,9 +140,9 @@ fn apply(app: &mut App, editing: &Editing) -> Result<(), String> {
             })
         }
         Field::Lyrics => {
-            let note = &loaded.music.tracks[track].events[event];
+            let note = &loaded.visible().tracks[track].events[event];
             let (tick, identity) = (note.tick, (note.status, note.data.clone()));
-            let occurrence = same_notes(&loaded.music.tracks[track].events, tick, &identity)
+            let occurrence = same_notes(&loaded.visible().tracks[track].events, tick, &identity)
                 .position(|i| i == event)
                 .unwrap_or(0);
             app.edit_music(|music| {
@@ -131,15 +181,19 @@ fn keep_cursor_on(
     let Some(loaded) = &app.loaded else {
         return;
     };
-    if app.track != track || !app.note_mode {
+    if app.track != track {
         return;
     }
     let Some(event) =
-        same_notes(&loaded.music.tracks[track].events, tick, identity).nth(occurrence)
+        same_notes(&loaded.visible().tracks[track].events, tick, identity).nth(occurrence)
     else {
         return;
     };
-    if let Some(row) = loaded.display_rows[track].event_row(event) {
+    if let Some(row) = if app.note_mode {
+        loaded.display_rows[track].event_row(event)
+    } else {
+        Some(event)
+    } {
         app.cursor_row = Some(row);
         app.selected_event = Some(event);
     }
@@ -156,25 +210,31 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut close = false;
+    let name = super::patterns::presentation::name(app, editing.track);
     egui::Area::new(egui::Id::new("note-edit"))
         .fixed_pos(editing.rect.min)
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut editing.text)
-                    .font(egui::TextStyle::Monospace)
-                    .desired_width(editing.rect.width()),
-            );
-            if editing.focus {
-                response.request_focus();
-                editing.focus = false;
-            }
-            if response.lost_focus() && !app.palette.is_open() {
-                close = true;
-            }
-            if let Some(error) = &editing.error {
-                ui.colored_label(egui::Color32::LIGHT_RED, error);
-            }
+            super::patterns::presentation::frame(app, editing.track).show(ui, |ui| {
+                if let Some(name) = &name {
+                    super::patterns::presentation::label(ui, name);
+                }
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut editing.text)
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(editing.rect.width()),
+                );
+                if editing.focus {
+                    response.request_focus();
+                    editing.focus = false;
+                }
+                if response.lost_focus() && !app.palette.is_open() {
+                    close = true;
+                }
+                if let Some(error) = &editing.error {
+                    ui.colored_label(egui::Color32::LIGHT_RED, error);
+                }
+            });
         });
     if !close {
         app.note_edit = Some(editing);

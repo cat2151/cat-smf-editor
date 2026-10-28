@@ -25,6 +25,8 @@ pub struct State {
     key: Option<String>,
     /// The song as it was when the overlay opened; previews are rebuilt from it.
     base: Option<Music>,
+    saved_base: Option<Music>,
+    pattern: Option<cat_smf_editor::score::pattern::editing::Context>,
     session: Option<crate::store::config::Session>,
     cursor_tick: Option<u64>,
     /// A repeat editing session never replaces transport audio with cursor audition.
@@ -41,9 +43,13 @@ pub fn open(app: &mut App, ctx: &egui::Context, overwrite: bool) {
     let Some(loaded) = app.loaded.as_ref() else {
         return;
     };
+    if !app.can_edit_notes(app.track) {
+        app.load_error = Some("Edit the pattern from its destination track".into());
+        return;
+    }
     let (tick, _) = crate::play::playback::location(app);
     let channel =
-        cat_smf_editor::edit::mml::channel(&loaded.music.tracks[app.track], app.selected_event);
+        cat_smf_editor::edit::mml::channel(&loaded.visible().tracks[app.track], app.selected_event);
     app.mml_input = State {
         open: true,
         focus: true,
@@ -60,7 +66,9 @@ pub fn open(app: &mut App, ctx: &egui::Context, overwrite: bool) {
                 let tonic = name.split_whitespace().next().unwrap();
                 format!("{tonic}{}", if key.minor() { " Aeolian" } else { "" })
             }),
-        base: Some(loaded.music.clone()),
+        base: Some(loaded.visible().clone()),
+        saved_base: Some(loaded.music.clone()),
+        pattern: app.patterns.editing.clone(),
         session: app.session(),
         cursor_tick: app.track_view.cursor_tick,
         repeat_session: app.playback.repeat.is_some()
@@ -97,7 +105,11 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut state = std::mem::take(&mut app.mml_input);
-    if state.song != app.song_id || state.track != app.track || app.loaded.is_none() {
+    if state.song != app.song_id
+        || state.track != app.track
+        || app.loaded.is_none()
+        || state.pattern != app.patterns.editing
+    {
         if !state.repeat_session {
             app.audition.stop();
         }
@@ -125,7 +137,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         ctx.request_repaint();
         Action::Confirm
     } else {
-        editor::show(ctx, &mut state)
+        editor::show(ctx, &mut state, app)
     };
     if matches!(action, Action::Confirm) && !ready {
         app.mml_input = state;
@@ -138,7 +150,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             if !state.repeat_session {
                 app.audition.stop();
             }
-            match app.apply_music(state.base.as_ref().unwrap().clone()) {
+            match app.apply_music(
+                state
+                    .saved_base
+                    .as_ref()
+                    .unwrap_or_else(|| state.base.as_ref().unwrap())
+                    .clone(),
+            ) {
                 Ok(()) => {
                     if let Some(session) = &state.session {
                         app.restore_position(session);
@@ -155,19 +173,35 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             }
             match inserted(&state) {
                 Ok((music, end)) => {
-                    if let Err(error) = app.apply_music(music) {
+                    if let Err(error) = app.apply_note_music(music, state.base.as_ref().unwrap()) {
                         state.error = Some(error);
                         app.mml_input = state;
                         super::comma_menu::swallow(ctx);
                         return;
                     }
-                    app.undo.push(state.base.as_ref().unwrap().clone());
+                    app.undo.push(
+                        state
+                            .saved_base
+                            .as_ref()
+                            .unwrap_or_else(|| state.base.as_ref().unwrap())
+                            .clone(),
+                    );
                     state.open = false;
                     if !state.repeat_session {
                         crate::play::transport::repeat::play_once(app, (state.tick, end));
                         app.playback.follow = false;
                     }
-                    crate::cursor::moves::at_tick(app, end);
+                    let cursor = if state
+                        .pattern
+                        .as_ref()
+                        .and_then(|p| p.edit_range(state.saved_base.as_ref()?).ok())
+                        .is_some_and(|r| end >= r.1)
+                    {
+                        state.tick
+                    } else {
+                        end
+                    };
+                    crate::cursor::moves::at_tick(app, cursor);
                 }
                 Err(error) => {
                     state.error = Some(error);
@@ -202,6 +236,10 @@ fn audition(app: &mut App, state: &State, request: Option<Option<cat_smf_editor:
                     )
                 })
                 .collect();
+            if let Some((track, patch)) = super::patterns::preview::edit_sound(app, state.track) {
+                app.audition.play_track(track, &patch, &notes, None);
+                return;
+            }
             // A singer sings only the top note, as in playback.
             let take = notes.last().and_then(|&(pitch, _, seconds)| {
                 crate::play::sung::audition::note(app, state.track, pitch, seconds?)
@@ -239,7 +277,20 @@ fn inserted(state: &State) -> Result<(Music, u64), String> {
         state.channel,
         &state.buffer,
     )?;
-    cat_smf_editor::edit::regenerate(&mut music)?;
+    if let Some(pattern) = &state.pattern {
+        let saved = state
+            .saved_base
+            .as_ref()
+            .ok_or("Missing pattern edit base")?;
+        let (_, until) = pattern.edit_range(saved)?;
+        if end > until {
+            return Err("MML exceeds the pattern length".into());
+        }
+    }
+
+    if state.pattern.is_none() {
+        cat_smf_editor::edit::regenerate(&mut music)?;
+    }
     Ok((music, end))
 }
 
@@ -249,11 +300,11 @@ fn preview(app: &mut App, state: &mut State) {
         return;
     };
     let music = inserted(state).map_or_else(|_| base.clone(), |(music, _)| music);
-    let current = &app.loaded.as_ref().unwrap().music;
+    let current = app.loaded.as_ref().unwrap().visible();
     if cat_smf_editor::smf_io::encode(current) == cat_smf_editor::smf_io::encode(&music) {
         return;
     }
-    match app.apply_music(music) {
+    match app.apply_note_music(music, base) {
         Ok(()) => measure::follow(app, state),
         Err(error) => state.error = Some(error),
     }

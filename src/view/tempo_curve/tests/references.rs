@@ -106,6 +106,7 @@ fn dragging_reference_previews_rank_colors_and_keeps_tick_curve_and_tempos() {
 #[test]
 fn reference_drag_with_a_curve_preserves_all_performance_events() {
     let mut song = music();
+    cat_smf_editor::edit::initial_meta::initialize(&mut song).unwrap();
     reference_tempo::initialize(&mut song).unwrap();
     let curve = tempo_curve::read(&with_curve()).unwrap().unwrap();
     tempo_curve::write(&mut song, Some(&curve)).unwrap();

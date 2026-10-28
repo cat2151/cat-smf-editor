@@ -44,7 +44,7 @@ master設定変更、音声エラーなどの既存の音源リセット時と�
 ## Ctrl+Pの試聴
 
 ファイルごとに音源をメモリへ保持しない。曲切替では前の曲の音源を破棄する。
-試聴は先頭1小節を書き出したwavで行い、音源はwavを書き終えると破棄する（操作と保存先はREADMEを参照）。
+試聴は先頭1小節を書き出したwavで行い、音源はwavを書き終えると破棄する。
 書き出しは演奏と同じmixer（`audition_mix.rs`）を音声deviceなしで回す。
 UAPMDの`renderOfflineProject`はUAPMD project形式の`SequencerEngine`を前提とし、
 layer・track/master effect・auto gainの解釈が二重になるため使わない。

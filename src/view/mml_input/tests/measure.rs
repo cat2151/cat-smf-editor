@@ -4,6 +4,14 @@ use crate::view::palette::tests::{listed, open as open_palette, press, query};
 use cat_smf_editor::model::Event;
 
 const LABEL: &str = "Event list: MML / コード進行: 1小節を上書き";
+fn choose_measure(app: &mut App, ctx: &egui::Context) {
+    let index = listed(app).iter().position(|label| label == LABEL).unwrap();
+    for _ in 0..index {
+        press(app, ctx, egui::Key::ArrowDown);
+    }
+    press(app, ctx, egui::Key::Enter);
+}
+
 /// Measure 2 in 4/4 at 480 ticks per quarter note.
 const MEASURE: (u64, u64) = (1920, 3840);
 
@@ -76,9 +84,9 @@ fn the_palette_repeats_the_cursor_measure_and_typed_mml_overwrites_its_notes() {
         query(&mut app, &ctx, q);
         let found = listed(&mut app);
         eprintln!("query {q:?}: {found:?}");
-        assert_eq!(found.first().map(String::as_str), Some(LABEL));
+        assert!(found.iter().any(|label| label == LABEL));
         if q == "measure" {
-            press(&mut app, &ctx, egui::Key::Enter);
+            choose_measure(&mut app, &ctx);
         } else {
             press(&mut app, &ctx, egui::Key::Escape);
         }
@@ -141,7 +149,7 @@ fn cancel_restores_the_measure_and_keeps_looping() {
     let before = smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap();
     open_palette(&mut app, &ctx);
     query(&mut app, &ctx, "measure");
-    press(&mut app, &ctx, egui::Key::Enter);
+    choose_measure(&mut app, &ctx);
     frame(&mut app, &ctx, vec![]);
     assert!(app.mml_input.open);
     frame(&mut app, &ctx, vec![egui::Event::Text("r1".into())]);
@@ -161,10 +169,12 @@ fn a_new_song_repeats_its_first_measure() {
     let mut app = song();
     let ctx = egui::Context::default();
     app.new_smf_unchecked();
+    app.edit_style = None;
+    app.edit_start = Default::default();
     frame(&mut app, &ctx, vec![]);
     open_palette(&mut app, &ctx);
     query(&mut app, &ctx, "measure");
-    press(&mut app, &ctx, egui::Key::Enter);
+    choose_measure(&mut app, &ctx);
     frame(&mut app, &ctx, vec![]);
     assert!(app.mml_input.open && app.mml_input.repeat_session);
     assert_eq!(app.playback.repeat, Some((0, 1920)));

@@ -1,7 +1,7 @@
 //! Metadata prepared for display; opening the overlay never edits the document.
 use crate::app::App;
 use cat_smf_editor::{
-    edit::{reference_tempo, trill},
+    edit::{initial_meta, reference_tempo, trill},
     model::Music,
 };
 use std::sync::Arc;
@@ -27,6 +27,7 @@ pub(super) fn prepare(app: &mut App) -> Result<Arc<Music>, String> {
     {
         let result = (|| {
             let mut music = app.loaded.as_ref().ok_or("No SMF is loaded")?.music.clone();
+            initial_meta::initialize(&mut music)?;
             reference_tempo::initialize(&mut music)?;
             trill::initialize(&mut music)?;
             // Keep the original notes and tempo events until an actual edit.

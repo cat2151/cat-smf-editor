@@ -5,6 +5,9 @@ use cat_smf_editor::{chain::Chain, master_effects, score::instrument::Patch};
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 
 pub const CHANNELS: usize = 2;
+#[cfg(test)]
+#[path = "audition_offline_native_probe.rs"]
+pub(crate) mod native_probe;
 
 /// Plugins of one render. They stay on the UI thread, which must keep pumping them.
 pub struct Instruments {

@@ -2,6 +2,7 @@ use cat_smf_editor::{
     chain_settings::PluginState,
     patch_reference::{PatchReference, Source},
 };
+pub mod instrument;
 pub fn referenced(mut slot: PluginState) -> PluginState {
     let path = std::path::PathBuf::from(format!("X:/patches/{}.preset", slot.plugin.id));
     slot.reference = Some(PatchReference {

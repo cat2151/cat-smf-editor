@@ -6,6 +6,8 @@ use cat_smf_editor::{
 };
 use eframe::egui;
 
+pub(crate) mod unplaced;
+
 pub(crate) fn app(music: Music) -> App {
     let time = MusicalTime::new(&music);
     let track_titles = music
@@ -15,10 +17,13 @@ pub(crate) fn app(music: Music) -> App {
         .map(|(i, t)| format!("Track {} · {} events", i + 1, t.events.len()))
         .collect();
     App {
+        lifecycle: Default::default(),
+        edit_start: Default::default(),
         mascot: Default::default(),
         startup: Default::default(),
         opening: Default::default(),
         palette: Default::default(),
+        patterns: Default::default(),
         selection_history: Default::default(),
         undo: Default::default(),
         file_open_requested: false,
@@ -44,6 +49,7 @@ pub(crate) fn app(music: Music) -> App {
         event_selection: Default::default(),
         mml_input: Default::default(),
         busy: Default::default(),
+        edit_style: None,
         note_edit: None,
         trill_edit: None,
         note_edit_request: None,
@@ -56,6 +62,7 @@ pub(crate) fn app(music: Music) -> App {
         parameter_editor: Default::default(),
         last_command: None,
         loaded: Some(Loaded {
+            display_music: None,
             patches: music
                 .tracks
                 .iter()
@@ -93,6 +100,14 @@ pub(crate) fn app(music: Music) -> App {
                 .iter()
                 .map(|t| NoteView::new(&t.events))
                 .collect(),
+            expansions: crate::play::playback::expand_all(
+                &music,
+                &music
+                    .tracks
+                    .iter()
+                    .map(|t| NoteView::new(&t.events))
+                    .collect::<Vec<_>>(),
+            ),
             music,
             time,
             track_titles,

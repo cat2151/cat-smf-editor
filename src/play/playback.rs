@@ -1,15 +1,17 @@
-use crate::{
-    app::App,
-    play::audio_sequence::{Note, Sequence},
-};
+use crate::{app::App, play::audio_sequence::Sequence};
 use cat_smf_editor::{
-    score::audition_timing::TempoMap, score::display_rows::DisplayRow,
-    score::musical_time::Position, score::note_view::note_on,
+    score::display_rows::DisplayRow, score::musical_time::Position, score::note_view::note_on,
 };
 use eframe::egui;
+mod sequence;
+mod sounding;
+use sequence::sequence_track;
+pub(crate) use sounding::{expand_all, performance, silent, sounding, Expansion, Sounding};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Mode {
+    Pattern(u64),
+    Arrangement(Option<u64>),
     AllTracks,
     AllTracksFromMeasure,
     MeasureStart,
@@ -89,7 +91,7 @@ pub fn location(app: &App) -> (u64, Option<Position>) {
     } else {
         app.cursor_row.or(app.selected_event)
     };
-    let tick = source.map_or(0, |i| loaded.music.tracks[app.track].events[i].tick);
+    let tick = source.map_or(0, |i| loaded.visible().tracks[app.track].events[i].tick);
     (tick, map.map(|m| m.position(tick)))
 }
 
@@ -98,126 +100,48 @@ pub fn sequence(app: &App, mode: Mode) -> Option<Sequence> {
     sequence_track(app, app.track, mode)
 }
 
-fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequence> {
-    let loaded = app.loaded.as_ref()?;
-    if mode == Mode::AllTracks {
-        let mut result = Sequence::new(Vec::new(), 0.0);
-        for track in 0..loaded.music.tracks.len() {
-            let sequence = sequence_track(app, track, Mode::Track)?;
-            result.end = result.end.max(sequence.end);
-            result.notes.extend(sequence.notes);
-            result.events.extend(sequence.events);
-        }
-        result.notes.sort_by(|a, b| a.start.total_cmp(&b.start));
-        result.events.sort_by(|a, b| a.time.total_cmp(&b.time));
-        return Some(result);
-    }
-    let events = &loaded.music.tracks[track].events;
-    let end_tick = cat_smf_editor::edit::parameter_curve::read(&loaded.music)
-        .ok()
-        .map(|collection| {
-            collection
-                .curves
-                .keys()
-                .filter(|&&curve_track| collection.owner(curve_track) == Some(track))
-                .filter_map(|&curve_track| {
-                    loaded.music.tracks[curve_track]
-                        .events
-                        .last()
-                        .map(|e| e.tick)
-                })
-                .fold(events.last().map_or(0, |e| e.tick), u64::max)
-        })
-        .unwrap_or(events.last()?.tick);
-    let (tick, position) = if mode == Mode::Track {
-        (0, None)
-    } else {
-        location(app)
-    };
-    let mut start = tick;
-    let mut end = end_tick;
-    if mode == Mode::Track {
-        start = 0;
-    }
-    if matches!(
-        mode,
-        Mode::Measure | Mode::MeasureStart | Mode::Beat | Mode::BeatOnly
-    ) {
-        let map = loaded.time.map(app.track)?;
-        let mut p = position?;
-        p.tick_numerator = 0;
-        p.tick_denominator = 1;
-        if matches!(mode, Mode::Measure | Mode::MeasureStart) {
-            p.beat = 1;
-        }
-        start = map.tick_at(&p)?;
-        if mode == Mode::Measure {
-            p.measure += 1;
-            end = map.tick_at(&p)?.min(end);
-        } else if mode == Mode::BeatOnly {
-            p.beat += 1;
-            end = map.tick_at(&p)?.min(end);
-        }
-    }
-    let tempo = TempoMap::new(&loaded.music, track);
-    let selected: Vec<_> = events
-        .iter()
-        .enumerate()
-        .filter(|(i, e)| {
-            note_on(e)
-                && match mode {
-                    Mode::Event if track == app.track => app.selected_event == Some(*i),
-                    Mode::Event => e.tick == tick,
-                    Mode::Notes => e.tick == tick,
-                    _ => e.tick >= start && e.tick < end,
-                }
-        })
-        .map(|(i, _)| i)
-        .collect();
-    let notes: Vec<_> = selected
-        .iter()
-        .map(|&i| (i, &events[i]))
-        .map(|(i, e)| {
-            let duration =
-                loaded.note_views[track].durations[i].unwrap_or(end.saturating_sub(e.tick));
-            let duration = if matches!(mode, Mode::Notes | Mode::Event) {
-                duration
-            } else {
-                duration.min(end.saturating_sub(e.tick))
-            };
-            Note {
-                start: tempo.duration(start, e.tick.saturating_sub(start)),
-                duration: if matches!(mode, Mode::Event | Mode::Notes)
-                    && loaded.note_views[track].durations[i].is_none()
-                {
-                    f64::INFINITY
-                } else {
-                    tempo.duration(e.tick, duration)
-                },
-                pitch: e.data[0],
-                velocity: e.data[1],
-            }
-        })
-        .collect();
-    let end = if matches!(mode, Mode::Event | Mode::Notes) {
-        notes
-            .iter()
-            .map(|n| n.start + n.duration)
-            .fold(0.0, f64::max)
-    } else {
-        tempo.duration(start, end.saturating_sub(start))
-    };
-    Some(Sequence::from_source(
-        notes, end, events, &selected, &tempo, start,
-    ))
-}
-
 pub fn start(app: &mut App, mode: Mode) {
+    let pattern = if let Mode::Pattern(id) = mode {
+        Some(id)
+    } else {
+        app.patterns
+            .editing
+            .as_ref()
+            .filter(|c| c.standalone)
+            .map(|c| c.pattern)
+    };
+    if let Some(id) = pattern {
+        if matches!(
+            mode,
+            Mode::Pattern(_) | Mode::Track | Mode::AllTracks | Mode::AllTracksFromMeasure
+        ) {
+            app.playback.open = false;
+            if let Err(error) = crate::view::patterns::preview::start(app, id) {
+                app.load_error = Some(error);
+            }
+            return;
+        }
+        if let Err(error) = crate::view::patterns::preview::prepare(app, id) {
+            app.load_error = Some(error);
+            return;
+        }
+    }
+    if let Mode::Arrangement(scene) = mode {
+        super::arrangement::start(app, scene);
+        return;
+    }
     app.playback.repeat = None;
     app.playback.last = mode;
     app.playback.open = false;
     app.audition.stop();
     app.playback.active = None;
+    if let Some(loaded) = &app.loaded
+        && let Err(error) = cat_smf_editor::score::same_measure::validate(&loaded.music)
+    {
+        app.playback.pending = None;
+        app.load_error = Some(error);
+        return;
+    }
     app.playback.pending = crate::play::transport::prepare(app, mode);
 }
 
@@ -228,6 +152,25 @@ pub fn parts(
     let Some(loaded) = &app.loaded else {
         return Vec::new();
     };
+    if let Some(context) = &app.patterns.editing
+        && context.standalone
+    {
+        if matches!(
+            mode,
+            Mode::Pattern(_) | Mode::Track | Mode::AllTracks | Mode::AllTracksFromMeasure
+        ) {
+            return crate::view::patterns::preview::prepare(app, context.pattern)
+                .map(|p| p.parts)
+                .unwrap_or_default();
+        }
+        let patch = match crate::view::patterns::preview::prepare(app, context.pattern) {
+            Ok(p) => p.parts[0].1.clone(),
+            Err(_) => return vec![],
+        };
+        return sequence_track(app, context.track, mode)
+            .map(|s| vec![(context.track, patch, s)])
+            .unwrap_or_default();
+    }
     let curves = cat_smf_editor::edit::parameter_curve::read(&loaded.music).ok();
     let automation_owner = curves.as_ref().and_then(|c| {
         c.curves
@@ -246,10 +189,11 @@ pub fn parts(
     tracks
         .into_iter()
         .filter(|&track| {
-            !loaded.music.tracks[track]
-                .events
-                .iter()
-                .any(cat_smf_editor::edit::parameter_curve::owned)
+            !cat_smf_editor::score::pattern::is_source(&loaded.music, track)
+                && !loaded.music.tracks[track]
+                    .events
+                    .iter()
+                    .any(cat_smf_editor::edit::parameter_curve::owned)
         })
         .filter_map(|track| {
             let sequence = sequence_track(
@@ -372,7 +316,10 @@ fn current_track_is_empty(app: &App) -> bool {
             .events
             .iter()
             .any(cat_smf_editor::edit::parameter_curve::owned)
-            && !loaded.music.tracks[app.track].events.iter().any(note_on)
+            && !loaded.visible().tracks[app.track]
+                .events
+                .iter()
+                .any(|e| note_on(e) || cat_smf_editor::score::same_measure::owned(e))
     })
 }
 
@@ -404,5 +351,7 @@ fn scope_cell(
 
 #[cfg(test)]
 mod empty_track_tests;
+#[cfg(test)]
+mod same_measure_tests;
 #[cfg(test)]
 mod tests;

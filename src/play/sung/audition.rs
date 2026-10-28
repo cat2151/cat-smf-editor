@@ -25,11 +25,8 @@ pub fn cursor(app: &mut App, track: usize, tick: u64) -> Option<Arc<Take>> {
 /// 歌う `track` で `pitch` を `seconds` 秒歌う1音。まだ歌っていなければ裏で歌わせる。
 pub fn note(app: &mut App, track: usize, pitch: u8, seconds: f64) -> Option<Arc<Take>> {
     let loaded = app.loaded.as_ref()?;
-    if !loaded.music.tracks.get(track).is_some_and(is_singer) {
-        return None;
-    }
-    let frames = ((seconds * FRAMES_PER_SECOND).round() as u64).max(1);
     let voice = Voice::read(loaded.music.tracks.get(track)?)?;
+    let frames = ((seconds * FRAMES_PER_SECOND).round() as u64).max(1);
     let samples = prerender::note(app, voice, (pitch, frames))?;
     piece(&one_note(pitch, frames), samples, app.audition.rate(), 0.0).map(Arc::new)
 }

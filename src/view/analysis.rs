@@ -7,7 +7,7 @@ use eframe::egui;
 use std::time::Duration;
 
 #[cfg(windows)]
-mod owner;
+pub(crate) mod owner;
 
 /// Unique among the editor's windows; the owner is found by it.
 const TITLE: &str = "Spectrum";
@@ -84,7 +84,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             .with_inner_size([width, height]);
     }
     let mut close = false;
-    let visible = !app.palette.browsing_views();
+    let visible = companion_visible(app, ctx);
     builder = builder.with_visible(visible);
     ctx.show_viewport_immediate(viewport(app.analysis.placement), builder, |ctx, _class| {
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(visible));
@@ -126,6 +126,23 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
 }
 
+/// Native owned windows sit above every egui layer. Use the same input owner as
+/// command routing, so every modal (including future ones) gets an unobscured root.
+pub(crate) fn companion_visible(app: &App, ctx: &egui::Context) -> bool {
+    use crate::view::commands::{owner, Screen};
+    !app.palette.owns_root()
+        && !app.patterns.workspace.input_open()
+        && matches!(
+            owner(app, ctx),
+            Screen::Main
+                | Screen::Timeline
+                | Screen::Mixer
+                | Screen::Play
+                | Screen::Drums
+                | Screen::DrumInput
+        )
+}
+
 fn viewport(placement: u64) -> egui::ViewportId {
     egui::ViewportId::from_hash_of(("output-analysis", placement))
 }
@@ -152,4 +169,26 @@ fn body(
             });
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn auxiliary_window_yields_to_all_root_dialog_owners_and_palette_arguments() {
+        let mut app = crate::view::palette::tests::app();
+        let ctx = egui::Context::default();
+        assert!(companion_visible(&app, &ctx));
+        app.mml_input.open = true;
+        assert!(!companion_visible(&app, &ctx));
+        app.mml_input.open = false;
+        app.help_open = true;
+        assert!(!companion_visible(&app, &ctx));
+        app.help_open = false;
+        crate::view::palette::tests::open(&mut app, &ctx);
+        assert!(!companion_visible(&app, &ctx));
+        crate::view::palette::tests::query(&mut app, &ctx, "create scene");
+        crate::view::palette::tests::press(&mut app, &ctx, egui::Key::Enter);
+        assert!(!companion_visible(&app, &ctx));
+    }
 }

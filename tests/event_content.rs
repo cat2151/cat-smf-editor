@@ -9,6 +9,46 @@ fn event(status: u8, meta_type: u8, data: &[u8]) -> Event {
         data: data.into(),
     }
 }
+#[test]
+fn arrangement_baselines_and_performance_meta_are_readable() {
+    use cat_smf_editor::score::{
+        pattern::automation::{self, Baseline},
+        performance,
+        scene::arrangement,
+    };
+    let data = [
+        automation::BASELINES,
+        serde_json::to_vec(&vec![Baseline::Midi {
+            channel: 1,
+            controller: Some(64),
+            value: 0,
+        }])
+        .unwrap()
+        .as_slice(),
+    ]
+    .concat();
+    assert_eq!(
+        decoded(&event(0xff, 0x7f, &data)),
+        "Container baselines: Channel 2 / CC 64: 0"
+    );
+    assert_eq!(
+        decoded(&event(0xff, 0x7f, &[performance::OWNER, &[1]].concat())),
+        "Performance owner: Container"
+    );
+    let mut m = cat_smf_editor::edit::tracks::new_song();
+    arrangement::add_lane(&mut m, None).unwrap();
+    let lane = m
+        .tracks
+        .iter()
+        .flat_map(|t| &t.events)
+        .find(|e| cat_smf_editor::score::scene::owned(e))
+        .unwrap();
+    let text = decoded(lane);
+    assert!(
+        text.starts_with("Scenes: ") && text.contains("Song 1 lanes"),
+        "{text}"
+    );
+}
 
 #[test]
 fn programs_use_zero_based_gm_names_and_pedals_use_states() {

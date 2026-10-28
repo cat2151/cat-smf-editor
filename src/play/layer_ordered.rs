@@ -95,17 +95,23 @@ impl<R: Instrument, E: Effect> Render<R, E> {
                     }
                     values(&mut self.ordered_events, binding, tick)?;
                     while let Some((_, midi)) = marks.next_if(|e| e.0 == tick) {
-                        if let Some(word) = midi
-                            && let Some(pitch) = super::routed_pitch(
+                        if let Some(word) = midi {
+                            if !matches!((word >> 20) & 15, 8 | 9) {
+                                push(&mut self.ordered_events, AutomationEvent::note(word))?;
+                                continue;
+                            }
+                            if let Some(pitch) = super::routed_pitch(
                                 layer,
                                 self.drums.as_ref(),
                                 ((word >> 8) & 127) as u8,
-                            )
-                        {
-                            push(
-                                &mut self.ordered_events,
-                                AutomationEvent::note((word & !0x7f00) | (u32::from(pitch) << 8)),
-                            )?;
+                            ) {
+                                push(
+                                    &mut self.ordered_events,
+                                    AutomationEvent::note(
+                                        (word & !0x7f00) | (u32::from(pitch) << 8),
+                                    ),
+                                )?;
+                            }
                         }
                     }
                 }

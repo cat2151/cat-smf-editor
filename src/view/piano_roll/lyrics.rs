@@ -1,17 +1,14 @@
 //! The same note-onset labels on the piano roll and the tempo curve's note pane.
-use super::Layout;
 use eframe::egui::{self, Color32};
 
-pub(crate) fn draw(
+/// `labels` is each note's rectangle and lyric, from [`super::Layout::labels`].
+pub(crate) fn draw<'a>(
     painter: &egui::Painter,
-    layout: &Layout,
-    note_rect: impl Fn(usize) -> egui::Rect,
+    labels: impl Iterator<Item = (egui::Rect, &'a str)>,
 ) {
-    for (i, text) in layout.lyrics.iter().enumerate() {
-        let Some(text) = text else { continue };
-        let rect = note_rect(i);
+    for (rect, text) in labels {
         let galley = painter.layout_no_wrap(
-            text.clone(),
+            text.to_owned(),
             egui::FontId::proportional(rect.height().clamp(14.0, 18.0)),
             Color32::BLACK,
         );

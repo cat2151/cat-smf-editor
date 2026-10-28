@@ -23,7 +23,7 @@ pub fn at_tick(app: &mut App, tick: u64) {
     let count = if app.note_mode {
         loaded.display_rows[app.track].len()
     } else {
-        loaded.music.tracks[app.track].events.len()
+        loaded.visible().tracks[app.track].events.len()
     };
     app.cursor_row = (count > 0).then_some(row.min(count.saturating_sub(1)));
     app.selected_event = None;
@@ -62,7 +62,10 @@ fn audition(app: &mut App, chord: bool) {
     let Some(loaded) = &app.loaded else {
         return;
     };
-    let events = &loaded.music.tracks[app.track].events;
+    if !app.can_edit_notes(app.track) {
+        return;
+    }
+    let events = &loaded.visible().tracks[app.track].events;
     let pitches = app.selected_event.map_or_else(Vec::new, |i| {
         let tick = events[i].tick;
         let range = if !chord {
@@ -81,7 +84,7 @@ fn audition(app: &mut App, chord: bool) {
             .map(|index| {
                 let duration = loaded.note_views[app.track].durations[index].map(|d| {
                     cat_smf_editor::score::audition_timing::duration_seconds(
-                        &loaded.music,
+                        loaded.visible(),
                         app.track,
                         tick,
                         d,
@@ -93,6 +96,10 @@ fn audition(app: &mut App, chord: bool) {
     });
     if pitches.is_empty() {
         app.audition.stop();
+        return;
+    }
+    if let Some((track, patch)) = crate::view::patterns::preview::edit_sound(app, app.track) {
+        app.audition.play_track(track, &patch, &pitches, None);
         return;
     }
     let tick = app.selected_event.map(|i| events[i].tick);
@@ -122,7 +129,7 @@ pub(crate) fn move_rows(app: &mut App, step: isize) {
     let count = if app.note_mode {
         loaded.display_rows[app.track].len()
     } else {
-        loaded.music.tracks[app.track].events.len()
+        loaded.visible().tracks[app.track].events.len()
     };
     if count == 0 {
         return;
@@ -152,7 +159,7 @@ pub(crate) fn boundary(app: &mut App, forward: bool, measure: bool) {
     let Some(map) = loaded.time.map(app.track) else {
         return;
     };
-    let events = &loaded.music.tracks[app.track].events;
+    let events = &loaded.visible().tracks[app.track].events;
     let Some(last) = events.last() else {
         return;
     };

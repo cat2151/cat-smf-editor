@@ -1,6 +1,6 @@
 //! SMF の1 track を VOICEVOX の譜面（`notes` の列）へ変換する。
 use crate::edit::lyric::text_at;
-use crate::model::Music;
+use crate::model::{Event, Music};
 use crate::score::audition_timing::TempoMap;
 use crate::score::note_view::{note_on, NoteView};
 use serde::Serialize;
@@ -56,11 +56,19 @@ impl Score {
     }
 }
 
-/// `track` の note を単音の譜面にする。note が無ければ `None`。
+/// `track` が鳴らす note（同じ小節の参照を展開した後）のうち、歌う note を
+/// 単音の譜面にする。歌う note が無ければ `None`。
+pub fn from_track(music: &Music, track: usize) -> Option<Score> {
+    let voice = super::Voice::read(music.tracks.get(track)?).unwrap_or_default();
+    let (events, _) = crate::score::same_measure::expand(music, track).ok()?;
+    let tempo = TempoMap::new(music, track);
+    from_events(&events, &tempo, voice)
+}
+
+/// 鳴らす event 列の note を、`tempo` の時刻で単音の譜面にする。歌う note が無ければ `None`。
 ///
 /// 同じ tick の note は最も高い音だけを歌い、後から始まる note は前の note を切る。
-pub fn from_track(music: &Music, track: usize) -> Option<Score> {
-    let events = &music.tracks.get(track)?.events;
+pub fn from_events(events: &[Event], tempo: &TempoMap, voice: super::Voice) -> Option<Score> {
     let durations = NoteView::new(events).durations;
     let end_tick = events.last()?.tick;
     let mut melody: Vec<usize> = Vec::new();
@@ -77,11 +85,10 @@ pub fn from_track(music: &Music, track: usize) -> Option<Score> {
     if melody.is_empty() {
         return None;
     }
-    let tempo = TempoMap::new(music, track);
     let frame =
         |tick: u64| LEAD_FRAMES + (tempo.duration(0, tick) * FRAMES_PER_SECOND).round() as u64;
     let mut score = Score {
-        voice: super::Voice::read(music.tracks.get(track)?).unwrap_or_default(),
+        voice,
         notes: Vec::new(),
         starts: Vec::new(),
         sources: Vec::new(),

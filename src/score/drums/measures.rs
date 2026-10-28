@@ -128,8 +128,14 @@ pub fn toggle_measure(
 /// GM onsets and velocities are authoritative; releases follow the next hit in that row or bar end.
 pub fn rebuild(music: &mut crate::model::Music) -> Result<(), String> {
     let time = MusicalTime::new(music);
+    let bodies = (0..music.tracks.len())
+        .filter(|&t| {
+            crate::score::pattern::is_source(music, t)
+                || crate::score::performance::is_owner(&music.tracks[t])
+        })
+        .collect::<std::collections::BTreeSet<_>>();
     for (track, source) in music.tracks.iter_mut().enumerate() {
-        if read(source)?.is_none() {
+        if bodies.contains(&track) || read(source)?.is_none() {
             continue;
         }
         let map = time.map(track).ok_or("Missing drum measure map")?;

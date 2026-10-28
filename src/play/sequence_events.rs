@@ -12,6 +12,9 @@ use std::collections::{HashMap, VecDeque};
 pub(super) fn is_on(word: u32) -> bool {
     (word >> 20) & 15 == 9 && word & 127 != 0
 }
+fn is_off(word: u32) -> bool {
+    (word >> 20) & 15 == 8 || ((word >> 20) & 15 == 9 && word & 127 == 0)
+}
 fn key(word: u32) -> u32 {
     word & 0x000f_7f00
 }
@@ -61,6 +64,18 @@ impl Sequence {
         let mut pending: HashMap<(u8, u8), VecDeque<bool>> = HashMap::new();
         result.origin = tempo.seconds_at(start);
         for (index, event) in source.iter().enumerate() {
+            if matches!(event.status & 0xf0, 0xb0 | 0xe0) && event.data.len() == 2 {
+                if event.tick >= start && tempo.seconds_at(event.tick) <= result.origin + end {
+                    result.events.push(MidiEvent {
+                        time: tempo.seconds_at(event.tick),
+                        word: 0x2000_0000
+                            | (u32::from(event.status) << 16)
+                            | (u32::from(event.data[0]) << 8)
+                            | u32::from(event.data[1]),
+                    });
+                }
+                continue;
+            }
             if !note_on(event) && !note_off(event) {
                 continue;
             }
@@ -116,7 +131,9 @@ impl Sequence {
         for event in &self.events {
             if is_on(event.word) {
                 held.push(event.word);
-            } else if let Some(index) = held.iter().position(|&word| key(word) == key(event.word)) {
+            } else if is_off(event.word)
+                && let Some(index) = held.iter().position(|&word| key(word) == key(event.word))
+            {
                 held.remove(index);
             }
         }
@@ -128,27 +145,7 @@ impl Sequence {
 
     pub fn skip(&mut self, elapsed: f64) {
         let origin = self.origin + elapsed;
-        let mut held: Vec<MidiEvent> = Vec::new();
-        for event in self.events.iter().take_while(|event| event.time < origin) {
-            if is_on(event.word) {
-                held.push(event.clone());
-            } else if let Some(index) = held.iter().position(|on| key(on.word) == key(event.word)) {
-                held.remove(index);
-            }
-        }
-        // An off at the seek point must not resurrect the note that just ended.
-        for event in self
-            .events
-            .iter()
-            .filter(|event| event.time == origin && !is_on(event.word))
-        {
-            if let Some(index) = held.iter().position(|on| key(on.word) == key(event.word)) {
-                held.remove(index);
-            }
-        }
-        for on in &mut held {
-            on.time = origin;
-        }
+        let mut held = super::super::sequence_seek::prelude(&self.events, origin);
         held.extend(
             self.events
                 .iter()

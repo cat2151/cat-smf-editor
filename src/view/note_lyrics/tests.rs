@@ -40,12 +40,15 @@ pub(crate) fn singing() -> crate::app::App {
 #[test]
 fn singing_lyrics_match_note_ticks_and_ignore_duplicates_and_orphans() {
     let mut app = singing();
-    let loaded = app.loaded.as_mut().unwrap();
-    let lyrics = super::read(loaded, 0);
+    let read = |app: &crate::app::App| {
+        let loaded = app.loaded.as_ref().unwrap();
+        super::read(&loaded.music, 0, &crate::view::piano_roll::shown(loaded)[0])
+    };
     assert_eq!(
-        lyrics.into_iter().collect::<Vec<_>>(),
+        read(&app).into_iter().collect::<Vec<_>>(),
         [(0, "きゃ".into()), (480, "り".into())]
     );
+    let loaded = app.loaded.as_mut().unwrap();
     cat_smf_editor::voicevox::Voice::write(&mut loaded.music.tracks[0], None).unwrap();
-    assert!(super::read(loaded, 0).is_empty());
+    assert!(read(&app).is_empty());
 }

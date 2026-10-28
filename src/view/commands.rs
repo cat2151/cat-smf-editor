@@ -145,7 +145,16 @@ impl<T> Spec<T> {
 
 pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     let mut result = Vec::new();
+    if screen == Screen::EditStyle {
+        super::edit_style::collect(&mut result);
+        for c in &mut result {
+            c.target = Some(Target::of(app));
+        }
+        return result;
+    }
+    super::patterns::mode::collect(app, screen, &mut result);
     basic::collect(app, screen, &mut result);
+    super::patterns::collect(app, screen, &mut result);
     menus::collect(app, screen, &mut result);
     navigation::collect(app, screen, &mut result);
     super::layers::commands::collect(app, screen, &mut result);
@@ -158,6 +167,17 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     super::mml_input::commands::collect(app, screen, &mut result);
     super::voicevox::collect(app, screen, &mut result);
     super::track_overview::collect(app, screen, &mut result);
+    if app.patterns.confirming_creation() {
+        result.retain(|c| {
+            matches!(
+                c.id.as_str(),
+                "first-pattern-edit"
+                    | "first-pattern-back"
+                    | "first-container-prev"
+                    | "first-container-next"
+            )
+        });
+    }
     for c in &mut result {
         c.target = Some(Target::of(app));
     }
@@ -165,7 +185,13 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
 }
 
 pub fn candidates(app: &App, ctx: &egui::Context) -> Vec<Command> {
-    let current = owner(app, ctx);
+    let current = if !app.patterns.workspace.input_open()
+        && let Some(p) = super::patterns::workspace::focused_query(ctx)
+    {
+        p.screen()
+    } else {
+        owner(app, ctx)
+    };
     let mut result = contextual_definitions(app, ctx, current);
     let screens: &[Screen] = match current {
         Screen::Main => &[
@@ -184,6 +210,7 @@ pub fn candidates(app: &App, ctx: &egui::Context) -> Vec<Command> {
         ],
         Screen::Timeline | Screen::Overview => &[Screen::Settings, Screen::Program, Screen::Play],
         Screen::Mixer => &[Screen::Effects],
+        Screen::Patterns | Screen::Scene | Screen::Song => &[Screen::Settings, Screen::Play],
         Screen::Settings => &[Screen::Program],
         Screen::Go => &[Screen::Tracks],
         _ => &[],
@@ -233,6 +260,8 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
         return;
     }
     ctx.data_mut(|d| d.insert_temp(guard, token));
+    // Before dispatch: Esc for an open popup must not also cancel a selection under it.
+    super::track_pane::close_warnings_on_escape(app, ctx);
     let mut screen = owner(app, ctx);
     if screen == Screen::Lyrics {
         crate::view::voicevox::lyrics::keep_ime_enter(app, ctx);
@@ -242,6 +271,9 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
     }
     if screen == Screen::Singer {
         crate::view::voicevox::singer::keep_ime(app, ctx);
+    }
+    if matches!(screen, Screen::Mml | Screen::Note) {
+        super::text_input::keep_ime(ctx);
     }
     let events = ctx.input(|i| i.events.clone());
     let question_repeat = events

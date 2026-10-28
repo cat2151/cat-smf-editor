@@ -214,14 +214,24 @@ fn r_opens_the_tempo_curve_only_on_the_conductor_of_format_1() {
     press(&mut app, &ctx, egui::Key::R);
     assert!(app.tempo_curve.open);
     assert!(!app.piano_roll.open);
-    press(&mut app, &ctx, egui::Key::V);
-    assert!(app.note_mode, "V must not reach the view while open");
+    press(&mut app, &ctx, egui::Key::T);
+    assert!(!app.player_selection.open);
     press(&mut app, &ctx, egui::Key::R);
     assert!(!app.tempo_curve.open);
     press(&mut app, &ctx, egui::Key::R);
     assert!(app.tempo_curve.open);
     press(&mut app, &ctx, egui::Key::Escape);
     assert!(!app.tempo_curve.open);
+    press(&mut app, &ctx, egui::Key::R);
+    let before = cat_smf_editor::smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap();
+    press(&mut app, &ctx, egui::Key::V);
+    assert!(!app.note_mode && !app.tempo_curve.open);
+    assert_eq!(
+        cat_smf_editor::smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap(),
+        before
+    );
+    press(&mut app, &ctx, egui::Key::V);
+    assert!(app.note_mode);
 
     app.select_track(1);
     press(&mut app, &ctx, egui::Key::R);
@@ -395,4 +405,5 @@ mod trills;
 
 mod deferred;
 mod grid;
+mod initial_meta;
 mod note_references;

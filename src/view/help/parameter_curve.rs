@@ -13,6 +13,7 @@ pub(super) fn rows(ui: &mut egui::Ui) {
                 ("円 / 四角: ドラッグ", "Point / Control"),
                 ("円: 右クリック", "Point削除"),
                 ("Ctrl+Z", "元に戻す"),
+                ("V", "Notes / Raw"),
                 ("PageUp / PageDown", "時間拡大 / 縮小"),
                 ("minimap: ドラッグ", "表示範囲"),
                 ("A-B repeat: 左ドラッグ", "範囲指定"),

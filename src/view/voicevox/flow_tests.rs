@@ -52,6 +52,7 @@ pub(super) fn new_song(
     frame(&mut app, &ctx, vec![]);
     key(&mut app, &ctx, Key::N, Modifiers::CTRL | Modifiers::COMMAND);
     assert_eq!(app.loaded.as_ref().unwrap().name, "untitled.mid");
+    key(&mut app, &ctx, Key::Escape, Modifiers::NONE);
     (app, ctx)
 }
 
@@ -126,8 +127,8 @@ fn sung(json: &str) -> Vec<(u64, String)> {
         .collect()
 }
 
-/// The last playback cued the singer's take note by note, from the score the engine sang last.
-fn assert_sung(app: &App, track: usize, last: &str) -> Vec<(u64, String)> {
+/// The playback cued the take for a full score that the engine actually rendered.
+fn assert_sung(app: &App, track: usize, requests: &[String]) -> Vec<(u64, String)> {
     let take = app
         .audition
         .takes
@@ -136,8 +137,14 @@ fn assert_sung(app: &App, track: usize, last: &str) -> Vec<(u64, String)> {
         .map(|(_, take)| take.clone())
         .expect("the singer's take");
     let score = from_track(&app.loaded.as_ref().unwrap().music, track).unwrap();
-    assert_eq!(score.json(), last);
-    let notes = sung(last);
+    let json = score.json();
+    // MML note previews can finish after the whole-song render. Completion order
+    // does not determine which cached take the playback uses.
+    assert!(
+        requests.contains(&json),
+        "Score was not rendered: {json}; requests: {requests:?}"
+    );
+    let notes = sung(&json);
     assert_eq!(take.voiced(), notes.len());
     notes
 }
@@ -169,8 +176,7 @@ fn from_a_new_song_the_palette_alone_makes_zundamon_sing_donguri_on_notes_added_
     lyrics(&mut app, &ctx, 1920, "ころころ");
     settle(&mut app, &ctx);
     let track = play(&mut app, &ctx);
-    let last = SUNG.lock().unwrap().last().cloned().expect("sung");
-    let notes = assert_sung(&app, track, &last);
+    let notes = assert_sung(&app, track, &SUNG.lock().unwrap());
     assert_eq!(
         notes.iter().map(|n| n.1.as_str()).collect::<Vec<_>>(),
         DONGURI
@@ -204,8 +210,7 @@ fn a_melody_typed_as_mml_first_takes_donguri_and_sings_it() {
     lyrics(&mut app, &ctx, 1920, "ころころ");
     settle(&mut app, &ctx);
     let track = play(&mut app, &ctx);
-    let last = SUNG.lock().unwrap().last().cloned().expect("sung");
-    let notes = assert_sung(&app, track, &last);
+    let notes = assert_sung(&app, track, &SUNG.lock().unwrap());
     assert_eq!(
         notes.iter().map(|n| n.1.as_str()).collect::<Vec<_>>(),
         DONGURI

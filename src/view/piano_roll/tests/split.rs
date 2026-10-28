@@ -33,7 +33,11 @@ pub(super) fn fixture() -> crate::app::App {
 fn higher_range_is_on_top_in_equal_halves_and_both_panes_edit_their_own_track() {
     let mut app = fixture();
     let (ctx, output) = opened_in(&mut app);
-    let tracks = super::super::panes::tracks(&app, app.loaded.as_ref().unwrap());
+    let tracks = super::super::panes::tracks(
+        &app,
+        app.loaded.as_ref().unwrap(),
+        &crate::play::playback::performance(&app),
+    );
     assert_eq!(tracks, vec![2, 1]);
     let panel = app.piano_roll.viewport.panel.unwrap();
     let rects = all_notes(&output);
@@ -90,7 +94,11 @@ fn duplicate_tracks_empty_tracks_and_tied_ranges_keep_stable_order() {
     );
     app.track_view.split = Some([0, 1]);
     assert_eq!(
-        super::super::panes::tracks(&app, app.loaded.as_ref().unwrap()),
+        super::super::panes::tracks(
+            &app,
+            app.loaded.as_ref().unwrap(),
+            &crate::play::playback::performance(&app)
+        ),
         vec![1, 0]
     );
     let loaded = app.loaded.as_mut().unwrap();
@@ -99,7 +107,11 @@ fn duplicate_tracks_empty_tracks_and_tied_ranges_keep_stable_order() {
         cat_smf_editor::score::note_view::NoteView::new(&loaded.music.tracks[2].events);
     app.track_view.split = Some([2, 1]);
     assert_eq!(
-        super::super::panes::tracks(&app, app.loaded.as_ref().unwrap()),
+        super::super::panes::tracks(
+            &app,
+            app.loaded.as_ref().unwrap(),
+            &crate::play::playback::performance(&app)
+        ),
         vec![2, 1]
     );
 }

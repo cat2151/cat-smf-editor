@@ -97,13 +97,16 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         return;
     };
     let track = app.track;
-    let lyrics = crate::view::note_lyrics::read(loaded, track);
     let cursor = crate::play::playback::location(app).0;
     let playing = crate::play::transport::tick_for(app, track);
     let mut following = Follow::new(ui.ctx(), app.playback.follow, playing);
+    let sources = crate::play::playback::performance(app);
+    let lyrics = crate::view::note_lyrics::read(&loaded.music, track, &sources[track]);
     // One list per track, since beams join notes of one track only.
-    let tracks: Vec<_> = (0..loaded.music.tracks.len())
-        .map(|t| score::notes(loaded, t))
+    let tracks: Vec<_> = sources
+        .iter()
+        .enumerate()
+        .map(|(t, source)| score::notes(loaded, t, source))
         .collect();
     let mut voices = vec![tracks[track].as_slice()];
     let mut others: Vec<_> = (0..loaded.music.tracks.len())
@@ -118,8 +121,8 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             .filter(|&t| t != track)
             .collect();
     }
-    let mut overview = piano_roll::layout_of(loaded, &voiced, track, cursor);
-    let mut layout = piano_roll::layout(loaded, track, cursor);
+    let mut overview = piano_roll::layout_from(loaded, &sources, &voiced, track, cursor);
+    let mut layout = piano_roll::layout_from(loaded, &sources, &[track], track, cursor);
     let tempos = minimap::Data::read(loaded, track);
     tempos.extend_timeline(loaded, track, &mut overview);
     tempos.extend_timeline(loaded, track, &mut layout);

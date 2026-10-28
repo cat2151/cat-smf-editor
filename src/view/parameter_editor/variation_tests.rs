@@ -7,96 +7,8 @@ use cat_smf_editor::{
     },
 };
 
-fn fixture() -> App {
-    let mut music = tracks::new_song();
-    let lane = |value| Curve {
-        version: 1,
-        target: Target {
-            group: 1,
-            layer: 1,
-            plugin_format: "CLAP".into(),
-            plugin_id: "org.surge-synth-team.surge-xt".into(),
-            parameter_id: "macro-fixture".into(),
-        },
-        minimum: 0.0,
-        maximum: 1.0,
-        value_space: ValueSpace::Plain,
-        name: "Macro 1".into(),
-        path: "Macros".into(),
-        points: vec![Point { tick: 0, value }],
-        controls: vec![],
-    };
-    macro_values::write(
-        &mut music.tracks[0],
-        &Values {
-            version: 1,
-            parameters: vec![lane(0.2)],
-            variations: vec![Variations {
-                layer: 1,
-                selected: 0,
-                snapshots: vec![vec![lane(0.2)], vec![lane(0.8)], vec![lane(0.4)]],
-            }],
-        },
-    )
-    .unwrap();
-    let mut app = crate::view::tests::app(music);
-    // Use the saved instrument identity without opening native plugins.
-    let mut c = lane(0.0);
-    c.target.parameter_id = "macro-variation".into();
-    c.target.plugin_id = "CLAP:org.surge-synth-team.surge-xt".into();
-    c.maximum = 2.0;
-    c.points.clear();
-    macro_curve::write(&mut app.loaded.as_mut().unwrap().music.tracks[0], &c).unwrap();
-    app.parameter_editor = State {
-        open: true,
-        variation_layer: Some(1),
-        owner: Some(0),
-        ..Default::default()
-    };
-    app
-}
-
-fn index_curve() -> Curve {
-    Curve {
-        version: 1,
-        target: Target {
-            group: 1,
-            layer: 1,
-            plugin_format: "CLAP".into(),
-            plugin_id: "CLAP:org.surge-synth-team.surge-xt".into(),
-            parameter_id: "macro-variation".into(),
-        },
-        minimum: 0.0,
-        maximum: 2.0,
-        value_space: ValueSpace::Plain,
-        name: "Macro variation curve".into(),
-        path: "Macros".into(),
-        points: vec![
-            Point {
-                tick: 0,
-                value: 0.0,
-            },
-            Point {
-                tick: 480,
-                value: 1.0,
-            },
-            Point {
-                tick: 960,
-                value: 2.0,
-            },
-        ],
-        controls: vec![
-            Point {
-                tick: 240,
-                value: 0.0,
-            },
-            Point {
-                tick: 720,
-                value: 1.5,
-            },
-        ],
-    }
-}
+mod fixture;
+use fixture::{fixture, index_curve};
 
 fn frame(app: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
     ctx.run(
@@ -250,19 +162,6 @@ fn playback_plan_uses_curve_and_explicit_parameter_automation_takes_priority() {
         .unwrap()
         .parameters[0]
         .clone();
-    loaded.patches[0].layers[0].instrument = Some(cat_smf_editor::chain_settings::PluginState {
-        reference: None,
-        plugin: PluginKey {
-            format: template.target.plugin_format.clone(),
-            id: template.target.plugin_id.clone(),
-            name: "Surge XT".into(),
-            vendor: String::new(),
-            bundle_path: String::new(),
-        },
-        state: vec![],
-        preset_name: None,
-        bypass: false,
-    });
     let parts = vec![(
         0,
         loaded.patches[0].clone(),
@@ -424,6 +323,7 @@ fn opening_repeats_the_entire_owner_and_keeps_repeat_after_point_edit() {
 }
 
 mod occlusion;
+mod plugin_independence;
 mod unbounded_controls;
 mod zoom;
 

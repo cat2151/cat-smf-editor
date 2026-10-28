@@ -4,6 +4,7 @@ use super::{
     notation::{self, Spelled},
 };
 use crate::app::Loaded;
+use crate::play::playback::Sounding;
 use cat_smf_editor::score::note_view::note_on;
 use eframe::egui::{self, Color32};
 
@@ -23,7 +24,7 @@ pub(super) fn lit(start: u64, end: u64, playing: Option<u64>) -> bool {
 
 /// SMPTE division has no quarter note; 480 only sizes the notes.
 pub(super) fn ppqn(loaded: &Loaded) -> u16 {
-    let division = loaded.music.division;
+    let division = loaded.visible().division;
     if division == 0 || division & 0x8000 != 0 {
         480
     } else {
@@ -31,14 +32,14 @@ pub(super) fn ppqn(loaded: &Loaded) -> u16 {
     }
 }
 
-/// Notes of `track`, with accidentals only where the measure needs one.
-pub(super) fn notes(loaded: &Loaded, track: usize) -> Vec<Note> {
+/// Notes of `track` as `source` plays them, with accidentals only where the measure needs one.
+pub(super) fn notes(loaded: &Loaded, track: usize, source: &Sounding) -> Vec<Note> {
     let ppqn = ppqn(loaded);
     let keys = loaded.keys.map(track);
     let meter = loaded.time.map(track);
-    let durations = &loaded.note_views[track].durations;
+    let durations = &source.durations;
     let mut accidentals = notation::Accidentals::default();
-    loaded.music.tracks[track]
+    source
         .events
         .iter()
         .enumerate()
@@ -184,7 +185,7 @@ pub(super) fn comments(
 ) {
     let mut events: Vec<_> = tracks
         .iter()
-        .flat_map(|&t| loaded.music.tracks[t].events.iter())
+        .flat_map(|&t| loaded.visible().tracks[t].events.iter())
         .filter(|e| e.status == 0xff && e.meta_type == 0x01 && !e.data.is_empty())
         .collect();
     events.sort_by_key(|e| e.tick);

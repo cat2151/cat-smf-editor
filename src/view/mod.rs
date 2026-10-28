@@ -6,6 +6,7 @@ pub(crate) mod comma_menu;
 pub(crate) mod commands;
 pub(crate) mod drums;
 pub(crate) mod edit_menu;
+pub(crate) mod edit_style;
 pub(crate) mod effects;
 mod event_repeat;
 pub(crate) mod event_selection;
@@ -17,6 +18,7 @@ pub(crate) mod note_edit;
 mod note_lyrics;
 pub(crate) mod opening;
 pub(crate) mod palette;
+pub(crate) mod patterns;
 pub(crate) mod piano_roll;
 mod pitch_keyboard;
 mod row;
@@ -31,6 +33,7 @@ pub(crate) mod staff;
 pub(crate) mod tempo_curve;
 #[cfg(test)]
 pub(crate) mod tests;
+mod text_input;
 pub(crate) mod time_columns;
 mod timeline_drag;
 mod timeline_follow;
@@ -66,15 +69,19 @@ pub(crate) fn track_color(track: usize) -> Color32 {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    patterns::validate(app);
     if app.startup_pending(ctx) {
+        app.lifecycle.interrupted();
         return;
     }
     opening::advance(app, ctx);
     crate::play::sung::prerender::poll(app, ctx);
     voicevox::singer::poll(app, ctx);
     let opening_input = opening::suspend_input(app, ctx);
+    patterns::workspace::suspend_background(app, ctx);
     let palette_input = palette::begin(app, ctx);
     if crate::player::setup::show(app, ctx) {
+        app.lifecycle.interrupted();
         crate::play::transport::advance(app);
         crate::play::mascot::update(app);
         app.audition.pump();
@@ -92,31 +99,43 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         crate::play::transport::advance(app);
     }
     crate::play::mascot::update(app);
-    show_contents(app, ctx);
+    app.frame_started(ctx);
+    let style_input = edit_style::suspend_background(app, ctx);
+    let event_list_drawn = show_contents(app, ctx);
+    patterns::show(app, ctx);
+    patterns::workspace::root_dialog(app, ctx);
     track_rename::show(app, ctx);
     if app.palette.is_open() {
         app.audition.pump();
     }
     // Outside show_contents: a viewport skipped for one frame closes.
     analysis::show(app, ctx);
+    patterns::presentation::refocus_root(app, ctx);
+    patterns::workspace::show(app, ctx);
     if !opening::pending(app) {
         app.auto_save(ctx);
     }
     title::update(app, ctx);
+    app.frame_completed(ctx, event_list_drawn);
+    edit_style::show(app, ctx, style_input);
     palette::end(app, ctx, palette_input);
     opening::show(app, ctx, opening_input);
     voicevox::progress::show(app, ctx);
 }
 
-fn show_contents(app: &mut App, ctx: &egui::Context) {
+fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
     if files::missing_last_dialog(app, ctx) {
-        return;
+        return false;
     }
     let mut invalid_smf = files::invalid_smf_dialog(app, ctx);
-    if !invalid_smf && !app.mml_input.open && recent::show(app, ctx) {
-        return;
+    if !invalid_smf && app.edit_style.is_none() && !app.mml_input.open && recent::show(app, ctx) {
+        return false;
     }
-    if !invalid_smf && !app.mml_input.open && !event_selection::valid(app) {
+    if !invalid_smf
+        && app.edit_style.is_none()
+        && !app.mml_input.open
+        && !event_selection::valid(app)
+    {
         crate::view::files::inputs(app, ctx);
     }
     let departure = app.config.navigation.departure.is_some();
@@ -127,7 +146,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         invalid_smf = files::invalid_smf_dialog(app, ctx);
     }
     let notice = !invalid_smf && !departure && files::backup_notice_dialog(app, ctx);
-    let confirming = departure || invalid_smf || notice;
+    let confirming = departure || invalid_smf || notice || app.edit_style.is_some();
     if !confirming {
         #[cfg(windows)]
         crate::player::resident_link::refresh_browser_activity(app);
@@ -151,7 +170,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
             crate::player::resident_link::trace_slow(app, "advance", started);
             if app.player_selection.no_notes_error {
                 crate::player::bulk::show_note_error(app, ctx);
-                return;
+                return false;
             }
             if app.trill_edit.is_none() {
                 crate::view::piano_roll::shortcuts(app, ctx);
@@ -175,6 +194,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         });
 
         let mut track = app.track;
+        let mut track_clicked = false;
         let mut add_track = false;
         let mut rename_track = None;
         let can_rename = matches!(
@@ -200,6 +220,11 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
                     .show(ui, |ui| {
                         for (index, title) in loaded.track_titles.iter().enumerate() {
                             let response = ui.selectable_value(&mut track, index, title);
+                            track_clicked |= response.clicked();
+                            #[cfg(test)]
+                            ctx.data_mut(|d| {
+                                d.insert_temp(egui::Id::new(("actual-track", index)), response.rect)
+                            });
                             if can_rename {
                                 response.context_menu(|ui| {
                                     if ui.button("Rename…").clicked() {
@@ -225,6 +250,9 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
             busy::request(app, ctx, busy::Task::AddTrack);
         } else if track != app.track {
             app.select_track(track);
+            patterns::track_selected(app);
+        } else if track_clicked {
+            patterns::track_selected(app);
         }
         if let Some(track) = rename_track {
             track_rename::begin(app, track);
@@ -263,7 +291,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
         crate::view::effects::open(app, crate::view::effects::Target::Track(app.track), slot);
     }
     if confirming {
-        return;
+        return app.loaded.is_some();
     }
     crate::player::selection::show(app, ctx);
     crate::view::help::show(app, ctx);
@@ -299,6 +327,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) {
     if app.audition.needs_pump() {
         ctx.request_repaint_after(std::time::Duration::from_millis(32));
     }
+    app.loaded.is_some()
 }
 
 /// The track's rows with its map on the right; the map follows the rows' visible ticks.

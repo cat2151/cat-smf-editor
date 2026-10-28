@@ -2,11 +2,12 @@
 use crate::app::App;
 use crate::view::pitch_keyboard;
 use cat_smf_editor::score::musical_time::Position;
-use cat_smf_editor::score::note_view::note_on;
 use eframe::egui::{self, Color32};
 
+mod notes;
 mod tempo;
 mod variations;
+pub(crate) use notes::Notes;
 
 pub const WIDTH: f32 = 120.0;
 
@@ -29,13 +30,13 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
     let painter = ui.painter_at(rect);
-    let events = &loaded.music.tracks[track].events;
-    let variations =
-        cat_smf_editor::score::macro_curve::read(&loaded.music.tracks[track]).unwrap_or_default();
+    let notes = Notes::read(app, track);
+    let variations = cat_smf_editor::score::macro_curve::read(&loaded.visible().tracks[track])
+        .unwrap_or_default();
     let end = variations
         .iter()
         .filter_map(|c| c.points.last().map(|p| p.tick))
-        .chain(events.last().map(|e| e.tick))
+        .chain([notes.end])
         .max()
         .unwrap_or(0)
         .max(1) as f32;
@@ -44,7 +45,7 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
         let top = y(tick).floor();
         egui::Rect::from_x_y_ranges(rect.x_range(), top..=top + 1.0)
     };
-    let curve = cat_smf_editor::edit::tempo_curve::read(&loaded.music)
+    let curve = cat_smf_editor::edit::tempo_curve::read(loaded.visible())
         .ok()
         .flatten();
     if let Some(curve) = &curve {
@@ -69,15 +70,8 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
         }
         painter.rect_filled(row(event.tick), 0.0, DARK);
     }
-    let range = loaded.time_columns[track].pitch_range;
-    // A track without notes, such as the conductor, spans every track's notes.
-    let others_range = range.or_else(|| {
-        loaded
-            .time_columns
-            .iter()
-            .filter_map(|c| c.pitch_range)
-            .reduce(|(min, max), (low, high)| (min.min(low), max.max(high)))
-    });
+    let range = notes.own_range();
+    let others_range = notes.range();
     let note_rect = |range: (u8, u8), pitch: u8, tick: u64, duration: Option<u64>| {
         let top = y(tick);
         let bottom = y(tick + duration.unwrap_or(0)).max(top + 1.0);
@@ -87,25 +81,9 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
         )
     };
     if let Some(range) = others_range {
-        for (other, other_track) in loaded.music.tracks.iter().enumerate() {
-            if other == track {
-                continue;
-            }
-            let durations = &loaded.note_views[other].durations;
-            for (index, event) in other_track
-                .events
-                .iter()
-                .enumerate()
-                .filter(|(_, e)| note_on(e))
-            {
-                let pitch = event.data[0];
-                if (range.0..=range.1).contains(&pitch) {
-                    painter.rect_filled(
-                        note_rect(range, pitch, event.tick, durations[index]),
-                        0.0,
-                        DARK,
-                    );
-                }
+        for &(tick, duration, pitch) in &notes.others {
+            if (range.0..=range.1).contains(&pitch) {
+                painter.rect_filled(note_rect(range, pitch, tick, duration), 0.0, DARK);
             }
         }
     }
@@ -113,14 +91,12 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
         .unwrap_or_else(|| crate::play::playback::location(app).0);
     painter.rect_filled(row(playing), 0.0, Color32::WHITE);
     if let Some(range) = range {
-        let durations = &loaded.note_views[track].durations;
         let keys = loaded.keys.map(track);
-        for (index, event) in events.iter().enumerate().filter(|(_, e)| note_on(e)) {
-            let pitch = event.data[0];
+        for &(tick, duration, pitch) in &notes.own {
             painter.rect_filled(
-                note_rect(range, pitch, event.tick, durations[index]),
+                note_rect(range, pitch, tick, duration),
                 0.0,
-                pitch_keyboard::note_color(pitch, keys.and_then(|k| k.at(event.tick))),
+                pitch_keyboard::note_color(pitch, keys.and_then(|k| k.at(tick))),
             );
         }
     }

@@ -3,6 +3,12 @@ use crate::view::timeline_follow::Follow;
 use crate::view::timeline_repeat as repeat;
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
+    if app.piano_roll.generation != app.generation {
+        app.piano_roll.drag = None;
+        app.piano_roll.drag_pane = None;
+        app.piano_roll.range_drag = None;
+        app.piano_roll.generation = app.generation;
+    }
     if !app.piano_roll.open {
         keyboard::cancel(app, ctx);
         return;
@@ -20,7 +26,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         || app.track_view.go_open
         || app.trill_edit.is_some()
         || app.track_view.split_open);
-    let tracks = panes::tracks(app, loaded);
+    let sounding = crate::play::playback::performance(app);
+    let tracks = panes::tracks(app, loaded, &sounding);
     let active_slot = if tracks.first() == tracks.last() {
         app.track_view.active
     } else {
@@ -30,11 +37,12 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             .unwrap_or(0)
     };
     let tick = crate::play::playback::location(app).0;
-    let mut overview = layout_of(loaded, &tracks, app.track, tick);
+    let mut overview = roll(loaded, &sounding, &tracks, app.track, tick);
     let mut layouts: Vec<_> = tracks
         .iter()
-        .map(|&track| layout(loaded, track, tick))
+        .map(|&track| roll(loaded, &sounding, &[track], track, tick))
         .collect();
+    drop(sounding);
     let playing = crate::play::transport::tick_for(app, app.track);
     let mut following = Follow::new(ctx, app.playback.follow, playing);
     let minimap = minimap::Data::read(loaded, app.track);

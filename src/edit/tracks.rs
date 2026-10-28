@@ -29,6 +29,7 @@ fn event(tick: u64, status: u8, meta_type: u8, data: &[u8]) -> Event {
     }
 }
 
+/// 120 BPM and 4/4 follow Cubase's default project tempo and signature.
 pub fn new_song() -> Music {
     let mut track = Track {
         events: vec![

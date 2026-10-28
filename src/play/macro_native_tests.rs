@@ -100,6 +100,8 @@ fn macro_native_live_values_and_restoration() {
     }
     let music = cat_smf_editor::edit::tracks::new_song();
     let owner = Arc::new(OwnerPlan {
+        windows: Default::default(),
+        midi: false,
         owner: 0,
         curves,
         live: live.clone(),

@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Screen {
     Main,
+    EditStyle,
     TrackRename,
     Settings,
     Program,
@@ -42,11 +43,16 @@ pub enum Screen {
     MacroEditor,
     ParameterPicker,
     ParameterInput,
+    Patterns,
+    Scene,
+    Song,
+    ArrangementInput,
 }
 impl Screen {
     pub fn label(self) -> &'static str {
         match self {
             Self::Main => "Event list",
+            Self::EditStyle => "Edit style",
             Self::TrackRename => "Track name",
             Self::Settings => "Settings",
             Self::Program => "Program target",
@@ -79,12 +85,19 @@ impl Screen {
             Self::Singer => "VOICEVOX voice",
             Self::MacroEditor => "Macro edit",
             Self::ParameterPicker | Self::ParameterInput => "Automation",
+            Self::Patterns => "Patterns",
+            Self::Scene => "Scene",
+            Self::Song => "Pattern / Song",
+            Self::ArrangementInput => "Arrangement",
         }
     }
     pub fn owns_keys(self) -> bool {
         !matches!(
             self,
             Self::Main
+                | Self::ArrangementInput
+                | Self::Scene
+                | Self::Song
                 | Self::TrackRename
                 | Self::Mml
                 | Self::LayerInput
@@ -102,7 +115,20 @@ impl Screen {
 }
 
 pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
+    if a.patterns.workspace.input_open() {
+        return Screen::ArrangementInput;
+    }
+    if crate::view::patterns::workspace::focused_query(ctx).is_some() {
+        return Screen::ArrangementInput;
+    }
     if ctx.viewport_id() != egui::ViewportId::ROOT {
+        if let Some(p) = crate::view::patterns::workspace::pane(ctx) {
+            return if a.playback.open {
+                Screen::Play
+            } else {
+                p.screen()
+            };
+        }
         return Screen::Analysis;
     }
     if a.player_selection.setup.is_active()
@@ -122,6 +148,9 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     }
     if a.config.navigation.backup_notice {
         return Screen::Backup;
+    }
+    if a.edit_style.is_some() {
+        return Screen::EditStyle;
     }
     if a.track_rename.is_some() {
         return Screen::TrackRename;
@@ -152,6 +181,9 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     }
     if a.voicevox.lyrics.is_some() {
         return Screen::Lyrics;
+    }
+    if a.patterns.confirming_creation() {
+        return Screen::Patterns;
     }
     if a.mml_input.open {
         return Screen::Mml;

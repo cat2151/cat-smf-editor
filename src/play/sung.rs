@@ -173,4 +173,6 @@ pub mod prerender;
 #[cfg(test)]
 mod engine_tests;
 #[cfg(test)]
+mod source_tests;
+#[cfg(test)]
 pub(crate) mod tests;
