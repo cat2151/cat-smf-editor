@@ -16,10 +16,6 @@ pub(super) fn show(
         cancel = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
     }
     let contents = |ui: &mut egui::Ui| {
-        if state.help {
-            super::keyboard::help(state, ui);
-            return;
-        }
         ui.scope(|ui| {
             ui.set_max_height((ctx.screen_rect().height() - 40.0).max(22.0));
             ui.set_width((ctx.screen_rect().width() - 40.0).clamp(300.0, 600.0));
@@ -100,7 +96,7 @@ pub(super) fn show(
                                             }
                                             if !cancel {
                                                 cancel |= output.response.lost_focus()
-                                                    && !crate::view::palette::suspended(ctx);
+                                                    && !crate::view::modal::suspended(ctx);
                                             }
                                             output.response
                                         } else {
@@ -179,8 +175,8 @@ pub(super) fn show(
             }
         });
     };
-    if crate::view::palette::preview_active(ctx) {
-        crate::view::palette::preview_window(ctx, "Preview").show(ctx, contents);
+    if crate::view::command_input::preview_active(ctx) {
+        crate::view::command_input::preview_window(ctx, "Preview").show(ctx, contents);
     } else {
         egui::Modal::new(egui::Id::new("instrument-layers")).show(ctx, contents);
     };

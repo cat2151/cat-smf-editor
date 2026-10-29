@@ -19,7 +19,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             },
         ));
     }
-    if matches!(s, Screen::Main | Screen::Timeline) {
+    if matches!(s, Screen::Main | Screen::Timeline | Screen::Drums) {
         for (id, name, key, forward) in [
             ("track-next", "次のtrack", Key::ArrowRight, true),
             ("track-prev", "前のtrack", Key::ArrowLeft, false),

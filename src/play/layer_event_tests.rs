@@ -36,6 +36,30 @@ impl Effect for NoEffect {
 }
 
 #[test]
+fn live_chords_release_and_fast_retrigger_preserve_order_without_restarting_held_notes() {
+    let record = Rc::new(RefCell::new(Vec::new()));
+    let mut render =
+        Render::<_, NoEffect>::new(vec![(Recorder(record.clone()), Layer::default())], None);
+    for words in [
+        &[0x2090_3c50][..],
+        &[0x2090_4050][..],
+        &[0x2080_3c00, 0x2090_3c50][..],
+        &[0x2080_4000, 0x2080_3c00][..],
+    ] {
+        assert!(render.process_live(words, &mut [0.; 64], 2));
+    }
+    assert_eq!(
+        *record.borrow(),
+        vec![
+            vec![0x2090_3c50],
+            vec![0x2090_4050],
+            vec![0x2080_3c00, 0x2090_3c50],
+            vec![0x2080_4000, 0x2080_3c00]
+        ]
+    );
+}
+
+#[test]
 fn channel_controls_broadcast_to_drum_layers_without_pitch_routing() {
     let records: Vec<_> = (0..4).map(|_| Rc::new(RefCell::new(Vec::new()))).collect();
     let mut render = Render::<_, NoEffect>::new(

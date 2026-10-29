@@ -68,7 +68,7 @@ fn run(app: &mut App, ctx: &egui::Context) {
     query(app, ctx, "voicevox");
     assert_eq!(listed(app).first().map(String::as_str), Some(LABEL));
     press(app, ctx, Key::Enter);
-    assert!(!app.palette.is_open());
+    assert!(!crate::view::modal::is_open(app));
     press(app, ctx, Key::Enter);
     assert!(app.voicevox.singer.is_none());
 }

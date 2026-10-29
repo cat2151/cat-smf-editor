@@ -127,13 +127,19 @@ impl App {
     }
 
     pub fn restore_position(&mut self, session: &Session) {
+        self.restore_cursor(session);
+        crate::view::patterns::track_selected(self);
+    }
+
+    /// Edits restore cursor coordinates without reopening a dismissed body.
+    pub(crate) fn restore_cursor(&mut self, session: &Session) {
         let Some(loaded) = &self.loaded else {
             return;
         };
         if loaded.visible().tracks.is_empty() {
             return;
         }
-        self.select_track(
+        self.set_track(
             session
                 .track
                 .saturating_sub(1)

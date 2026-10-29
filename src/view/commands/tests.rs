@@ -51,7 +51,10 @@ fn closed_keys_are_not_direct_and_dialogs_block_reachability() {
         .all(|c| c.screen == Screen::Confirm));
     a.config.navigation.departure = None;
     a.help_open = true;
-    assert!(candidates(&a, &c).iter().all(|c| c.screen == Screen::Help));
+    assert_eq!(owner(&a, &c), Screen::Main);
+    assert!(candidates(&a, &c)
+        .iter()
+        .any(|c| c.screen == Screen::Timeline));
 }
 #[test]
 fn shared_key_and_palette_use_same_layer_target_and_undo_condition() {

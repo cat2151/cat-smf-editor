@@ -1,5 +1,6 @@
 use super::*;
 mod measure;
+mod pattern;
 mod positioning;
 mod repeat;
 use cat_smf_editor::{
@@ -339,8 +340,7 @@ fn reopening_starts_empty() {
 fn other_editors_and_menus_keep_their_i_key() {
     let ctx = egui::Context::default();
     let mut app = fixture();
-    for kind in 0..5 {
-        app.help_open = kind == 0;
+    for kind in 1..5 {
         app.comma_menu.open = kind == 1;
         app.edit_menu.open = kind == 2;
         app.layer_editor.open = kind == 3;

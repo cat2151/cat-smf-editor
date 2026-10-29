@@ -43,7 +43,7 @@ impl App {
             && !view::opening::pending(self)
             && !crate::play::transport::preparing(self)
             && !crate::play::sung::prerender::running(self)
-            && !self.palette.is_open()
+            && !view::modal::is_open(self)
             && !self.file_open_requested
             && !self.config.navigation.close_approved
             && self.load_error.is_none()
@@ -59,7 +59,7 @@ impl App {
         let Some(event) = &self.lifecycle.queued else {
             return;
         };
-        if event.frame == view::palette::frame_token(ctx) {
+        if event.frame == view::modal::frame_token(ctx) {
             return;
         }
         if event.song != self.song_id || !self.interactive_idle(ctx) {
@@ -77,7 +77,7 @@ impl App {
         if self.lifecycle.observe(idle) == Some(Event::EnteredIdle) {
             self.lifecycle.queued = Some(IdleNotification {
                 song: self.song_id,
-                frame: view::palette::frame_token(ctx),
+                frame: view::modal::frame_token(ctx),
             });
             ctx.request_repaint();
         }

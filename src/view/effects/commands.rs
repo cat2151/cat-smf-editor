@@ -15,11 +15,7 @@ pub(super) enum Op {
 }
 impl State {
     pub(crate) fn command_screen(&self) -> Screen {
-        if self.help {
-            Screen::EffectHelp
-        } else {
-            Screen::Effects
-        }
+        Screen::Effects
     }
     pub(crate) fn command_target(&self) -> (Option<Target>, usize) {
         (self.target, self.selected)
@@ -32,9 +28,6 @@ pub(super) fn specs(state: &State, count: usize) -> Vec<Spec<Op>> {
         p("help", "ヘルプ", &[Key::F1], Help),
         p("effects-close", "閉じる", &[Key::Escape, Key::Enter], Close),
     ];
-    if state.help {
-        return r;
-    }
     r.extend([
         p("effect-add", "エフェクト追加", &[Key::A], Add),
         p("effect-replace", "エフェクト差し替え", &[Key::X], Replace),
@@ -87,14 +80,8 @@ pub(super) fn specs(state: &State, count: usize) -> Vec<Spec<Op>> {
 pub(super) fn apply(state: &mut State, count: usize, op: Op) -> Option<Action> {
     use Op::*;
     match op {
-        Help => {
-            state.help = !state.help;
-            None
-        }
-        Close if state.help => {
-            state.help = false;
-            None
-        }
+        Help => None,
+
         Close => Some(Action::Close),
         Row(down) => {
             state.selected = if down {
@@ -120,7 +107,7 @@ pub(super) fn apply(state: &mut State, count: usize, op: Op) -> Option<Action> {
     }
 }
 pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
-    if !matches!(s, Screen::Effects | Screen::EffectHelp) {
+    if !matches!(s, Screen::Effects) {
         return;
     }
     let target = a.effect_editor.target.unwrap_or_else(|| {
@@ -155,6 +142,10 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             spec.name,
             &spec.keys,
             move |a, _| {
+                if matches!(op, Op::Help) {
+                    a.help_open = !a.help_open;
+                    return;
+                }
                 let Some(chain) = effects(a, target) else {
                     return;
                 };

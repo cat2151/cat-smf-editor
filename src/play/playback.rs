@@ -31,6 +31,7 @@ pub struct Playback {
     pub pending: Option<crate::play::transport::Prepared>,
     pub active: Option<crate::play::transport::Active>,
     pub repeat: Option<(u64, u64)>,
+    pub repeat_mode: Option<Mode>,
     pub follow: bool,
     pub mixer_open: bool,
     /// Keys go to the open mixer; otherwise to the views beside it.
@@ -54,6 +55,7 @@ impl Default for Playback {
             pending: None,
             active: None,
             repeat: None,
+            repeat_mode: None,
             follow: true,
             mixer_open: false,
             mixer_focus: true,

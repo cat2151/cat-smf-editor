@@ -107,7 +107,7 @@ fn first_drum() -> (App, egui::Context) {
     library::initialize_with(&mut a, true, drum_patch()).unwrap();
     let _ = c.run(Default::default(), |ctx| library::input(&mut a, ctx));
     frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
-    assert!(a.drum_editor.open);
+    assert!(crate::view::drums::is_open(&a));
     (a, c)
 }
 
@@ -120,11 +120,15 @@ fn first_drum_pattern_glows_edit_then_beat_then_placement() {
     assert!(place(&mut a, &c).is_none());
     // Leaving the grid for Song shows Edit on the empty candidate.
     key(&mut a, &c, root, Key::Escape, Modifiers::NONE);
-    assert!(!a.drum_editor.open);
+    assert!(!crate::view::drums::is_open(&a));
     let button = edit_button(&mut a, &c).expect("Edit on the empty pattern");
     click(&mut a, &c, song, button.center());
     frame(&mut a, &c, root, vec![]);
-    assert!(a.drum_editor.open, "{:?}", a.patterns.workspace.error);
+    assert!(
+        crate::view::drums::is_open(&a),
+        "{:?}",
+        a.patterns.workspace.error
+    );
     assert!(drum_beat(&mut a, &c).is_some());
     // One step makes the pattern a part to place.
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
@@ -138,7 +142,8 @@ fn first_drum_pattern_glows_edit_then_beat_then_placement() {
         .unwrap();
     assert_eq!(cell, first);
     assert!(card.top() > cell.bottom());
-    // Enter puts the candidate at the selected first cell, and the glow ends.
+    // Choose the part, then place it at the first cell.
+    key(&mut a, &c, song, Key::F, Modifiers::NONE);
     key(&mut a, &c, song, Key::Enter, Modifiers::NONE);
     let collection = cat_smf_editor::score::scene::read(&a.loaded.as_ref().unwrap().music).unwrap();
     assert_eq!(collection.song.len(), 1);
@@ -152,10 +157,10 @@ fn shift_e_opens_the_drum_editor_for_a_drum_pattern_with_notes() {
     let root = egui::ViewportId::ROOT;
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
     key(&mut a, &c, root, Key::Escape, Modifiers::NONE);
-    assert!(!a.drum_editor.open);
+    assert!(!crate::view::drums::is_open(&a));
     key(&mut a, &c, Pane::Song.viewport(), Key::E, Modifiers::SHIFT);
     frame(&mut a, &c, root, vec![]);
-    assert!(a.drum_editor.open);
+    assert!(crate::view::drums::is_open(&a));
 }
 
 #[test]
@@ -187,5 +192,5 @@ fn edit_on_an_empty_saw_pattern_opens_mml_input_and_notes_keep_the_event_list() 
         frame(&mut a, &c, root, vec![]);
     }
     assert!(!a.mml_input.open);
-    assert!(!a.drum_editor.open);
+    assert!(!crate::view::drums::is_open(&a));
 }

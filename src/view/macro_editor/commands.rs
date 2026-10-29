@@ -56,10 +56,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         "取消",
         &[Key::Escape],
         |a, _| {
-            if a.macro_editor.help {
-                a.macro_editor.help = false;
-            } else if a
-                .macro_editor
+            if a.macro_editor
                 .session
                 .as_mut()
                 .is_some_and(|s| s.keyboard.count.take().is_some())
@@ -79,12 +76,9 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             if let Some(s) = &mut a.macro_editor.session {
                 s.keyboard.count = None;
             }
-            a.macro_editor.help = !a.macro_editor.help;
+            a.help_open = !a.help_open;
         },
     ));
-    if app.macro_editor.help {
-        return;
-    }
     out.push(Command::plain(
         screen,
         "macro-confirm",

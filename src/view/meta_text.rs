@@ -4,14 +4,40 @@ use eframe::egui::{self, Color32};
 
 const COLOR: Color32 = Color32::from_rgb(0xe6, 0xdb, 0x74);
 
+pub(super) fn guide_track(loaded: &Loaded, tracks: &[usize]) -> Option<usize> {
+    if loaded.display_music.is_some()
+        || tracks
+            .iter()
+            .any(|&t| cat_smf_editor::score::pattern::is_source(&loaded.music, t))
+    {
+        return None;
+    }
+    cat_smf_editor::score::chord_guide::track(&loaded.music)
+}
+
+/// A silent guide still contributes its annotation positions to the viewport extent.
+pub(super) fn guide_end(loaded: &Loaded, tracks: &[usize]) -> u64 {
+    guide_track(loaded, tracks)
+        .and_then(|t| loaded.music.tracks[t].events.last())
+        .map_or(0, |e| e.tick)
+}
+
 pub(super) fn show(
     ui: &mut egui::Ui,
     loaded: &Loaded,
+    track: usize,
     config: &Store,
     rect: egui::Rect,
     scale: f32,
 ) -> Option<(usize, usize)> {
-    show_music(ui, &loaded.music, config, rect, scale)
+    paint(
+        ui,
+        &loaded.music,
+        config,
+        rect,
+        scale,
+        guide_track(loaded, &[track]).is_some(),
+    )
 }
 
 pub(super) fn show_music(
@@ -21,9 +47,20 @@ pub(super) fn show_music(
     rect: egui::Rect,
     scale: f32,
 ) -> Option<(usize, usize)> {
-    if !config.meta_text_visible {
-        return None;
-    }
+    paint(ui, music, config, rect, scale, true)
+}
+
+fn paint(
+    ui: &mut egui::Ui,
+    music: &cat_smf_editor::model::Music,
+    config: &Store,
+    rect: egui::Rect,
+    scale: f32,
+    include_guide: bool,
+) -> Option<(usize, usize)> {
+    let guide = include_guide
+        .then(|| cat_smf_editor::score::chord_guide::track(music))
+        .flatten();
     let clip = rect.intersect(ui.clip_rect());
     let painter = ui.painter().with_clip_rect(clip);
     let mut events: Vec<_> = music
@@ -32,8 +69,13 @@ pub(super) fn show_music(
         .enumerate()
         .flat_map(|(track, t)| {
             t.events.iter().enumerate().filter_map(move |(index, e)| {
-                (e.status == 0xff && e.meta_type == 0x01 && !e.data.is_empty())
-                    .then_some((e.tick, track, index, e))
+                ((config.meta_text_visible
+                    && e.status == 0xff
+                    && e.meta_type == 0x01
+                    && !e.data.is_empty())
+                    || (guide == Some(track)
+                        && cat_smf_editor::score::chord_guide::chord(e).is_some()))
+                .then_some((e.tick, track, index, e))
             })
         })
         .collect();
@@ -42,7 +84,10 @@ pub(super) fn show_music(
     let mut lanes: Vec<(f32, f32)> = Vec::new();
     let mut clicked = None;
     for (tick, track, index, event) in events {
-        let text = String::from_utf8_lossy(&event.data);
+        let text = cat_smf_editor::score::chord_guide::chord(event).map_or_else(
+            || String::from_utf8_lossy(&event.data),
+            std::borrow::Cow::Borrowed,
+        );
         if text.trim().is_empty() {
             continue;
         }

@@ -193,6 +193,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         .flat_map(|notes| notes.iter())
         .map(|n| n.tick)
         .collect();
+    if super::meta_text::guide_track(loaded, &[track]).is_some() {
+        onsets.extend(cat_smf_editor::score::chord_guide::chords(&loaded.music).map(|e| e.tick));
+    }
     onsets.sort_unstable();
     onsets.dedup();
     let end = (layout.size.x / layout.scale) as u64;
@@ -202,6 +205,12 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         layout.scale,
         gap,
     );
+    let comments_height = COMMENTS.max(score::comment_height(
+        ui.painter(),
+        loaded,
+        &[0, track],
+        |tick| spacing.x(tick),
+    ));
     let (area, navigated) = state.viewport.minimap_on(
         ui,
         area,
@@ -259,7 +268,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             let (whole, response) = ui.allocate_exact_size(
                 egui::vec2(
                     layout.size.x.max(visible.width()),
-                    (COMMENTS + staff.height() + gap).max(visible.height() - repeat::HEIGHT)
+                    (comments_height + staff.height() + gap).max(visible.height() - repeat::HEIGHT)
                         + repeat::HEIGHT,
                 ),
                 egui::Sense::click(),
@@ -282,7 +291,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
             let painter = ui
                 .painter()
                 .with_clip_rect(screen.with_min_y(row.bottom()).intersect(ui.clip_rect()));
-            staff.top = whole.top() + repeat::HEIGHT + COMMENTS;
+            staff.top = whole.top() + repeat::HEIGHT + comments_height;
             let x = |tick: u64| whole.left() + spacing.x(tick);
             staff.lines(&painter, screen.x_range(), palette.lines);
             for &(beat_x, beat) in &layout.beats {

@@ -28,6 +28,15 @@ fn values(
 }
 
 impl<R: Instrument, E: Effect> Render<R, E> {
+    pub fn process_live(&mut self, words: &[u32], out: &mut [f32], channels: usize) -> bool {
+        self.event_block(
+            words.iter().map(|&word| (0.0, Some(word))),
+            None,
+            out,
+            channels,
+        )
+    }
+
     pub fn process_scheduled(
         &mut self,
         timeline: &crate::play::event_timeline::Timeline,

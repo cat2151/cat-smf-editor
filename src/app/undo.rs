@@ -43,7 +43,7 @@ impl History {
 
 impl App {
     pub fn undo_music(&mut self) -> Result<(), String> {
-        let independent = self.patterns.editing.clone().filter(|c| c.standalone);
+        let editor = crate::view::patterns::navigation::snapshot(self);
         let Some(music) = self.undo.entries.back().cloned() else {
             return Ok(());
         };
@@ -64,9 +64,7 @@ impl App {
         self.install_music(music, false);
         // Reject delayed browser selections prepared against the state we just left.
         self.song_id = self.song_id.wrapping_add(1);
-        self.patterns.editing = independent;
-        self.patterns.edit_song = self.song_id;
-        crate::view::patterns::refresh(self);
+        crate::view::patterns::navigation::restore(self, editor);
         self.undo.end_volume_gesture();
         self.undo.entries.pop_back();
         Ok(())
@@ -74,7 +72,9 @@ impl App {
 
     /// Commit only after encoding succeeds. The SMF includes track output gains.
     pub(crate) fn apply_music(&mut self, music: Music) -> Result<(), String> {
-        self.commit_music(music, true)
+        self.commit_music(music, true)?;
+        crate::view::drums::reconcile(self);
+        Ok(())
     }
 
     pub(crate) fn apply_volume_music(&mut self, music: Music) -> Result<(), String> {
@@ -133,7 +133,7 @@ impl App {
             self.audition.restore_automated_baselines();
         }
         if let Some(session) = session {
-            self.restore_position(&session);
+            self.restore_cursor(&session);
         }
         if let Some(resume) = resume {
             crate::play::transport::timeline::resume(self, resume);

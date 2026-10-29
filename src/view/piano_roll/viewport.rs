@@ -103,6 +103,18 @@ impl Viewport {
         }
     }
 
+    pub(crate) fn zoom_horizontal(&mut self, enlarge: bool) {
+        self.zoom_axis(
+            0,
+            if enlarge {
+                timeline_zoom::CLICK
+            } else {
+                1.0 / timeline_zoom::CLICK
+            },
+            self.axis_length(0) / 2.0,
+        );
+    }
+
     pub fn scale_layout(&self, layout: &mut Layout) {
         let zoom = self.zoom();
         layout.size = layout.size * zoom;
@@ -149,9 +161,20 @@ impl Viewport {
     }
 
     pub fn bars(&mut self, ui: &mut egui::Ui, enabled: bool) -> egui::Rect {
+        self.axis_bars(ui, enabled, false)
+    }
+
+    pub(crate) fn horizontal_bar(&mut self, ui: &mut egui::Ui, enabled: bool) -> egui::Rect {
+        self.axis_bars(ui, enabled, true)
+    }
+
+    fn axis_bars(&mut self, ui: &mut egui::Ui, enabled: bool, horizontal: bool) -> egui::Rect {
         let mut mode = (0, false);
         let (outer, _) = ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
-        let inner = egui::Rect::from_min_max(outer.min + egui::vec2(BAR, BAR), outer.max);
+        let inner = egui::Rect::from_min_max(
+            outer.min + egui::vec2(if horizontal { 0.0 } else { BAR }, BAR),
+            outer.max,
+        );
         let zones = [
             egui::Rect::from_min_max(outer.min, egui::pos2(outer.right(), inner.top())),
             egui::Rect::from_min_max(
@@ -159,7 +182,11 @@ impl Viewport {
                 egui::pos2(inner.left(), inner.bottom()),
             ),
         ];
-        for (axis, zone) in zones.into_iter().enumerate() {
+        for (axis, zone) in zones
+            .into_iter()
+            .enumerate()
+            .take(if horizontal { 1 } else { 2 })
+        {
             self.zoom_bars[axis] = Some(zone);
             let response = ui.interact(
                 zone,
@@ -293,6 +320,17 @@ impl Viewport {
         panel: egui::Rect,
         offset: egui::Vec2,
     ) {
+        self.finish_axes(ui, area, panel, offset, false);
+    }
+
+    fn finish_axes(
+        &mut self,
+        ui: &mut egui::Ui,
+        area: egui::Rect,
+        panel: egui::Rect,
+        offset: egui::Vec2,
+        horizontal: bool,
+    ) {
         self.scroll = offset;
         self.panel = Some(panel);
         let bars = [
@@ -302,7 +340,11 @@ impl Viewport {
             ),
             egui::Rect::from_min_max(panel.right_top(), egui::pos2(area.right(), panel.bottom())),
         ];
-        for (axis, bar) in bars.into_iter().enumerate() {
+        for (axis, bar) in bars
+            .into_iter()
+            .enumerate()
+            .take(if horizontal { 1 } else { 2 })
+        {
             self.bars[axis] = Some(bar);
             if let Some(direction) = timeline_zoom::page_buttons(ui, bar, axis == 1, "roll-page") {
                 let mut next = offset;

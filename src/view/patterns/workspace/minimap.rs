@@ -3,6 +3,10 @@ use super::*;
 use crate::view::timeline_minimap;
 
 pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
+    if p == Pane::Song {
+        super::timeline::show(a, ui);
+        return;
+    }
     let id = scene_id(a, p);
     if p == Pane::Scene && id.is_none() {
         return;

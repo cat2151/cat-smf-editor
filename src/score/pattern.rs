@@ -6,6 +6,7 @@ pub mod body;
 mod catalog;
 pub mod editing;
 pub mod operations;
+pub mod recording;
 pub mod render;
 pub use super::scene::Meter;
 pub use catalog::Catalog;

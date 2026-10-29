@@ -15,24 +15,7 @@ pub(super) fn picker_ui(app: &mut App, ctx: &egui::Context) {
                 close = true;
             }
         });
-        if p.help {
-            egui::Grid::new("parameter-picker-help").show(ui, |ui| {
-                crate::view::help::key_groups(
-                    ui,
-                    &[(
-                        egui::Color32::LIGHT_BLUE,
-                        &[
-                            ("↑ ↓", "Parameter選択・Preview"),
-                            ("PageUp / PageDown", "10候補移動"),
-                            ("Ctrl+Home / Ctrl+End", "候補先頭 / 末尾"),
-                            ("Shift+Space", "演奏停止"),
-                            ("Esc", "閉じる"),
-                        ],
-                    )],
-                );
-            });
-            return;
-        }
+
         let response = ui.add(
             // Search remains the text owner while navigating parameter rows.
             egui::TextEdit::singleline(&mut p.query)
@@ -81,7 +64,7 @@ pub(super) fn picker_ui(app: &mut App, ctx: &egui::Context) {
         }
         confirm = ui
             .add_enabled_ui(!indices.is_empty(), |ui| {
-                crate::view::palette::row::action(
+                crate::view::command_row::action(
                     ui,
                     "Create automation track".into(),
                     "Enter".into(),

@@ -1,19 +1,18 @@
 use super::*;
 pub fn show(app: &mut App, ctx: &egui::Context) {
-    let preview = crate::view::palette::preview_active(ctx);
+    let preview = crate::view::command_input::preview_active(ctx);
     if !preview {
         refresh(app);
     }
     let Some(s) = &mut app.macro_editor.session else {
         return;
     };
-    let help_open = app.macro_editor.help;
     let mut open = true;
     let mut confirm = false;
     let mut cancel = false;
     let mut step_anchor = None;
     let window = if preview {
-        crate::view::palette::preview_window(ctx, s.title.clone())
+        crate::view::command_input::preview_window(ctx, s.title.clone())
     } else {
         egui::Window::new(&s.title)
             .id(egui::Id::new("macro-editor"))
@@ -21,9 +20,6 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             .resizable(false)
     };
     window.open(&mut open).show(ctx, |ui| {
-        if help_open {
-            ui.disable();
-        }
         egui::Grid::new("macro-rows")
             .num_columns(2)
             .max_col_width(620.0)
@@ -121,36 +117,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         }
     });
     step_toast(ctx, &mut s.keyboard, step_anchor);
-    if app.macro_editor.help {
-        let mut help = true;
-        egui::Window::new("Macro edit — ヘルプ")
-            .id(egui::Id::new("macro-help-overlay"))
-            .open(&mut help)
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                egui::Grid::new("macro-help").show(ui, |ui| {
-                    crate::view::help::key_groups(
-                        ui,
-                        &[(
-                            egui::Color32::from_rgb(0x66, 0xd9, 0xef),
-                            &[
-                                ("j k", "Macro選択"),
-                                ("h l", "値"),
-                                ("1–9… + h j k l", "反復回数"),
-                                ("[ / ]", "変化量 ÷2 / ×2"),
-                                ("Home / End", "最小 / 最大"),
-                                ("PageUp / PageDown", "Variation切替"),
-                                ("r", "全Macroランダム・Variation範囲"),
-                                ("Shift+R", "全Macroランダム・全範囲"),
-                            ],
-                        )],
-                    );
-                });
-                crate::view::help::close_guide(ui);
-            });
-        app.macro_editor.help = help;
-    }
+
     if !open || cancel {
         finish(app, false);
     } else if confirm {

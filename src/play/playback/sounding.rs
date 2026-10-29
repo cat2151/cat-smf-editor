@@ -17,9 +17,18 @@ pub(crate) struct Sounding<'a> {
     pub end: u64,
 }
 
-/// A pattern source plays only while it is edited on its own.
+/// Guides are silent; a pattern source plays only while edited on its own.
 pub(crate) fn silent(app: &App, track: usize) -> bool {
     app.loaded.as_ref().is_some_and(|loaded| {
+        if cat_smf_editor::score::chord_guide::supported(&loaded.music)
+            && loaded
+                .music
+                .tracks
+                .get(track)
+                .is_some_and(cat_smf_editor::score::chord_guide::is_guide)
+        {
+            return true;
+        }
         cat_smf_editor::score::pattern::is_source(&loaded.music, track)
             && !app
                 .patterns

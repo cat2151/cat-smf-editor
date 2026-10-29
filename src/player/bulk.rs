@@ -97,8 +97,9 @@ pub(crate) fn accept(app: &mut App, settings: &Settings) -> Result<(), String> {
     }
     loaded.refresh();
     app.generation += 1;
+    crate::view::patterns::refresh(app);
     if let Some(session) = session {
-        app.restore_position(&session);
+        app.restore_cursor(&session);
     }
     if let Some(resume) = resume {
         crate::play::selection_playback::restore(app, resume);

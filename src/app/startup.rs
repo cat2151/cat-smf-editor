@@ -169,6 +169,7 @@ impl App {
             .clone()
             .map_or_else(store::config::Store::local, store::config::Store::open);
         self.mascot.enabled = self.config.mascot_enabled;
+        crate::view::help::restore(self);
         drop(status_span);
         if let Some(error) = startup.read_error {
             self.config.error = Some(error);

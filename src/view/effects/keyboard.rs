@@ -1,11 +1,11 @@
-use super::State;
 use eframe::egui;
 
-pub(super) fn help(state: &mut State, ui: &mut egui::Ui) {
+pub(crate) fn help(ui: &mut egui::Ui) -> bool {
+    let mut close = false;
     ui.horizontal(|ui| {
         ui.heading("エフェクト — ヘルプ");
         if ui.button("×").clicked() {
-            state.help = false;
+            close = true;
         }
     });
     egui::Grid::new("effect-help").show(ui, |ui| {
@@ -30,4 +30,5 @@ pub(super) fn help(state: &mut State, ui: &mut egui::Ui) {
         );
     });
     crate::view::help::close_guide(ui);
+    close
 }

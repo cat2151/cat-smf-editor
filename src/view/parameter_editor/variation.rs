@@ -23,7 +23,6 @@ fn open_with_playback(app: &mut App, layer: u64, play: bool) {
             app.tempo_curve.open = false;
             app.layer_editor.open = false;
             app.comma_menu.open = false;
-            app.help_open = false;
             let end = app
                 .loaded
                 .as_ref()

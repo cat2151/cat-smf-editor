@@ -1,5 +1,5 @@
 use super::*;
-fn drag(a: &mut App, c: &egui::Context, p: Pane, from: egui::Id, to: egui::Id) {
+pub(super) fn drag(a: &mut App, c: &egui::Context, p: Pane, from: egui::Id, to: egui::Id) {
     let id = p.viewport();
     frame(a, c, id, vec![]);
     let rect = |r| {
@@ -22,7 +22,7 @@ fn drag(a: &mut App, c: &egui::Context, p: Pane, from: egui::Id, to: egui::Id) {
         frame(a, c, id, events);
     }
 }
-fn part(p: Pane, part: PatternOrScene) -> egui::Id {
+pub(super) fn part(p: Pane, part: PatternOrScene) -> egui::Id {
     egui::Id::new((p.title(), "part", format!("{part:?}")))
 }
 fn at(p: Pane, row: usize, measure: u64) -> egui::Id {
@@ -272,7 +272,7 @@ fn candidate_click_rejects_a_filtered_pattern_with_a_stale_rect() {
     candidate(&mut a, &c, Pane::Scene, PatternOrScene::Pattern(first));
 }
 #[test]
-fn candidate_click_on_a_pattern_opens_it_unbound_and_auditions_it() {
+fn candidate_click_on_a_pattern_auditions_only_it_and_space_repeats_it_in_the_event_list() {
     use crate::play::playback::Mode;
     // The fixture leaves `first` open, so each pane opens the other pattern.
     for (p, opened) in [(Pane::Song, 1), (Pane::Scene, 0)] {
@@ -282,10 +282,41 @@ fn candidate_click_on_a_pattern_opens_it_unbound_and_auditions_it() {
             library::edit(&mut a, second).unwrap();
             clear_scene_query(&mut a, &c);
         }
-        crate::play::transport::stop(&mut a);
+        let before = bytes(&a);
+        crate::play::arrangement::start(&mut a, None);
+        assert_eq!(a.playback.last, Mode::Arrangement(None));
+        let expected = preview::prepare(&a, id).unwrap();
         candidate(&mut a, &c, p, PatternOrScene::Pattern(id));
-        let active = &a.playback.pending.as_ref().expect("auditioning").active;
+        let active = &a
+            .playback
+            .pending
+            .as_ref()
+            .expect("pattern audition")
+            .active;
         assert_eq!(active.mode, Mode::Pattern(id), "{p:?}");
+        assert_eq!(active.start_seconds, 0.0);
+        assert_eq!(active.end, expected.active.end);
+        assert_eq!(active.sources.len(), expected.active.sources.len());
+        for ((track, actual), (expected_track, source)) in
+            active.sources.iter().zip(&expected.active.sources)
+        {
+            assert_eq!(track, expected_track);
+            let notes = |s: &crate::play::audio_sequence::Sequence| {
+                s.notes
+                    .iter()
+                    .map(|n| (n.start, n.duration, n.pitch, n.velocity))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(notes(actual), notes(source));
+            let events = |s: &crate::play::audio_sequence::Sequence| {
+                s.events
+                    .iter()
+                    .map(|e| (e.time, e.word))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(events(actual), events(source));
+        }
+        assert_eq!(a.playback.last, Mode::Pattern(id));
         let editing = a.patterns.editing.as_ref().expect("event list shows it");
         assert_eq!(
             (editing.pattern, editing.placement),
@@ -296,6 +327,29 @@ fn candidate_click_on_a_pattern_opens_it_unbound_and_auditions_it() {
         assert_eq!(a.patterns.workspace.return_to, None);
         frame(&mut a, &c, p.viewport(), vec![]);
         assert!(visible(&c, p), "{p:?}");
+        key(
+            &mut a,
+            &c,
+            egui::ViewportId::ROOT,
+            Key::Space,
+            Modifiers::SHIFT,
+        );
+        assert!(a.playback.pending.is_none() && a.playback.active.is_none());
+        key(
+            &mut a,
+            &c,
+            egui::ViewportId::ROOT,
+            Key::Space,
+            Modifiers::NONE,
+        );
+        let active = &a.playback.pending.as_ref().expect("repeat pattern").active;
+        assert_eq!(active.mode, Mode::Pattern(id));
+        assert_eq!(active.end, expected.active.end);
+        assert_eq!(
+            bytes(&a),
+            before,
+            "audition must not change placements or bodies"
+        );
     }
 }
 #[test]
@@ -322,8 +376,14 @@ fn page_keys_and_candidate_drags_open_nothing() {
     a.patterns.workspace.scene = None;
     let editing = a.patterns.editing.clone();
     let song = Pane::Song.viewport();
+    let selected = a.patterns.workspace.song_cell.choice;
+    for k in [Key::PageDown, Key::PageUp] {
+        key(&mut a, &c, song, k, Modifiers::NONE);
+        assert_eq!(a.patterns.workspace.song_cell.choice, selected);
+    }
+    key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
     let mut seen = Vec::new();
-    for k in [Key::PageDown, Key::PageDown, Key::PageDown, Key::PageUp] {
+    for k in [Key::J, Key::J, Key::J, Key::K] {
         key(&mut a, &c, song, k, Modifiers::NONE);
         seen.push(a.patterns.workspace.song_cell.choice);
     }

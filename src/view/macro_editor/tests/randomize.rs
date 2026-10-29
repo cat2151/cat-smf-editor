@@ -43,12 +43,11 @@ fn randomize_all_current_macros_live_preserves_other_variations_and_confirms_or_
             cat_smf_editor::smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap()
         );
         assert!(!app.undo.available());
-        // Help owns input and leaves the draft intact.
+        // Help stays open while editing continues.
         key(&mut app, &ctx, egui::Key::F1);
-        key(&mut app, &ctx, egui::Key::R);
         let s = app.macro_editor.session.as_ref().unwrap();
         assert_eq!(s.rows.iter().map(Row::get).collect::<Vec<_>>(), expected);
-        key(&mut app, &ctx, egui::Key::Escape);
+        key(&mut app, &ctx, egui::Key::F1);
         key(&mut app, &ctx, egui::Key::PageUp);
         assert_eq!(
             app.macro_editor.session.as_ref().unwrap().rows[0].get(),

@@ -21,6 +21,7 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
             ("i / e / .", "MML・ドラム / 編集menu / 反復"),
             ("r", "ピアノロール / カーブ / ドラム"),
             ("Shift+D", "Drum sequencer"),
+            ("Shift+R", "Virtual MIDI keyboard"),
             ("左ドラッグ", "A-B repeat"),
             ("s", "範囲選択 / 範囲menu"),
         ],
@@ -76,11 +77,7 @@ pub(super) fn close_guide(ui: &mut egui::Ui) {
             ui,
             &[(
                 Color32::from_rgb(0xe6, 0xdb, 0x74),
-                &[
-                    ("Ctrl+Shift+P", "コマンドパレット"),
-                    ("↑ ↓ / PageUp PageDown", "候補 / 10候補"),
-                    ("Ctrl+Home / Ctrl+End", "候補先頭 / 末尾"),
-                ],
+                &[("Ctrl+Shift+P", "コマンドパレット")],
             )],
         );
     });
@@ -103,37 +100,81 @@ pub(crate) fn view_rows(ui: &mut egui::Ui) {
     );
 }
 
-pub fn show(app: &mut App, ctx: &egui::Context) {
-    let mut open = app.help_open;
-    let window = egui::Window::new("ヘルプ");
-    let window = if app.tempo_curve.open {
-        window.default_height((ctx.screen_rect().height() - 80.0).max(200.0))
-    } else {
-        window
-    };
-    window.open(&mut open).resizable(false).show(ctx, |ui| {
-        if app.tempo_curve.open && !app.piano_roll.open && !app.track_overview.open {
-            egui::ScrollArea::vertical()
-                .max_height((ctx.screen_rect().height() - 160.0).max(200.0))
-                .show(ui, |ui| {
-                    egui::Grid::new("tempo-help").show(ui, tempo_curve::rows);
-                });
-        } else {
-            egui::Grid::new("help-keys").show(ui, |ui| {
-                if app.track_overview.open {
-                    track_overview::rows(ui);
-                } else if app.parameter_editor.open {
-                    parameter_curve::rows(ui);
-                } else if app.piano_roll.open {
-                    piano_roll::rows(ui);
-                } else {
-                    key_groups(ui, &KEYS);
-                }
+pub(crate) use context::{input, observe, State};
+pub(crate) use window::{restore, show, viewport};
+mod context;
+mod overlays;
+mod pages;
+mod placement;
+mod song;
+mod window;
+
+pub(super) fn body(app: &mut App, ui: &mut egui::Ui) {
+    use context::Target;
+    match app.help.target {
+        Target::Mml => overlays::mml(ui),
+        Target::Palette => overlays::palette(ui),
+        Target::Recording => overlays::recording(ui, app.patterns.recording.choosing()),
+        Target::Mixer => overlays::mixer(ui),
+        Target::Singer => overlays::singer(ui),
+        Target::Recent => overlays::recent(ui),
+        Target::Selection => overlays::selection(ui),
+        Target::SelectionMenu => {
+            ui.heading("範囲menu");
+            egui::Grid::new("selection-menu-help").show(ui, |ui| {
+                key_groups(
+                    ui,
+                    &[(Color32::from_rgb(0xe6, 0xdb, 0x74), &[("Esc", "戻る")])],
+                );
             });
         }
-        close_guide(ui);
-    });
-    app.help_open = open;
+        Target::Layers => {
+            if crate::view::layers::keyboard::help(ui) {
+                app.help_open = false;
+            }
+        }
+        Target::Effects => {
+            if crate::view::effects::keyboard::help(ui) {
+                app.help_open = false;
+            }
+        }
+        Target::Drums => {
+            if let Some(l) = &app.loaded {
+                ui.heading(format!("Drum sequencer · {}", l.track_titles[app.track]));
+            }
+            pages::drums(ui);
+        }
+        Target::Macro => pages::macros(ui),
+        Target::Picker => {
+            if let Some(title) = app.parameter_editor.help_title() {
+                ui.heading(format!("{title} / Automation"));
+            }
+            pages::picker(ui);
+        }
+        Target::Scene => pages::arrangement(ui, crate::view::patterns::workspace::Pane::Scene),
+        Target::Song => pages::arrangement(ui, crate::view::patterns::workspace::Pane::Song),
+        Target::Views => {
+            ui.heading("Views");
+            egui::Grid::new("view-palette-help").show(ui, view_rows);
+        }
+        target => {
+            ui.heading(match target {
+                Target::Piano => "ピアノロール",
+                Target::Tempo => "Tempo curve",
+                Target::Parameter => "Parameter curve",
+                Target::Overview => "Track Overview",
+                _ => "Event list",
+            });
+            egui::Grid::new("help-keys").show(ui, |ui| match target {
+                Target::Piano => piano_roll::rows(ui),
+                Target::Tempo => tempo_curve::rows(ui),
+                Target::Parameter => parameter_curve::rows(ui),
+                Target::Overview => track_overview::rows(ui),
+                _ => key_groups(ui, &KEYS),
+            });
+            close_guide(ui);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -144,3 +185,16 @@ mod tempo_curve;
 mod track_overview;
 
 mod parameter_curve;
+
+#[cfg(test)]
+mod context_tests;
+
+#[cfg(test)]
+pub(crate) fn test_target(a: &App) -> String {
+    format!("{:?}", a.help.target)
+}
+#[cfg(test)]
+mod native_tests;
+
+#[cfg(test)]
+mod overlay_tests;

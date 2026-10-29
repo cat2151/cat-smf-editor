@@ -136,7 +136,7 @@ fn first_drum_pattern_keeps_song_visible_while_the_grid_owns_keys() {
     library::initialize_with(&mut a, true, patch).unwrap();
     let _ = c.run(Default::default(), |ctx| library::input(&mut a, ctx));
     frame(&mut a, &c, vec![]);
-    assert!(a.drum_editor.open);
+    assert!(crate::view::drums::is_open(&a));
     assert_eq!(crate::view::commands::owner(&a, &c), Screen::Drums);
     assert!(crate::view::analysis::companion_visible(&a, &c));
     assert!(!a.patterns.workspace.song_cell.focus);

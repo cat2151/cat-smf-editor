@@ -14,6 +14,7 @@ pub struct App {
     pub edit_start: edit_start::State,
     pub startup: startup::State,
     pub selection_history: crate::view::selection_history::State,
+    pub command_input: crate::view::command_input::State,
     pub palette: crate::view::palette::State,
     pub patterns: crate::view::patterns::State,
     pub undo: undo::History,
@@ -64,6 +65,7 @@ pub struct App {
     pub note_mode: bool,
     /// Note rows draw a dark keyboard behind their cells instead of beside them.
     pub help_open: bool,
+    pub help: crate::view::help::State,
     pub cursor_row: Option<usize>,
     pub cursor_position: Option<cat_smf_editor::score::musical_time::Position>,
     pub reveal_cursor: bool,
@@ -92,6 +94,7 @@ impl App {
             lifecycle: Default::default(),
             edit_start: Default::default(),
             startup: Default::default(),
+            command_input: Default::default(),
             palette: Default::default(),
             patterns: Default::default(),
             selection_history: Default::default(),
@@ -142,6 +145,7 @@ impl App {
             generation: 0,
             note_mode: true,
             help_open: false,
+            help: Default::default(),
             cursor_row: None,
             cursor_position: None,
             reveal_cursor: false,
@@ -178,9 +182,22 @@ impl App {
         Ok(())
     }
     pub fn can_edit_notes(&self, track: usize) -> bool {
-        crate::view::patterns::mode::can_edit_notes(self, track)
+        !self.loaded.as_ref().is_some_and(|loaded| {
+            cat_smf_editor::score::chord_guide::supported(&loaded.music)
+                && loaded
+                    .music
+                    .tracks
+                    .get(track)
+                    .is_some_and(cat_smf_editor::score::chord_guide::is_guide)
+        }) && crate::view::patterns::mode::can_edit_notes(self, track)
     }
     pub fn select_track(&mut self, track: usize) {
+        self.set_track(track);
+        crate::view::patterns::track_selected(self);
+    }
+
+    /// Rebind the current track without performing a user navigation.
+    pub(crate) fn set_track(&mut self, track: usize) {
         if self.track != track {
             self.patterns.workspace_open = false;
             self.note_edit = None;
@@ -190,7 +207,7 @@ impl App {
             crate::view::patterns::refresh(self);
             crate::view::macro_editor::cancel(self);
             self.layer_editor.open = false;
-            self.drum_editor.open = false;
+            crate::view::drums::close(self);
             self.parameter_editor.close();
             self.effect_editor.close_track();
         }

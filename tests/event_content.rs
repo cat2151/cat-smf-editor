@@ -338,3 +338,16 @@ fn app_owned_payloads_read_as_values() {
         "Tempo curve: 120.00 → 90.00 BPM"
     );
 }
+
+#[test]
+fn chord_guide_role_and_chord_are_readable() {
+    use cat_smf_editor::score::chord_guide;
+    assert_eq!(
+        decoded(&event(0xff, 0x7f, &[chord_guide::ROLE, &[1]].concat())),
+        "Track role: Chord guide"
+    );
+    assert_eq!(
+        decoded(&chord_guide::event(1920, "Isus4").unwrap()),
+        "Chord: Isus4"
+    );
+}

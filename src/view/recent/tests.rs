@@ -237,7 +237,8 @@ fn paging_clamps_and_overlay_does_not_open_over_other_editors() {
     let ctx = egui::Context::default();
     app.help_open = true;
     press(&mut app, &ctx, Key::P, Modifiers::CTRL);
-    assert!(!app.recent.open);
+    assert!(app.recent.open);
+    assert!(app.help_open);
     app.help_open = false;
     press(&mut app, &ctx, Key::P, Modifiers::CTRL);
     press(&mut app, &ctx, Key::PageDown, Modifiers::NONE);

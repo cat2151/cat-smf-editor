@@ -106,10 +106,10 @@ fn new_song_respects_departure_and_overlay_ownership() {
     app.edit_start = Default::default();
     app.add_track().unwrap();
     let ctx = egui::Context::default();
-    app.help_open = true;
+    app.comma_menu.open = true;
     key(&mut app, &ctx, Key::N, Modifiers::CTRL);
     assert!(app.config.navigation.departure.is_none());
-    app.help_open = false;
+    app.comma_menu.open = false;
     key(&mut app, &ctx, Key::N, Modifiers::CTRL);
     assert!(matches!(
         app.config.navigation.departure,

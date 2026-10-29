@@ -3,6 +3,8 @@ pub(crate) mod analysis;
 pub(crate) mod beat_audition;
 pub(crate) mod busy;
 pub(crate) mod comma_menu;
+pub(crate) mod command_input;
+mod command_row;
 pub(crate) mod commands;
 pub(crate) mod drums;
 pub(crate) mod edit_menu;
@@ -10,10 +12,11 @@ pub(crate) mod edit_style;
 pub(crate) mod effects;
 mod event_repeat;
 pub(crate) mod event_selection;
-mod help;
+pub(crate) mod help;
 pub(crate) mod layers;
 mod meta_text;
 pub(crate) mod mml_input;
+pub(crate) mod modal;
 pub(crate) mod note_edit;
 mod note_lyrics;
 pub(crate) mod opening;
@@ -27,6 +30,7 @@ pub(crate) mod files;
 pub(crate) mod macro_editor;
 pub(crate) mod parameter_editor;
 pub(crate) mod recent;
+pub(crate) mod recording;
 mod score_panes;
 pub(crate) mod selection_history;
 pub(crate) mod staff;
@@ -69,6 +73,7 @@ pub(crate) fn track_color(track: usize) -> Color32 {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    help::input(app, ctx);
     patterns::validate(app);
     if app.startup_pending(ctx) {
         app.lifecycle.interrupted();
@@ -79,19 +84,21 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     voicevox::singer::poll(app, ctx);
     let opening_input = opening::suspend_input(app, ctx);
     patterns::workspace::suspend_background(app, ctx);
-    let palette_input = palette::begin(app, ctx);
+    let palette_input = modal::begin(app, ctx);
     if crate::player::setup::show(app, ctx) {
         app.lifecycle.interrupted();
         crate::play::transport::advance(app);
         crate::play::mascot::update(app);
         app.audition.pump();
-        palette::end(app, ctx, palette_input);
+        modal::end(app, ctx, palette_input);
+        help::observe(app, ctx);
+        help::show(app, ctx);
         return;
     }
     busy::run(app, ctx);
     crate::play::transport::stop_shortcut(app, ctx);
     if !opening::pending(app)
-        && (app.palette.is_open()
+        && (crate::view::modal::is_open(app)
             || (!app.recent.open
                 && app.config.navigation.departure.is_none()
                 && app.invalid_smf_name.is_none()))
@@ -105,7 +112,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     patterns::show(app, ctx);
     patterns::workspace::root_dialog(app, ctx);
     track_rename::show(app, ctx);
-    if app.palette.is_open() {
+    if crate::view::modal::is_open(app) {
         app.audition.pump();
     }
     // Outside show_contents: a viewport skipped for one frame closes.
@@ -118,9 +125,11 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     title::update(app, ctx);
     app.frame_completed(ctx, event_list_drawn);
     edit_style::show(app, ctx, style_input);
-    palette::end(app, ctx, palette_input);
+    modal::end(app, ctx, palette_input);
     opening::show(app, ctx, opening_input);
     voicevox::progress::show(app, ctx);
+    help::observe(app, ctx);
+    help::show(app, ctx);
 }
 
 fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
@@ -250,7 +259,6 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
             busy::request(app, ctx, busy::Task::AddTrack);
         } else if track != app.track {
             app.select_track(track);
-            patterns::track_selected(app);
         } else if track_clicked {
             patterns::track_selected(app);
         }
@@ -294,7 +302,6 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
         return app.loaded.is_some();
     }
     crate::player::selection::show(app, ctx);
-    crate::view::help::show(app, ctx);
     crate::play::mixer::show(app, ctx);
     crate::view::event_selection::show(app, ctx);
     crate::view::edit_menu::show(app, ctx);

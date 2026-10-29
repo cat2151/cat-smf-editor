@@ -173,7 +173,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         }
                         let response = ui.interact(
                             clip,
-                            crate::view::palette::preview_id(
+                            crate::view::command_input::preview_id(
                                 ui.ctx(),
                                 egui::Id::new(("track-overview-pane", slot)),
                             ),
@@ -363,8 +363,8 @@ fn draw_name(painter: &egui::Painter, rect: egui::Rect, name: &str, color: Color
 }
 
 fn placement(ctx: &egui::Context, maximized: bool) -> egui::Window<'static> {
-    if crate::view::palette::preview_active(ctx) {
-        return crate::view::palette::preview_window(ctx, "Track Overview");
+    if crate::view::command_input::preview_active(ctx) {
+        return crate::view::command_input::preview_window(ctx, "Track Overview");
     }
     let window = egui::Window::new("Track Overview").collapsible(false);
     if maximized {

@@ -93,12 +93,12 @@ fn shortcuts_change_selected_layer_allow_multiple_solos_mutes_and_undo() {
 }
 
 #[test]
-fn shortcuts_do_not_modify_layers_in_help_or_numeric_input() {
+fn numeric_input_blocks_shortcuts_even_with_help() {
     let mut app = fixture();
     let ctx = egui::Context::default();
     for help in [true, false] {
-        app.layer_editor.help = help;
-        if !help {
+        app.help_open = help;
+        {
             app.layer_editor.field = 1;
             app.layer_editor
                 .begin(&app.loaded.as_ref().unwrap().patches[1]);

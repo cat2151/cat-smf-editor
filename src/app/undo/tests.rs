@@ -162,10 +162,10 @@ fn keyboard_undo_works_in_score_and_roll_and_menu_and_respects_overlays() {
     let mut app = fixture();
     let original = bytes(&app);
     duration(&mut app, 720);
-    app.help_open = true;
+    app.comma_menu.open = true;
     key(&mut app, &ctx, egui::Key::Z, egui::Modifiers::CTRL);
     assert_ne!(bytes(&app), original);
-    app.help_open = false;
+    app.comma_menu.open = false;
     key(
         &mut app,
         &ctx,

@@ -183,17 +183,48 @@ pub(super) fn comments(
     top: f32,
     color: Color32,
 ) {
-    let mut events: Vec<_> = tracks
+    annotations(painter, loaded, tracks, x, top, color, true);
+}
+
+pub(super) fn comment_height(
+    painter: &egui::Painter,
+    loaded: &Loaded,
+    tracks: &[usize],
+    x: impl Fn(u64) -> f32,
+) -> f32 {
+    annotations(painter, loaded, tracks, x, 0.0, Color32::WHITE, false)
+}
+
+fn annotations(
+    painter: &egui::Painter,
+    loaded: &Loaded,
+    tracks: &[usize],
+    x: impl Fn(u64) -> f32,
+    top: f32,
+    color: Color32,
+    draw: bool,
+) -> f32 {
+    let mut selected = tracks.to_vec();
+    selected.sort_unstable();
+    selected.dedup();
+    let mut events: Vec<_> = selected
         .iter()
         .flat_map(|&t| loaded.visible().tracks[t].events.iter())
         .filter(|e| e.status == 0xff && e.meta_type == 0x01 && !e.data.is_empty())
         .collect();
+    if crate::view::meta_text::guide_track(loaded, tracks).is_some() {
+        events.extend(cat_smf_editor::score::chord_guide::chords(&loaded.music));
+    }
     events.sort_by_key(|e| e.tick);
     let clip = painter.clip_rect();
     // Right edge of each lane's last label.
     let mut lanes: Vec<f32> = Vec::new();
+    let mut height: f32 = 0.0;
     for event in events {
-        let text = String::from_utf8_lossy(&event.data);
+        let text = cat_smf_editor::score::chord_guide::chord(event).map_or_else(
+            || String::from_utf8_lossy(&event.data),
+            std::borrow::Cow::Borrowed,
+        );
         if text.trim().is_empty() {
             continue;
         }
@@ -205,9 +236,6 @@ pub(super) fn comments(
         );
         let x = x(event.tick);
         let width = galley.size().x;
-        if x > clip.right() || x + width < clip.left() {
-            continue;
-        }
         let lane = lanes
             .iter()
             .position(|&right| right + 6.0 <= x)
@@ -217,8 +245,12 @@ pub(super) fn comments(
             });
         lanes[lane] = x + width;
         let y = top + lane as f32 * (galley.size().y + 1.0);
-        painter.galley(egui::pos2(x, y), galley, color);
+        height = height.max(y - top + galley.size().y + 2.0);
+        if draw && x <= clip.right() && x + width >= clip.left() {
+            painter.galley(egui::pos2(x, y), galley, color);
+        }
     }
+    height
 }
 
 #[cfg(test)]
@@ -232,5 +264,79 @@ mod tests {
         assert!(!stem_up(notation::TREBLE_BOTTOM + 4));
         assert!(stem_up(notation::BASS_BOTTOM));
         assert!(!stem_up(notation::BASS_BOTTOM + 6));
+    }
+
+    #[test]
+    fn guide_chords_use_spacing_even_at_empty_onsets_and_with_own_key() {
+        use cat_smf_editor::{edit, score::chord_guide};
+        let mut music = edit::tracks::new_song();
+        music.tracks[0].events = vec![edit::meta_input::Kind::KeySignature
+            .event(0, "D minor")
+            .unwrap()];
+        chord_guide::add(&mut music).unwrap();
+        for (tick, text) in [(0, "Isus4"), (1920, "I"), (2400, "V7")] {
+            edit::insert(
+                &mut music.tracks[1],
+                chord_guide::event(tick, text).unwrap(),
+            );
+        }
+        let source = cat_smf_editor::score::pattern::operations::create_source(&mut music).unwrap();
+        let a = crate::view::tests::app(music);
+        let loaded = a.loaded.as_ref().unwrap();
+        let c = egui::Context::default();
+        for (scale, offset) in [(0.1, 20.0), (0.2, -40.0)] {
+            let axis = super::super::spacing::Spacing::new(
+                vec![0.0, 1920.0, 3840.0],
+                &[0, 1920, 2400],
+                scale,
+                8.0,
+            );
+            let out = c.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1000.0, 300.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        comments(
+                            ui.painter(),
+                            loaded,
+                            &[0],
+                            |tick| offset + axis.x(tick),
+                            20.0,
+                            Color32::WHITE,
+                        );
+                    });
+                },
+            );
+            for (tick, label) in [(1920, "I"), (2400, "V7")] {
+                let texts: Vec<_> = out
+                    .shapes
+                    .iter()
+                    .filter_map(|s| match &s.shape {
+                        egui::epaint::Shape::Text(t) if t.galley.text() == label => Some(t.pos),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(texts.len(), 1);
+                assert!((texts[0].x - offset - axis.x(tick)).abs() < 0.01);
+            }
+            let raw = c.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    comments(
+                        ui.painter(),
+                        loaded,
+                        &[0, source],
+                        |tick| offset + axis.x(tick),
+                        20.0,
+                        Color32::WHITE,
+                    );
+                });
+            });
+            assert!(!raw.shapes.iter().any(|s| matches!(&s.shape, egui::epaint::Shape::Text(t) if ["Isus4", "I", "V7"].contains(&t.galley.text()))));
+        }
     }
 }

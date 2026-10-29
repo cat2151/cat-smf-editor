@@ -18,6 +18,7 @@ pub(crate) mod opening;
 mod parameters;
 
 pub(super) struct Part {
+    live: Option<live::Queue>,
     timeline: Option<Arc<super::event_timeline::Timeline>>,
     automation: Option<Arc<super::automation::RuntimePlan>>,
     velocities: [u8; 128],
@@ -29,6 +30,7 @@ pub(super) struct Part {
 impl Default for Part {
     fn default() -> Self {
         Self {
+            live: None,
             timeline: None,
             automation: None,
             velocities: [0; 128],
@@ -374,6 +376,8 @@ pub fn output_rate() -> u32 {
 
 #[path = "audition_key.rs"]
 mod key;
+#[path = "audition_live.rs"]
+pub(crate) mod live;
 
 #[cfg(test)]
 #[path = "audition_cache_tests.rs"]

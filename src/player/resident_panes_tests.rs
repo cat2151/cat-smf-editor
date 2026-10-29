@@ -181,6 +181,8 @@ fn drum_rows_open_normal_browser_with_role_filters_and_preserve_repeat_on_previe
     app.player_selection.executable = Some(std::env::current_exe().unwrap());
     app.player_selection.launch = Some(record);
     let ctx = egui::Context::default();
+    assert!(app.playback.repeat.is_none());
+    crate::view::palette::tests::press(&mut app, &ctx, egui::Key::R);
     crate::player::selection::open_layer(&mut app, 1);
     assert!(app.player_selection.error.is_none());
     let (mut out, mut input) = resident_ipc::connect(launched().last().unwrap()).unwrap();

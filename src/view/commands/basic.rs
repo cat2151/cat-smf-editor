@@ -24,6 +24,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             |a, c| a.new_smf(c),
         ));
         if a.loaded.is_some() {
+            super::guide::collect(a, s, out);
             out.push(Command::plain(
                 s,
                 "export-performance",
@@ -31,20 +32,33 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 &[],
                 |a, _| files::performance::dialog(a),
             ));
-            for (id, name) in [
-                ("insert-event", "Insert event…"),
-                ("insert-tempo", "Insert tempo"),
-                ("insert-key-signature", "Insert key signature"),
+            for (id, name, kind) in [
+                ("insert-event", "Insert event…", None),
+                (
+                    "insert-tempo",
+                    "Insert tempo",
+                    Some(cat_smf_editor::edit::meta_input::Kind::Tempo),
+                ),
+                (
+                    "insert-key-signature",
+                    "Insert key signature",
+                    Some(cat_smf_editor::edit::meta_input::Kind::KeySignature),
+                ),
             ] {
-                out.push(Command::plain(s, id, name, &[], |_, _| {}));
+                out.push(Command::operation(
+                    s,
+                    id,
+                    name,
+                    Operation::InsertEvent { kind, text: None },
+                ));
             }
-            out.push(Command::plain(
+            out.push(Command::operation(
                 s,
                 "insert-same-measure",
                 "Insert same measure",
-                &[],
-                |a, c| {
-                    super::super::palette::open_same_measure(a, c, false);
+                Operation::SameMeasure {
+                    batch: false,
+                    number: None,
                 },
             ));
             out.push(
@@ -111,7 +125,12 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             Screen::Main | Screen::Timeline | Screen::Mixer | Screen::Layers | Screen::Effects
         )
     {
-        out.push(Command::plain(s, "browse-views", "Views…", &[], |_, _| {}));
+        out.push(Command::operation(
+            s,
+            "browse-views",
+            "Views…",
+            Operation::Views,
+        ));
     }
     let mut add = |id, name, keys: &[Key], run: fn(&mut App, &egui::Context)| {
         let mut command = Command::plain(s, id, name, keys, run);
@@ -314,7 +333,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 });
             }
             if s == Screen::Mixer {
-                mixer_commands(a, s, out);
+                super::mixer::collect(a, s, out);
             }
         }
         _ => {}
@@ -353,9 +372,6 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             | Screen::LayerInput
             | Screen::ParameterInput
             | Screen::ParameterPicker
-            | Screen::LayerHelp
-            | Screen::EffectHelp
-            | Screen::Help
             | Screen::Settings
             | Screen::Program
             | Screen::Edit
@@ -375,67 +391,5 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             )
             .repeating(),
         );
-    }
-}
-
-fn mixer_commands(a: &App, s: Screen, out: &mut Vec<Command>) {
-    out.push(Command::plain(
-        s,
-        "mixer-unfocus",
-        "Event listへ戻る",
-        &[Key::Escape],
-        mixer::unfocus,
-    ));
-    out.push(Command::plain(
-        s,
-        "spectrum",
-        "Spectrum / Lissajous",
-        &[Key::F],
-        |a, _| super::super::analysis::toggle(a),
-    ));
-    for (id, name, keys, key) in [
-        (
-            "mixer-left",
-            "前のtrack / master",
-            &[Key::H, Key::ArrowLeft][..],
-            mixer::Operation::Previous,
-        ),
-        (
-            "mixer-right",
-            "次のtrack",
-            &[Key::L, Key::ArrowRight][..],
-            mixer::Operation::Next,
-        ),
-        (
-            "mixer-effects",
-            "選択対象のエフェクト",
-            &[Key::X, Key::Space, Key::Enter][..],
-            mixer::Operation::Effects,
-        ),
-    ] {
-        out.push(Command::plain(s, id, name, keys, move |a, _| {
-            mixer::apply(a, key);
-        }));
-    }
-    // When reached from Event list, enter() explicitly selects this track, not master.
-    if !a.playback.mixer_focused() || !a.playback.mixer_master {
-        for (id, name, keys, key) in [
-            (
-                "volume-down",
-                "現在のtrackを減音 −3 dB",
-                &[Key::J, Key::ArrowDown][..],
-                mixer::Operation::Quieter,
-            ),
-            (
-                "volume-up",
-                "現在のtrackを増音 +3 dB",
-                &[Key::K, Key::ArrowUp][..],
-                mixer::Operation::Louder,
-            ),
-        ] {
-            out.push(Command::plain(s, id, name, keys, move |a, _| {
-                mixer::apply(a, key);
-            }));
-        }
     }
 }

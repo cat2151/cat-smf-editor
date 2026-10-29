@@ -2,6 +2,7 @@
 pub mod audition_timing;
 pub mod automation;
 pub mod catalog;
+pub mod chord_guide;
 pub mod display_rows;
 pub mod drums;
 pub mod event_content;

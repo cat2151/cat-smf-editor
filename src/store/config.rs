@@ -60,6 +60,10 @@ pub struct Status {
     pub analysis_window: Option<[f32; 4]>,
     #[serde(default)]
     pub analysis_open: bool,
+    #[serde(default)]
+    pub help_open: bool,
+    #[serde(default)]
+    pub help_window: Option<[f32; 4]>,
     /// Pattern companion windows: outer x/y and inner width/height.
     #[serde(default)]
     pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
@@ -89,6 +93,8 @@ pub struct Store {
     pub patch_cursors: std::collections::BTreeMap<String, PatchIdentity>,
     pub analysis_window: Option<[f32; 4]>,
     pub analysis_open: bool,
+    pub help_open: bool,
+    pub help_window: Option<[f32; 4]>,
     pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
     pub voicevox_engine: Option<PathBuf>,
     pub mascot_enabled: bool,
@@ -115,6 +121,8 @@ impl Default for Status {
             patch_cursors: Default::default(),
             analysis_window: None,
             analysis_open: false,
+            help_open: false,
+            help_window: None,
             pattern_windows: Default::default(),
             voicevox_engine: None,
             mascot_enabled: false,
@@ -142,6 +150,8 @@ impl Default for Store {
             patch_cursors: Default::default(),
             analysis_window: None,
             analysis_open: false,
+            help_open: false,
+            help_window: None,
             pattern_windows: Default::default(),
             voicevox_engine: None,
             mascot_enabled: false,
@@ -199,6 +209,8 @@ impl Store {
                     patch_cursors,
                     analysis_window,
                     analysis_open,
+                    help_open,
+                    help_window,
                     pattern_windows,
                     voicevox_engine,
                     mascot_enabled,
@@ -218,6 +230,9 @@ impl Store {
                         window.iter().all(|n| n.is_finite()) && window[2] > 0.0 && window[3] > 0.0
                     });
                     store.analysis_open = analysis_open;
+                    store.help_open = help_open;
+                    store.help_window = help_window
+                        .filter(|w| w.iter().all(|n| n.is_finite()) && w[2] > 0.0 && w[3] > 0.0);
                     store.pattern_windows = pattern_windows
                         .into_iter()
                         .filter(|(_, w)| {
@@ -375,6 +390,8 @@ impl Store {
                 patch_cursors: self.patch_cursors.clone(),
                 analysis_window: self.analysis_window,
                 analysis_open: self.analysis_open,
+                help_open: self.help_open,
+                help_window: self.help_window,
                 pattern_windows: self.pattern_windows.clone(),
                 voicevox_engine: self.voicevox_engine.clone(),
                 mascot_enabled: self.mascot_enabled,
@@ -398,3 +415,6 @@ impl Store {
             .map(|error| format!("Cannot save {}: {error}", path.display()));
     }
 }
+
+#[cfg(test)]
+mod help_tests;

@@ -177,8 +177,9 @@ pub fn store_master(
     loaded.refresh();
     app.audition.set_master(master);
     app.generation += 1;
+    crate::view::patterns::refresh(app);
     if let Some(session) = session {
-        app.restore_position(&session);
+        app.restore_cursor(&session);
     }
     Ok(())
 }
@@ -230,7 +231,7 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
     app.generation += 1;
     crate::view::patterns::refresh(app);
     if let Some(session) = session {
-        app.restore_position(&session);
+        app.restore_cursor(&session);
     }
     if let Some(resume) = resume {
         crate::play::selection_playback::restore(app, resume);

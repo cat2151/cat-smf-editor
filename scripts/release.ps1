@@ -1,4 +1,4 @@
-# Adapter for the shared host, static SMF bridge and this app's DLL CRT.
+# Adapter for the shared host and static-CRT distribution build.
 $ErrorActionPreference = 'Stop'
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
 $installation = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json)[0]
@@ -12,6 +12,14 @@ $generator = switch ($major) {
 if (-not (Test-Path -LiteralPath '../cat-plugin-player/shared/host.cmake')) {
     throw 'cat-plugin-player sibling checkout must contain the shared host source'
 }
+# Keep the reader-facing prose identical to the resolved player source.
+if ((Get-Content -Raw -LiteralPath '.github/release-notes.md') -cne
+    (Get-Content -Raw -LiteralPath '../cat-plugin-player/.github/release-notes.md')) {
+    throw 'Release note templates differ between editor and player'
+}
+if ($env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS -notmatch '(?:^|\s)target-feature=\+crt-static(?:\s|$)') {
+    throw 'Distribution builds require -C target-feature=+crt-static (local builds use cargo build --release)'
+}
 # The shared build driver alone owns configure/build and the existing cache.
 $previousGenerator = $env:UH_GENERATOR
 try {
@@ -22,15 +30,7 @@ try {
     $env:UH_GENERATOR = $previousGenerator
 }
 # Check the executable and its exact embedded host DLL; no installed DLL is borrowed.
-$dumpbin = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'VC/Tools/MSVC/**/bin/Hostx64/x64/dumpbin.exe' | Select-Object -Last 1)
-if (-not $dumpbin) { throw 'dumpbin not found' }
 $package = (python -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['package']['name'])")
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-foreach ($binary in @("target/release/$package.exe", 'target/shim/out/uapmd_shim.dll')) {
-    $imports = & $dumpbin /nologo /dependents $binary
-    if ($LASTEXITCODE) { exit $LASTEXITCODE }
-    $imports | Write-Output
-    if ($imports -match '(?i)\b(?:(?:vcruntime|msvcp)\d+(?:_\d+)?d|ucrtbased)\.dll\b') {
-        throw "Release binary imports debug CRT DLLs: $binary"
-    }
-}
+python ../cat-plugin-player/scripts/crt_linkage.py "target/release/$package.exe" target/shim/out/uapmd_shim.dll
+if ($LASTEXITCODE) { exit $LASTEXITCODE }

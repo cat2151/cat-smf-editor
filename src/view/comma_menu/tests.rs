@@ -195,7 +195,8 @@ fn f1_opens_help_and_escape_closes_without_changing_the_view() {
     assert!(app.help_open);
     assert!(app.note_mode);
     press(&mut app, &ctx, egui::Key::Escape);
-    assert!(!app.help_open);
+    assert!(app.help_open);
+    press(&mut app, &ctx, egui::Key::F1);
     app.piano_roll.open = true;
     press(&mut app, &ctx, egui::Key::F1);
     assert!(app.help_open);

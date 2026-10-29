@@ -83,7 +83,7 @@ pub fn request_drop(app: &mut App, path: PathBuf) {
 }
 
 fn frame(ctx: &egui::Context) -> u64 {
-    super::palette::frame_token(ctx).1
+    super::modal::frame_token(ctx).1
 }
 
 pub fn advance(app: &mut App, ctx: &egui::Context) {

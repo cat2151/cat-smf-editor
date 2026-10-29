@@ -24,8 +24,6 @@ impl State {
     pub(crate) fn command_screen(&self) -> Screen {
         if self.editing.is_some() {
             Screen::LayerInput
-        } else if self.help {
-            Screen::LayerHelp
         } else {
             Screen::Layers
         }
@@ -48,9 +46,6 @@ pub(super) fn specs(state: &State, patch: &Patch) -> Vec<Spec<Op>> {
         p("help", "ヘルプ", &[Key::F1], Help),
         p("layers-close", "閉じる", &[Key::Escape], Close),
     ];
-    if state.help {
-        return result;
-    }
     result.extend([
         p(
             "layer-next",
@@ -122,16 +117,9 @@ pub(super) fn apply(
     use Op::*;
     let row = state.row(patch);
     let result = match op {
-        Help => {
-            state.help = !state.help;
-            Ok(())
-        }
+        Help => Ok(()),
         Close => {
-            if state.help {
-                state.help = false;
-            } else {
-                state.open = false;
-            }
+            state.open = false;
             Ok(())
         }
         Row(down) => {
@@ -198,7 +186,7 @@ pub(super) fn apply(
 }
 
 pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
-    if !matches!(s, Screen::Layers | Screen::LayerHelp | Screen::LayerInput) {
+    if !matches!(s, Screen::Layers | Screen::LayerInput) {
         return;
     }
     let Some(patch) = a.loaded.as_ref().and_then(|l| l.patches.get(a.track)) else {
@@ -227,6 +215,10 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
 }
 
 fn execute(a: &mut App, op: Op) {
+    if matches!(op, Op::Help) {
+        a.help_open = !a.help_open;
+        return;
+    }
     let Some(mut patch) = a
         .loaded
         .as_ref()

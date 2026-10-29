@@ -43,5 +43,12 @@ playerが途中で終了したらeditorはエラーを出し、次の要求で�
 
 player sourceとUAPMDを兄弟checkoutに用意する。editor自身のDLLを同梱して読み込み、
 インストール済みplayerのDLLを借りない。各repoの既定target/shimとCRT方針を使う。
+当初はeditorの配布でも動的CRTを維持したが、userはランタイム導入の案内を減らすため、
+配布方法と本文をplayerに揃えると決定した。配布は静的CRT版だけにし、ローカルの動的CRT版は維持する。
+共有hostはRustの `crt-static` に従ってC++側も切り替えられるため、独自の切替やUAPMDへの補修は増やさない。
+exeと埋込みDLLの両方を検査し、VC++/UCRT DLLに依存する版は公開しない。
+本文は両repoで同じ原文を使い、アプリ固有の値だけを差し替え、commit一覧を折りたたむ。
+原文の不一致は配布buildを止める。人間向け本文へ内部事情が再び混ざることを防ぐため、
+Surge XT・保存した音色の再現・音色やeffectの編集の説明は載せない。
 release engineは両依存の解決SHAを記録する。未commitの共有ソースを基準SHAとして偽装しない。
 新規GitHub runnerでの完走と、既存cacheでのlocal検証は区別する。

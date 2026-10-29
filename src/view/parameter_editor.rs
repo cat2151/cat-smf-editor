@@ -60,7 +60,6 @@ struct Input {
 }
 struct Picker {
     history: super::selection_history::History,
-    help: bool,
     tick: u64,
     previewed: bool,
     title: String,
@@ -79,6 +78,9 @@ struct Picker {
     reveal: bool,
 }
 impl State {
+    pub(crate) fn help_title(&self) -> Option<&str> {
+        self.picker.as_ref().map(|p| p.title.as_str())
+    }
     pub fn picker_open(&self) -> bool {
         self.picker.is_some()
     }
@@ -172,7 +174,6 @@ fn make_picker(app: &mut App, layer: u64) -> Result<Picker, String> {
         history,
         tick: crate::play::playback::location(app).0,
         previewed: false,
-        help: false,
         title,
         song: app.song_id,
         generation: app.generation,

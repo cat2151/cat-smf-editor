@@ -92,3 +92,68 @@ fn global_changes_apply_at_tick_and_format_two_keeps_tracks_independent() {
     assert_eq!(keys.map(1).unwrap().at(20).unwrap().name(), "A minor");
     assert!(keys.map(2).is_none());
 }
+
+#[test]
+fn guide_inheritance_is_per_track_and_own_key_stays_in_charge() {
+    use cat_smf_editor::score::chord_guide;
+    let mut music = Music {
+        format: 1,
+        division: 480,
+        tracks: vec![
+            Track {
+                events: vec![signature(0, 0, 0)],
+            },
+            Track { events: vec![] },
+            Track {
+                events: vec![signature(3840, -1, 1)],
+            },
+        ],
+    };
+    chord_guide::add(&mut music).unwrap();
+    for e in [
+        signature(0, 0, 0),
+        signature(1920, 1, 0),
+        signature(5760, 2, 0),
+    ] {
+        cat_smf_editor::edit::insert(&mut music.tracks[3], e);
+    }
+    let keys = KeySignatures::new(&music);
+    for t in [1, 2] {
+        assert_eq!(keys.map(t).unwrap().at(1919).unwrap().name(), "C major");
+        assert_eq!(keys.map(t).unwrap().at(1920).unwrap().name(), "G major");
+    }
+    assert_eq!(keys.map(1).unwrap().at(5760).unwrap().name(), "D major");
+    assert_eq!(keys.map(2).unwrap().at(5760).unwrap().name(), "D minor");
+    assert_eq!(keys.map(0).unwrap().at(5760).unwrap().name(), "C major");
+    // Local Pattern/Scene timelines keep the prior interpretation, excluding the guide.
+    assert_eq!(
+        KeySignatures::local_timeline(&music)
+            .map(1)
+            .unwrap()
+            .at(5760)
+            .unwrap()
+            .name(),
+        "D minor"
+    );
+    music.tracks[2].events.clear();
+    assert_eq!(
+        KeySignatures::new(&music)
+            .map(2)
+            .unwrap()
+            .at(5760)
+            .unwrap()
+            .name(),
+        "D major"
+    );
+    music.tracks.pop();
+    music.tracks[1].events.push(signature(0, 3, 0));
+    assert_eq!(
+        KeySignatures::new(&music)
+            .map(2)
+            .unwrap()
+            .at(0)
+            .unwrap()
+            .name(),
+        "C major"
+    );
+}

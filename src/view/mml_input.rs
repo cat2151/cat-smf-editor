@@ -44,7 +44,13 @@ pub fn open(app: &mut App, ctx: &egui::Context, overwrite: bool) {
         return;
     };
     if !app.can_edit_notes(app.track) {
-        app.load_error = Some("Edit the pattern from its destination track".into());
+        app.load_error = Some(
+            if cat_smf_editor::score::chord_guide::track(&loaded.music) == Some(app.track) {
+                "Select a note track".into()
+            } else {
+                "Edit the pattern from its destination track".into()
+            },
+        );
         return;
     }
     let (tick, _) = crate::play::playback::location(app);
@@ -159,7 +165,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             ) {
                 Ok(()) => {
                     if let Some(session) = &state.session {
-                        app.restore_position(session);
+                        app.restore_cursor(session);
                     }
                     app.track_view.cursor_tick = state.cursor_tick;
                     state.open = false;
@@ -173,7 +179,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             }
             match inserted(&state) {
                 Ok((music, end)) => {
-                    if let Err(error) = app.apply_note_music(music, state.base.as_ref().unwrap()) {
+                    if let Err(error) = insertion::apply(app, &state, music) {
                         state.error = Some(error);
                         app.mml_input = state;
                         super::comma_menu::swallow(ctx);
@@ -261,57 +267,29 @@ fn audition(app: &mut App, state: &State, request: Option<Option<cat_smf_editor:
     }
 }
 
-/// The song with the current input inserted into the overlay's opening state,
-/// and the tick where the insertion ends.
-fn inserted(state: &State) -> Result<(Music, u64), String> {
-    let mut music = state.base.clone().ok_or("No SMF is loaded")?;
-    let edit = if state.measure.is_some() {
-        cat_smf_editor::edit::mml::replace
-    } else {
-        cat_smf_editor::edit::mml::insert
-    };
-    let end = edit(
-        &mut music,
-        state.track,
-        state.tick,
-        state.channel,
-        &state.buffer,
-    )?;
-    if let Some(pattern) = &state.pattern {
-        let saved = state
-            .saved_base
-            .as_ref()
-            .ok_or("Missing pattern edit base")?;
-        let (_, until) = pattern.edit_range(saved)?;
-        if end > until {
-            return Err("MML exceeds the pattern length".into());
-        }
-    }
-
-    if state.pattern.is_none() {
-        cat_smf_editor::edit::regenerate(&mut music)?;
-    }
-    Ok((music, end))
-}
-
-/// Unusable input shows the opening state, so deleting the text undoes the preview.
+/// Unusable input restores the opening snapshot, including its pattern length.
 fn preview(app: &mut App, state: &mut State) {
-    let Some(base) = &state.base else {
-        return;
+    let fallback = if state.pattern.is_some() {
+        state.saved_base.as_ref()
+    } else {
+        state.base.as_ref()
     };
+    let Some(base) = fallback else { return };
     let music = inserted(state).map_or_else(|_| base.clone(), |(music, _)| music);
-    let current = app.loaded.as_ref().unwrap().visible();
+    let current = &app.loaded.as_ref().unwrap().music;
     if cat_smf_editor::smf_io::encode(current) == cat_smf_editor::smf_io::encode(&music) {
         return;
     }
-    match app.apply_note_music(music, base) {
+    match insertion::apply(app, state, music) {
         Ok(()) => measure::follow(app, state),
         Err(error) => state.error = Some(error),
     }
 }
 
+use insertion::inserted;
 pub(crate) mod commands;
 mod editor;
+mod insertion;
 mod key_prefix;
 pub(crate) mod measure;
 #[cfg(test)]

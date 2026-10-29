@@ -4,7 +4,7 @@ use cat_smf_editor::chain_settings::PluginState;
 use eframe::egui;
 
 pub(crate) mod commands;
-mod keyboard;
+pub(crate) mod keyboard;
 #[cfg(test)]
 pub(crate) mod tests;
 mod widgets;
@@ -21,7 +21,6 @@ pub struct State {
     selected: usize,
     /// Effects seen last frame; a grown chain selects the effect the browser added.
     count: usize,
-    help: bool,
     reveal: bool,
     drag: Option<usize>,
 }
@@ -52,9 +51,8 @@ pub fn open(app: &mut App, target: Target, selected: usize) {
         ..Default::default()
     };
     app.layer_editor.open = false;
-    app.drum_editor.open = false;
+    crate::view::drums::close(app);
     app.playback.open = false;
-    app.help_open = false;
     app.comma_menu.open = false;
     app.edit_menu.open = false;
     app.piano_roll.open = false;

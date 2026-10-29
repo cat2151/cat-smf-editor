@@ -4,23 +4,30 @@ use crate::model::Event;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
     Tempo,
+    Chord,
     KeySignature,
 }
 impl Kind {
     pub fn label(self) -> &'static str {
         match self {
+            Self::Chord => "Chord",
             Self::Tempo => "Tempo",
             Self::KeySignature => "Key signature",
         }
     }
     pub fn placeholder(self) -> &'static str {
         match self {
+            Self::Chord => "Isus4",
             Self::Tempo => "120",
             Self::KeySignature => "D minor",
         }
     }
     pub fn event(self, tick: u64, input: &str) -> Result<Event, String> {
+        if self == Self::Chord {
+            return crate::score::chord_guide::event(tick, input);
+        }
         let (meta_type, data) = match self {
+            Self::Chord => unreachable!(),
             Self::Tempo => {
                 let bpm = input.trim().parse::<f64>().map_err(|_| "Invalid BPM")?;
                 let micros = (60_000_000.0 / bpm).round();

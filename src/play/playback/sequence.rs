@@ -141,3 +141,36 @@ pub(super) fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequ
         notes, end, events, &selected, &tempo, start,
     ))
 }
+
+#[cfg(test)]
+mod guide_tests {
+    use super::*;
+
+    #[test]
+    fn guide_is_silent_without_cancelling_all_tracks() {
+        let mut a = crate::view::palette::tests::app();
+        let mut music = a.loaded.as_ref().unwrap().music.clone();
+        cat_smf_editor::score::chord_guide::add(&mut music).unwrap();
+        // Even stray notes in an imported guide must not sound.
+        music.tracks[3].events = music.tracks[0]
+            .events
+            .iter()
+            .cloned()
+            .chain(music.tracks[3].events.iter().cloned())
+            .collect();
+        music.tracks[3].events.sort_by_key(|e| e.tick);
+        a.loaded.as_mut().unwrap().music = music;
+        a.loaded.as_mut().unwrap().refresh();
+        assert!(!a.can_edit_notes(3));
+        assert!(super::super::sounding::silent(&a, 3));
+        assert!(super::super::sounding::sounding(&a, 3, Mode::Track)
+            .unwrap()
+            .events
+            .is_empty());
+        assert!(sequence_track(&a, 3, Mode::Track).unwrap().notes.is_empty());
+        assert!(!sequence_track(&a, 0, Mode::AllTracks)
+            .unwrap()
+            .notes
+            .is_empty());
+    }
+}

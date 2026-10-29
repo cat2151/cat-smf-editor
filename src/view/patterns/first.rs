@@ -89,10 +89,7 @@ fn edit(a: &mut App, ctx: &egui::Context) {
     };
     let result = match p.choices[p.selected].0 {
         Choice::Initial(drums) => library::initialize(a, drums),
-        Choice::Container(id) => {
-            a.patterns.container = Some(id);
-            library::create(a, None)
-        }
+        Choice::Container(id) => library::create_for_container(a, id),
         Choice::New(drums) => library::add_container(a, drums),
     };
     match result {

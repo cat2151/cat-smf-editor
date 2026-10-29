@@ -59,6 +59,7 @@ pub fn edit_sound(a: &App, track: usize) -> Option<(usize, Patch)> {
 pub fn start(a: &mut App, id: u64) -> Result<(), String> {
     let prepared = prepare(a, id)?;
     crate::play::transport::stop(a);
+    a.playback.last = Mode::Pattern(id);
     a.playback.follow = false;
     a.playback.pending = Some(prepared);
     a.patterns.preview = Some(id);

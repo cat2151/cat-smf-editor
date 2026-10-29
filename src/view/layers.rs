@@ -4,7 +4,7 @@ use cat_smf_editor::score::instrument::{Patch, ResolvedLayer};
 use eframe::egui;
 
 pub(crate) mod commands;
-mod keyboard;
+pub(crate) mod keyboard;
 #[cfg(test)]
 mod keyboard_tests;
 #[cfg(test)]
@@ -21,7 +21,6 @@ pub struct State {
     selected: Option<u64>,
     field: usize,
     editing: Option<Editing>,
-    help: bool,
     reveal: bool,
     automation: Option<u64>,
 }
@@ -40,7 +39,7 @@ pub fn open(app: &mut App) {
         super::drums::open(app);
         return;
     }
-    app.drum_editor.open = false;
+    crate::view::drums::close(app);
     if super::parameter_editor::is_track(app) {
         super::parameter_editor::open(app);
         return;
@@ -56,7 +55,6 @@ pub fn open(app: &mut App) {
     };
     app.playback.mixer_open = false;
     app.playback.open = false;
-    app.help_open = false;
     app.comma_menu.open = false;
     app.edit_menu.open = false;
     app.piano_roll.open = false;
@@ -124,7 +122,7 @@ fn nudge(patch: &mut Patch, row: usize, field: usize, up: bool) -> Result<(), St
 
 impl State {
     pub(crate) fn allows_undo(&self) -> bool {
-        !self.open || (self.editing.is_none() && !self.help)
+        !self.open || self.editing.is_none()
     }
     fn row(&self, patch: &Patch) -> usize {
         patch

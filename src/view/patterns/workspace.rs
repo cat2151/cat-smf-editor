@@ -9,12 +9,16 @@ use cat_smf_editor::score::{
 };
 use eframe::egui::{self, Key, Modifiers};
 mod commands;
+mod deletion;
 mod dialog;
 mod minimap;
 mod panel;
 mod rows;
+mod selection;
+mod timeline;
 pub use commands::collect;
 pub use rows::{lane, lanes, materialize, rows};
+pub use selection::Selection;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pane {
     Scene,
@@ -45,34 +49,9 @@ pub fn pane(ctx: &egui::Context) -> Option<Pane> {
         .into_iter()
         .find(|p| p.viewport() == ctx.viewport_id())
 }
-pub struct Selection {
-    pub row: usize,
-    pub measure: u64,
-    pub choice: Option<PatternOrScene>,
-    pub query: String,
-    pub search: crate::view::commands::SearchQuery,
-    pub focus: bool,
-    pub owned: bool,
-    pub help: bool,
-    pub composing: bool,
-}
-impl Default for Selection {
-    fn default() -> Self {
-        Self {
-            row: 0,
-            measure: 1,
-            choice: None,
-            query: String::new(),
-            search: Default::default(),
-            focus: false,
-            owned: false,
-            help: false,
-            composing: false,
-        }
-    }
-}
 #[derive(Default)]
 pub struct State {
+    timeline: timeline::State,
     pub scene: Option<u64>,
     pub scene_cell: Selection,
     pub song_cell: Selection,
@@ -189,7 +168,6 @@ pub fn reset_windows(a: &mut App) {
         let s = a.patterns.workspace.selection_mut(p);
         s.owned = false;
         s.focus = false;
-        s.help = false;
         s.composing = false;
     }
 }
@@ -267,16 +245,6 @@ pub fn play(a: &mut App, p: Pane) {
 fn result(a: &mut App, r: Result<(), String>) {
     a.patterns.workspace.error = r.err();
 }
-pub fn choose(a: &mut App, p: Pane, part: PatternOrScene) {
-    a.patterns.workspace.selection_mut(p).choice = Some(part);
-    match part {
-        PatternOrScene::Pattern(id) => {
-            let r = preview::start(a, id);
-            result(a, r);
-        }
-        PatternOrScene::Scene(id) => crate::play::arrangement::start(a, Some(id)),
-    }
-}
 pub fn current(a: &App, p: Pane) -> Option<PatternOrScene> {
     let c = scene::read(&a.loaded.as_ref()?.music).ok()?;
     let s = a.patterns.workspace.selection(p);
@@ -310,7 +278,7 @@ pub fn edit_choice(a: &mut App, ctx: &egui::Context, p: Pane) {
                 a.patterns.workspace.return_to = Some(p);
                 presentation::focus_root(a, ctx);
                 let l = a.loaded.as_ref().unwrap();
-                if l.patches[a.track].drums.is_some() || super::beacon::empty(&l.music, id) {
+                if !crate::view::drums::is_open(a) && super::beacon::empty(&l.music, id) {
                     crate::view::drums::input(a, ctx);
                 }
             }
@@ -324,7 +292,7 @@ pub fn edit_choice(a: &mut App, ctx: &egui::Context, p: Pane) {
         None => result(a, Err("Select a pattern or scene".into())),
     }
 }
-/// The event list shows pattern `id`, bound to the placement under the selected cell.
+/// Open the body editor, bound to the placement under the selected cell.
 fn show_body(a: &mut App, p: Pane, id: u64) -> Result<(), String> {
     let lane = lane(a, p);
     let placement = a
@@ -355,7 +323,7 @@ fn show_body(a: &mut App, p: Pane, id: u64) -> Result<(), String> {
     }
     Ok(())
 }
-/// A click on a placed pattern shows it in the event list and focus stays here;
+/// A click on a placed pattern opens its body editor and focus stays here;
 /// a click on a placed scene opens it in the scene window, which takes focus.
 pub fn click_body(a: &mut App, p: Pane) {
     let r = match current(a, p) {
@@ -387,7 +355,7 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
             d.viewport == p.viewport()
         } else {
             (p == Pane::Song || a.patterns.workspace.scene_window)
-                && !a.palette.owns_root()
+                && !(a.palette.owns_root() || a.command_input.owns_root())
                 && !a.patterns.confirming_creation()
                 && crate::view::analysis::companion_visible(a, ctx)
         };
@@ -410,7 +378,7 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
                 if class != egui::ViewportClass::Embedded {
                     super::windows::remember(a, ctx, p.title());
                 }
-                let input = crate::view::palette::begin(a, ctx);
+                let input = crate::view::modal::begin(a, ctx);
                 crate::view::commands::route(a, ctx);
                 if class == egui::ViewportClass::Embedded {
                     egui::Window::new(p.title())
@@ -425,7 +393,7 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
                     dialog::show(a, ctx);
                 }
                 crate::play::playback::show(a, ctx);
-                crate::view::palette::end(a, ctx, input);
+                crate::view::modal::end(a, ctx, input);
                 if ctx.input(|i| i.viewport().close_requested()) {
                     crate::play::transport::stop(a);
                     mode::close_workspace(a);

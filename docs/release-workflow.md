@@ -21,7 +21,12 @@ package名とexe名が一致する、Windows MSVC向けの単一バイナリア�
   一致は依存版の一致を意味し、配布するexeの手動確認済みを意味しない。
 - `build_script`: アプリrootから呼ぶPowerShellスクリプト。ビルドと固有の検査を担当する。
 - `package_files`: exe以外に同梱するファイル。ZIPではbasenameを使うため、同名ファイルを指定しない。
-- `runtime_notice`: 配布物の実際の実行要件。
+- `notes_dependency_order`: 本文の依存commit一覧の表示順。全依存のpathを一度ずつ指定する。
+
+本文の原文は `.github/release-notes.md`。player側にも同じテンプレートを置き、
+アプリ名・版・同梱ファイル・依存commit・非表示の再ビルド判定情報だけを差し替える。
+commit一覧は閉じた `details` に入れる。配布buildのadapterで解決済みplayerとのテンプレート一致を確認し、
+文言がずれたまま公開しない。両repoのテンプレートは一緒に更新する。
 
 `scripts/release.ps1` はMSVC x64を検出し、VS 2022/2026のgeneratorを `UH_GENERATOR` で共有build driverへ渡す。
 既定の `target/shim` のconfigure/buildは `build.rs` から参照するplayerの共有driverだけが担当する。
@@ -30,14 +35,18 @@ adapterは二度目のconfigureを追加せず、実行後に環境変数の元�
 共有hostはUAPMDを読む前に[stb revision補修](../../cat-plugin-player/patches/uapmd/stb-revision-pin/README.md)を読み、
 rtlogが使うstbを`2c980bb59875b0d32144a71867fbdebb2f77cd20`へ固定する。
 取得先overrideや既存cacheのSHA・変更・rootヘッダを取得前に検査し、不一致なら保全・復旧の診断を出して停止する。
-既知のclean cacheでは共有driverのv4 stampで一度再configureし、既存CPM_SOURCE_CACHEを再利用する。
+既知のclean cacheでは共有driverのstampで必要な再configureを判断し、既存CPM_SOURCE_CACHEを再利用する。
 この固定はplayer/editor共通で、依存checkoutの直接編集や別target-dirは行わない。
 UAPMD付属patchの二重適用を避けるため、単にReleaseビルドを試す目的で既存cacheを再configureしない。
-既存のCMake設定を使い、editorのRust/C++のDLL CRTは変更しない。Release exeとそのbuildの埋込みhost DLLへのdebug CRT混入をdumpbinで検査する。
-playerの静的CRT配布方針はeditorへ適用しない。clap-mml-play-serverのcheckoutは`cmrt-core`のソース取得用で、MMLアプリ本体のビルド用ではない。editorのDLLはeditor自身のtargetで生成し、exeに埋め込む。
-ZIPにはexeとLICENSEを含め、最新版の
-[VC++ v14 x64ランタイム](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist/)
-と未設定track用のSurge XT CLAPは別途必要。保存した設定を鳴らすpluginと外部sample、編集画面用のcat-plugin-playerも別途導入する。
+配布buildはplayerと同じ静的CRT方針とする。workflowのbuild job全体に
+`CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS=-C target-feature=+crt-static` を設定し、testでも同じ方式を使う。
+共有driverがこのflagからC++側の `/MT` も選ぶ。adapterはflagが無い配布buildを拒否し、
+playerの `scripts/crt_linkage.py` でexeとそのbuildの埋込みhost DLLのVC++/UCRT DLL依存を検査する。
+clap-mml-play-serverのcheckoutは`cmrt-core`のソース取得用で、MMLアプリ本体のビルド用ではない。editorのDLLはeditor自身のtargetで生成し、exeに埋め込む。
+ZIPにはexeと `package_files` のライセンス類を含め、VC++再頒布可能パッケージは不要。
+音源などの外部資源への依存はこのCRT変更で変わらないが、リリース本文には列挙しない。
+ローカルは従来どおり `cargo build --release --locked` で動的CRT版を作る。
+CRT方式を切り替えて既存の `target/shim` を使い回さない。配布の静的版は新規CI runnerでビルド・検査する。
 
 cat-plugin-playerのrefは共有ソースを含む版を指す必要があり、不足はadapterで明示して停止する。
 今回のlocal検証にはplayerの未commit変更を含むため、旧HEADを共有ソースの検証済みSHAとして記録しない。
@@ -77,8 +86,8 @@ jobs:
 共有版はSHA固定を推奨する。一つの修正が全アプリへ即時波及するのを避け、確認後に参照SHAを更新する。
 各アプリでのビルド・音声動作確認は引き続き必要。
 
-playerも同じMML関連の二つのリポジトリを使うが、adapterでは静的CRTのRust flags、
-共有build driver、exeと埋込みDLLのCRT検査を実行する。editorのadapterをそのまま使わない。
+playerも同じMML関連の二つのリポジトリを使う。両アプリとも配布版は静的CRTにし、
+共有build driverとexe・埋込みDLLのCRT検査を使う。checkoutとpackage構成は各アプリで定める。
 UAPMDの補修、plugin固有処理、音声エンジンまで今回の共通workflowに取り込む必要はない。
 複数exe、macOS/Linux、private依存、submodule必須の依存、独自ZIPレイアウトは追加設計が必要。
 
@@ -98,10 +107,12 @@ UAPMDの補修、plugin固有処理、音声エンジンまで今回の共通wor
 `python -m unittest discover -s scripts -p 'test_release_workflow.py'` で、workflow内のPython処理を
 mockしたGitHub/git応答で検証する。初回公開、入力一致時の省略、依存変更（`cmrt-core`・`cmrt-chord`・素材の取得元だけの変更を含む）、engine変更、手動再ビルド、
 通信失敗、Cargoの全path依存と取得先の整合、mascot-render-serverだけの変更による再ビルド、兄弟checkoutのSHA、ZIPの内容を対象にする。
-Actions YAMLはactionlint、adapterは実際のローカルReleaseビルドとdumpbinで検証する。
+playerの兄弟checkoutも使い、両workflowが生成する共通本文・uapmd確認文の一致、閉じた折りたたみと非表示markerの位置を検証する。
+Actions YAMLはactionlintで検証する。CRT検査の回帰はplayer側の
+`python -B -m unittest discover -s scripts -p 'test_crt_linkage.py'` で行う。
 素材テストは`cargo test --release --locked --test catalog_and_corpus --test smf_io`で有効なまま確認する。
 共有補修の実FetchContent回帰、両アプリのRelease/test、playerの静的CRT検査はそれぞれ必要で、
-editorのDLL CRT検査をplayerの検査に代用しない。
+editorのCRT検査をplayerの検査に代用しない。ローカルの動的CRT版の成功を配布の静的版の成功として扱わない。
 GitHub runnerの新規checkoutでの完走は別途必要で、既存ローカルcacheでの成功とは区別する。
 共有playerの修正を先にGitHubへ反映し、素材設定を含むeditorを反映してから、明示許可された
 両repoの`publish=false`を新規runnerで実行する。run ID、app/依存/stb SHAとbuild/CRT/test/ZIPを確認する。

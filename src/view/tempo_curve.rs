@@ -247,7 +247,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     // A fixed id keeps the drag alive when the error line above appears or goes.
                     let response = ui.interact(
                         rect,
-                        crate::view::palette::preview_id(
+                        crate::view::command_input::preview_id(
                             ui.ctx(),
                             egui::Id::new("tempo-curve-points"),
                         ),

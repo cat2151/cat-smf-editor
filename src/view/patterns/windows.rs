@@ -7,7 +7,7 @@ const TITLES: [&str; 2] = ["Scene", "Pattern / Song"];
 fn defaults(title: &str) -> [f32; 4] {
     match title {
         "Scene" => [460.0, 40.0, 760.0, 440.0],
-        "Pattern / Song" => [460.0, 520.0, 760.0, 440.0],
+        "Pattern / Song" => [460.0, 520.0, 760.0, 520.0],
         _ => unreachable!(),
     }
 }

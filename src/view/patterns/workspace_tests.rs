@@ -11,9 +11,14 @@ use cat_smf_editor::score::{
 use eframe::egui::{self, Key, Modifiers};
 mod arrange;
 mod comment_out;
+mod deletion;
 mod input;
 mod keyboard;
 mod minimap;
+mod recording;
+mod scrolling;
+mod single_cursor;
+mod timeline;
 
 pub(super) fn context() -> egui::Context {
     let c = egui::Context::default();
@@ -273,7 +278,15 @@ pub(crate) fn verification_song() -> (App, egui::Context, u64, u64, u64) {
     let before = bytes(&a);
     candidate(&mut a, &c, Pane::Scene, PatternOrScene::Pattern(first));
     assert_eq!(bytes(&a), before);
-    assert!(a.playback.pending.is_some());
+    assert_eq!(
+        a.playback
+            .pending
+            .as_ref()
+            .expect("candidate audition")
+            .active
+            .mode,
+        crate::play::playback::Mode::Pattern(first)
+    );
     cell(&mut a, &c, Pane::Scene, lanes[0], 1);
     key(
         &mut a,

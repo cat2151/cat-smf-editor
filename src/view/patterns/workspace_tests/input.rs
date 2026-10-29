@@ -109,7 +109,7 @@ fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
     assert_eq!(bytes(&a), before);
     assert_eq!(a.patterns.editing, root_edit);
     assert!(!a.mml_input.open);
-    assert!(!a.patterns.workspace.song_cell.help);
+    assert!(!a.help_open);
     assert_eq!(
         (
             a.patterns.workspace.song_cell.row,
@@ -121,9 +121,9 @@ fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
     assert!(a.playback.pending.is_some() || a.playback.active.is_some());
     key(&mut a, &c, song, Key::Escape, Modifiers::NONE); // Return focus from the filter.
     frame(&mut a, &c, song, vec![egui::Event::Text("?".into())]);
-    assert!(a.patterns.workspace.song_cell.help);
-    key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
-    assert!(!a.patterns.workspace.song_cell.help);
+    assert!(a.help_open);
+    key(&mut a, &c, song, Key::F1, Modifiers::NONE);
+    assert!(!a.help_open);
     button(&mut a, &c, Pane::Scene, "create");
     let mut raw = egui::RawInput {
         events: vec![egui::Event::Key {
@@ -165,4 +165,48 @@ fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
         .as_ref()
         .unwrap()
         .contains("in use"));
+}
+
+#[test]
+fn palette_pattern_arguments_start_from_the_focused_song_filter() {
+    let (mut a, c, _, _, _) = verification_song();
+    let song = Pane::Song.viewport();
+    let before = bytes(&a);
+    click(
+        &mut a,
+        &c,
+        song,
+        egui::Id::new((Pane::Song.title(), "query")),
+    );
+    key(&mut a, &c, song, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+    text(&mut a, &c, song, "Pattern measures / meter");
+    let candidates = crate::view::palette::tests::listed(&mut a);
+    let index = candidates
+        .iter()
+        .position(|label| label.ends_with(": Pattern measures / meter"))
+        .expect("Pattern command candidate");
+    for _ in 0..index {
+        key(&mut a, &c, song, Key::ArrowDown, Modifiers::NONE);
+    }
+    key(&mut a, &c, song, Key::Enter, Modifiers::NONE);
+    let listed = crate::view::palette::tests::listed(&mut a);
+    assert!(
+        a.command_input.is_open(),
+        "error {:?}; palette {}; owner {:?}; candidates {:?}; dialog {}",
+        a.load_error,
+        a.palette.is_open(),
+        crate::view::commands::owner(&a, &c),
+        listed,
+        a.patterns.workspace.input_open()
+    );
+    assert!(!a.palette.is_open());
+    key(
+        &mut a,
+        &c,
+        egui::ViewportId::ROOT,
+        Key::Escape,
+        Modifiers::NONE,
+    );
+    assert!(!a.command_input.is_open());
+    assert_eq!(bytes(&a), before);
 }

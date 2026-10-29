@@ -188,7 +188,6 @@ pub(super) fn picker() -> Picker {
         history: Default::default(),
         tick: 0,
         previewed: false,
-        help: false,
         title: "Fixture".into(),
         song: 99,
         generation: 0,

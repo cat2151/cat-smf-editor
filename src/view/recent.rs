@@ -38,7 +38,6 @@ pub(super) fn available(app: &App, ctx: &egui::Context) -> bool {
         && !app.tempo_curve.open
         && !app.comma_menu.open
         && !app.edit_menu.open
-        && !app.help_open
         && !app.playback.open
         && !app.playback.mixer_focused()
         && !app.track_view.go_open

@@ -43,12 +43,12 @@ fn root_pattern_input_cancel_invalid_and_ime_keep_context_and_song() {
     press(&mut a, &c, Key::Enter);
     assert!(a.mml_input.open);
     frame(&mut a, &c, vec![egui::Event::Ime(egui::ImeEvent::Disabled)]);
-    text(&mut a, &c, "o5 l1 g g");
+    text(&mut a, &c, "r1 r1"); // No sounding notes: still invalid for Insert MML.
     for _ in 0..3 {
         frame(&mut a, &c, vec![]);
     }
     assert!(a.mml_input.open);
-    assert_eq!(a.mml_input.buffer, "o5 l1 g g");
+    assert_eq!(a.mml_input.buffer, "r1 r1");
     assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
     press(&mut a, &c, Key::Escape);
     assert!(!a.mml_input.open);

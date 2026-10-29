@@ -18,9 +18,7 @@ pub enum Screen {
     DrumInput,
     DrumCreate,
     LayerInput,
-    LayerHelp,
     Effects,
-    EffectHelp,
     Selection,
     SelectionMenu,
     Mml,
@@ -62,9 +60,9 @@ impl Screen {
             Self::Split => "Columns",
             Self::Play => "Play",
             Self::Mixer => "Mixer",
-            Self::Layers | Self::LayerInput | Self::LayerHelp => "Layers",
+            Self::Layers | Self::LayerInput => "Layers",
             Self::Drums | Self::DrumInput | Self::DrumCreate => "Drum sequencer",
-            Self::Effects | Self::EffectHelp => "Effects",
+            Self::Effects => "Effects",
             Self::Selection | Self::SelectionMenu => "Selection",
             Self::Mml => "MML",
             Self::Note => "Note",
@@ -115,6 +113,9 @@ impl Screen {
 }
 
 pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
+    if ctx.viewport_id() == super::super::help::viewport() {
+        return Screen::Help;
+    }
     if a.patterns.workspace.input_open() {
         return Screen::ArrangementInput;
     }
@@ -194,7 +195,7 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     if a.layer_editor.open {
         return a.layer_editor.command_screen();
     }
-    if a.drum_editor.open {
+    if crate::view::drums::is_open(a) {
         return if a.drum_editor.confirm_create {
             Screen::DrumCreate
         } else if a.drum_editor.input.is_some() {
@@ -225,9 +226,6 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     }
     if a.track_view.split_open {
         return Screen::Split;
-    }
-    if a.help_open {
-        return Screen::Help;
     }
     if a.playback.open {
         return Screen::Play;

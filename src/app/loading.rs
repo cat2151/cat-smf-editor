@@ -110,9 +110,8 @@ impl App {
         self.playback.active = None;
         self.load_error = None;
         self.invalid_smf_name = None;
-        self.help_open = false;
         self.playback.mixer_open = false;
-        self.select_track(0);
+        self.set_track(0);
         self.generation += 1;
         for (track, gain) in volumes.into_iter().enumerate() {
             self.audition.set_gain(track, gain);
@@ -148,6 +147,9 @@ impl App {
             loaded.refresh_display();
         }
         self.loaded = Some(loaded);
+        if !self.startup.pending {
+            crate::view::patterns::track_selected(self);
+        }
         drop(display_span);
         let persist_span = (!self.startup.pending)
             .then(|| cat_smf_editor::startup_trace::span("history_status_write"));

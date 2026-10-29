@@ -39,12 +39,12 @@ jobs:
           CONFIG: ${{ inputs.config }}
           SKIP_UNCHANGED: ${{ inputs.skip-unchanged }}
           # Bump when changing the shared engine, including after centralization.
-          ENGINE_REVISION: '2'
+          ENGINE_REVISION: '3'
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: python
         run: |
-          import json, os, pathlib, re, subprocess, tomllib
+          import json, os, pathlib, re, string, subprocess, tomllib
           config = json.loads(pathlib.Path(os.environ['CONFIG']).read_text(encoding='utf-8'))
           package = tomllib.loads(pathlib.Path('Cargo.toml').read_text(encoding='utf-8'))['package']
           name, version = package['name'], package['version']
@@ -77,19 +77,23 @@ jobs:
           body = (json.loads(release.stdout).get('body') or '') if release.returncode == 0 else ''
           unchanged = marker in body.splitlines()
           build = not (os.environ['SKIP_UNCHANGED'] == 'true' and unchanged)
-          notes = [f'{name} v{version} (Windows x64)', '', '## 配布物',
-                   f'- `{name}-{version}-windows-x64.zip`: exe と設定された同梱ファイル',
-                   '- ' + config['runtime_notice'], '', '## この版について',
-                   '- 自動検査（ビルド・プロジェクト固有検査・テスト）を通した版。人による動作確認は別途必要。',
-                   '- schedule は同じ入力の公開版があれば省略。手動起動は常にビルド。',
-                   '', '## ビルドに使った commit', f'- {name}: {os.environ["GITHUB_SHA"]}']
-          for dep in dependencies:
-              notes.append(f'- {dep["repository"]} ({dep["ref"]}): {dep["sha"]}')
+          commits = [f'- {name}: {os.environ["GITHUB_SHA"]}']
+          order = config.get('notes_dependency_order', [dep['path'] for dep in dependencies])
+          if len(order) != len(dependencies) or set(order) != {dep['path'] for dep in dependencies}:
+              raise ValueError('Notes dependency order must contain every dependency exactly once')
+          for dep in sorted(dependencies, key=lambda dep: order.index(dep['path'])):
+              label = dep['repository'].split('/')[-1]
               if dep.get('verified_sha'):
-                  match = '一致' if dep['sha'] == dep['verified_sha'] else '不一致（この上流版の手元確認は未実施）'
-                  notes.append(f'  - 手元の確認基準 {dep["verified_sha"]} と{match}')
-          notes += ['', marker, '']
-          pathlib.Path('notes.md').write_text('\n'.join(notes), encoding='utf-8')
+                  label += f'（{dep["repository"]} の {dep["ref"].removeprefix("refs/heads/")}）'
+              commits.append(f'- {label}: {dep["sha"]}')
+              if dep.get('verified_sha'):
+                  match = '一致' if dep['sha'] == dep['verified_sha'] else f'不一致（手元で動作を確認していない {dep["repository"].split("/")[-1]} の版でビルドした）'
+                  commits.append(f'  - 手元で確認した {dep["repository"].split("/")[-1]} {dep["verified_sha"]} と{match}')
+          template = string.Template(pathlib.Path('.github/release-notes.md').read_text(encoding='utf-8'))
+          notes = template.substitute(name=name, version=version,
+              package_files='、'.join(pathlib.Path(file).name for file in config['package_files']),
+              commits='\n'.join(commits), build_inputs=marker)
+          pathlib.Path('notes.md').write_text(notes, encoding='utf-8')
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
               values = {'build': str(build).lower(), 'package': name, 'version': version,
                         'dependencies': json.dumps(dependencies), 'build-script': config['build_script'],
@@ -99,7 +103,7 @@ jobs:
                       raise ValueError('Output values must be single-line')
                   out.write(f'{key}={value}\n')
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
-              out.write(f'Build: {build} (published inputs unchanged: {unchanged})\n\n' + '\n'.join(notes))
+              out.write(f'Build: {build} (published inputs unchanged: {unchanged})\n\n' + notes)
       - uses: actions/upload-artifact@v7
         with:
           name: release-notes
@@ -115,6 +119,8 @@ jobs:
       PACKAGE_FILES: ${{ needs.resolve.outputs.package-files }}
       PACKAGE: ${{ needs.resolve.outputs.package }}
       VERSION: ${{ needs.resolve.outputs.version }}
+      # The shared build driver also applies /MT to the C++ host and SMF bridge.
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static
     steps:
       - run: git config --global core.longpaths true
         id: longpaths

@@ -1,7 +1,7 @@
 # ADR 0018: same measure・pattern・Scene／SongをSMF内の参照として扱う
 
 - 状態: 採用
-- 決定者: user（同じ小節への参照、take比較、3窓の作業領域、音色入れ物とpatternの所属、専用trackへの保存、配置レーン・Scene・Songをconductorのmeta 1個に集約、発音単位、演奏表現と競合・復元・移動の規則、patternが無い曲での開始）
+- 決定者: user（同じ小節への参照、take比較、3窓の作業領域、音色入れ物とpatternの所属、専用trackへの保存、配置レーン・Scene・Songをconductorのmeta 1個に集約、発音単位、演奏表現と競合・復元・移動の規則、patternが無い曲での開始、候補patternのクリックによる単体再生と本体表示）
 - 関連: [0006: instrument layerと音色参照](0006-instrument-layers-and-patch-state-cache.md)、[0010: 通常のMML・コード入力](0010-mml-chord-note-insertion.md)、[0013: 安定した所有元への参照](0013-instrument-parameter-automation.md)、[0017: ドラム編集](0017-drum-sequencer.md)
 
 ## 参照を保存し、本体の変更へ追従する
@@ -22,7 +22,9 @@ take比較では小節番号だけで本体を識別せず、patternへ永続ID�
 
 ## 通常編集を保ち、試聴と配置を分ける
 
-保存先sourceを選んでからpatternを作る案は、保存上の都合を入口に持ち込み、気軽にtakeを作って比較する目的に合わない。発音設定を共有する音色入れ物の選択を入口とし、その配下でpatternを作成・編集する。曲やSceneへの配置は別の明示操作に分け、候補を聴き比べるだけで配置や編集中の本体が変わらないよう、試聴候補、本体編集対象、各matrixの配置先を別の責務として保持する。
+保存先sourceを選んでからpatternを作る案は、保存上の都合を入口に持ち込み、気軽にtakeを作って比較する目的に合わない。発音設定を共有する音色入れ物の選択を入口とし、その配下でpatternを作成・編集する。曲やSceneへの配置は別の明示操作に分け、候補を聴き比べるだけで配置や本体の内容が変わらないよう、試聴候補、本体編集対象、各matrixの配置先を別の責務として保持する。
+
+候補patternをクリックした時も、その本体を表示したevent listでSpaceを押した時もSong全体が鳴る、とuserから報告された。本体を開くだけの経路では単体再生modeへ切り替わらず、Spaceも直前のSong再生modeを引き継いでいた。候補の比較という目的ではクリックしたpatternだけを聴くのが自然なため、userの指定により、候補patternのクリックは単体再生を開始してその本体を開く操作とする。Spaceが直前の再生modeを引き継ぐ規則は維持し、候補クリック後は同じpatternの単体再生を繰り返す。配置済みのセルをクリックした場合のScene／Song再生とは区別する。
 
 patternが1つも無い曲でpattern作業を始めた場合は、空のScene／Songを見せず、入れ物の選択から最初のpatternのMML入力まで1つの流れで進める（user）。user が選んだのが一覧を開く操作でも、作る物が無ければその一覧は使えないためである。
 

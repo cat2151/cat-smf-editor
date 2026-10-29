@@ -131,20 +131,34 @@ impl Mixer {
                 .parts
                 .get(i)
                 .and_then(|part| part.timeline.as_deref());
-            let rendered = if let Some(timeline) = timeline
-                && command.parts.get(i).is_none_or(|part| part.take.is_none())
-            {
-                render.process_scheduled(timeline, plan, frame, scratch, channels)
-            } else {
-                render.automate(plan, frame)
-                    && render.process(
-                        &state.velocities,
-                        &state.durations,
-                        changed,
-                        scratch,
-                        channels,
-                    )
-            };
+            let rendered =
+                if let Some(live) = command.parts.get(i).and_then(|part| part.live.as_ref()) {
+                    // Release the queue lock before calling any plugin code. Batches
+                    // preserve fast release/retrigger pairs between audio callbacks.
+                    let mut words = [0u32; 128];
+                    let count = {
+                        let mut queue = live.lock().unwrap();
+                        let count = queue.len().min(words.len());
+                        for word in &mut words[..count] {
+                            *word = queue.pop_front().unwrap();
+                        }
+                        count
+                    };
+                    render.process_live(&words[..count], scratch, channels)
+                } else if let Some(timeline) = timeline
+                    && command.parts.get(i).is_none_or(|part| part.take.is_none())
+                {
+                    render.process_scheduled(timeline, plan, frame, scratch, channels)
+                } else {
+                    render.automate(plan, frame)
+                        && render.process(
+                            &state.velocities,
+                            &state.durations,
+                            changed,
+                            scratch,
+                            channels,
+                        )
+                };
             if !rendered {
                 if let Some(d) = &self.diagnostics {
                     d.failure(4);

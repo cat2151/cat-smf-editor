@@ -43,6 +43,87 @@ fn positions(output: &egui::FullOutput, label: &str) -> Vec<egui::Pos2> {
 }
 
 #[test]
+fn guide_chords_keep_spelling_and_tick_coordinates_with_no_notes() {
+    use cat_smf_editor::{edit, score::chord_guide};
+    let mut music = edit::tracks::new_song();
+    music.tracks[0].events.clear();
+    chord_guide::add(&mut music).unwrap();
+    for (tick, text) in [(0, "Isus4"), (1920, "I")] {
+        edit::insert(
+            &mut music.tracks[1],
+            chord_guide::event(tick, text).unwrap(),
+        );
+    }
+    let a = app(music.clone());
+    let sources = crate::play::playback::performance(&a);
+    let layout =
+        crate::view::piano_roll::layout_from(a.loaded.as_ref().unwrap(), &sources, &[0], 0, 0);
+    assert!(layout.size.x >= 1920.0 * layout.scale + crate::view::piano_roll::PX_PER_QUARTER);
+    let c = egui::Context::default();
+    let draw = |scale: f32, left: f32| {
+        c.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 300.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    show_music(
+                        ui,
+                        &music,
+                        &Store::default(),
+                        egui::Rect::from_min_max(egui::pos2(left, 20.0), egui::pos2(990.0, 280.0)),
+                        scale,
+                    );
+                });
+            },
+        )
+    };
+    let first = draw(0.1, 20.0);
+    assert_eq!(positions(&first, "Isus4").len(), 1);
+    assert_eq!(positions(&first, "I").len(), 1);
+    assert!((positions(&first, "I")[0].x - positions(&first, "Isus4")[0].x - 192.0).abs() < 0.01);
+    let zoomed = draw(0.2, 20.0);
+    let scrolled = draw(0.2, -80.0);
+    assert!((positions(&zoomed, "I")[0].x - positions(&first, "I")[0].x - 192.0).abs() < 0.01);
+    assert!((positions(&zoomed, "I")[0].x - positions(&scrolled, "I")[0].x - 100.0).abs() < 0.01);
+}
+
+#[test]
+fn guide_chords_do_not_appear_on_raw_sources_or_local_projections() {
+    use cat_smf_editor::{
+        edit,
+        score::{chord_guide, pattern},
+    };
+    let mut music = edit::tracks::new_song();
+    chord_guide::add(&mut music).unwrap();
+    edit::insert(
+        &mut music.tracks[1],
+        chord_guide::event(0, "Isus4").unwrap(),
+    );
+    let source = pattern::operations::create_source(&mut music).unwrap();
+    let mut a = app(music);
+    let c = egui::Context::default();
+    let draw = |loaded: &crate::app::Loaded, track| {
+        c.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show(ui, loaded, track, &Store::default(), ui.max_rect(), 0.1);
+            });
+        })
+    };
+    assert_eq!(
+        positions(&draw(a.loaded.as_ref().unwrap(), 0), "Isus4").len(),
+        1
+    );
+    assert!(positions(&draw(a.loaded.as_ref().unwrap(), source), "Isus4").is_empty());
+    a.loaded.as_mut().unwrap().display_music = Some(a.loaded.as_ref().unwrap().music.clone());
+    assert!(positions(&draw(a.loaded.as_ref().unwrap(), 0), "Isus4").is_empty());
+}
+
+#[test]
 fn both_overlays_show_all_tracks_at_ticks_and_respect_display_settings() {
     for track in [0, 1] {
         let mut app = fixture();
@@ -95,6 +176,7 @@ fn annotations_follow_tick_scale_scroll_and_visibility() {
                     let _ = show(
                         ui,
                         loaded,
+                        0,
                         &config,
                         egui::Rect::from_min_max(egui::pos2(left, 20.0), egui::pos2(590.0, 280.0)),
                         scale,

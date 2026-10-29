@@ -156,10 +156,10 @@ mod tests {
         let ctx = egui::Context::default();
         let mut app = App::empty();
         app.audition = crate::play::audition::Audition::disabled();
-        app.help_open = true;
+        app.comma_menu.open = true;
         press(&mut app, &ctx, Modifiers::CTRL, false);
         assert!(!app.file_open_requested);
-        app.help_open = false;
+        app.comma_menu.open = false;
         app.layer_editor.open = true;
         press(&mut app, &ctx, Modifiers::CTRL, false);
         assert!(!app.file_open_requested);

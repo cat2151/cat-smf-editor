@@ -33,7 +33,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
             .is_some_and(|c| crate::view::patterns::beacon::empty(&loaded.music, c.pattern));
     let patch = &loaded.patches[track];
     let state = &mut app.drum_editor;
-    let mut open = state.open;
+    let mut open = true;
     egui::Window::new(format!("Drum sequencer · {}", loaded.track_titles[track]))
         .id(egui::Id::new("drum-sequencer"))
         .open(&mut open)
@@ -44,28 +44,6 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
         .max_width((ctx.screen_rect().width() - 32.0).max(1.0))
         .default_width((ctx.screen_rect().width() - 32.0).clamp(1.0, 1080.0))
         .show(ctx, |ui| {
-            if state.help {
-                egui::Grid::new("drum-help").show(ui, |ui| {
-                    super::super::help::key_groups(
-                        ui,
-                        &[(
-                            Color32::LIGHT_BLUE,
-                            &[
-                                ("h j k l", "移動"),
-                                ("f / Space", "Step"),
-                                ("Enter", "音色 / Note / Step"),
-                                ("PageUp / PageDown", "小節"),
-                                ("[ / ]", "A小節"),
-                                ("Shift+[ / ]", "B小節"),
-                                ("Shift+Space", "停止"),
-                                ("Ctrl+Z", "元に戻す"),
-                                ("Esc", "閉じる"),
-                            ],
-                        )],
-                    );
-                });
-                return;
-            }
             if let Some(Input::Note { text, focus }) = &mut state.input {
                 ui.label(format!("{} · Note", drums::NAMES[state.row]));
                 let response = ui.text_edit_singleline(text);
@@ -145,6 +123,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
                 ui.colored_label(Color32::LIGHT_RED, error);
             }
         });
-    state.open = open;
-    playback::validate(app);
+    if !open {
+        *action = Some(Op::Close);
+    }
 }

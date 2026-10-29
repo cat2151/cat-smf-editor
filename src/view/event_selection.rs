@@ -92,7 +92,14 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
         .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
         .show(ctx, |ui| {
             if ui.button("g: Generate same measures").clicked() {
-                crate::view::palette::open_same_measure(app, ctx, true);
+                crate::view::commands::invoke(
+                    app,
+                    ctx,
+                    crate::view::commands::Operation::SameMeasure {
+                        batch: true,
+                        number: None,
+                    },
+                );
             }
             let mut choices = vec![
                 (actions::Action::Repeat, "a: A-B repeat"),

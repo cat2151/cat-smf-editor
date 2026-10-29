@@ -240,3 +240,32 @@ fn extending_a_body_repacks_storage_without_changing_neighbor_events_or_musical_
     assert_eq!(events[0].tick - c.patterns[&a].tick, 120);
     assert_eq!(events.last().unwrap().tick - c.patterns[&a].tick, 1920);
 }
+
+#[test]
+fn resizing_a_song_pattern_extends_all_placements_and_preserves_trailing_silence() {
+    use crate::score::scene;
+    let (mut music, _, id) = fixture();
+    place_in_song(&mut music, &[(1, id), (5, id)]);
+    let placements = scene::read(&music).unwrap().song;
+    let meters = body::parse_meters("4/4 4/4", music.division).unwrap();
+    operations::resize(&mut music, id, meters.clone()).unwrap();
+    let collection = scene::read(&music).unwrap();
+    assert_eq!(collection.song_length, 6 * 1920);
+    assert_eq!(collection.song, placements);
+    scene::sizing::song(&mut music, 8).unwrap();
+    operations::resize(&mut music, id, body::parse_meters("4/4", 480).unwrap()).unwrap();
+    operations::resize(&mut music, id, meters).unwrap();
+    assert_eq!(scene::read(&music).unwrap().song_length, 8 * 1920);
+}
+
+#[test]
+fn resizing_a_song_pattern_still_rejects_overlaps_without_changing_the_song() {
+    let (mut music, track, id) = fixture();
+    let other = operations::create(&mut music, track, None).unwrap();
+    place_in_song(&mut music, &[(1, id), (2, other)]);
+    let before = crate::smf_io::encode(&music).unwrap();
+    let meters = body::parse_meters("4/4 4/4", music.division).unwrap();
+    let error = operations::resize(&mut music, id, meters).unwrap_err();
+    assert!(error.contains("overlap"), "{error}");
+    assert_eq!(crate::smf_io::encode(&music).unwrap(), before);
+}

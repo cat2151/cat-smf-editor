@@ -209,6 +209,21 @@ fn query_ime_and_dialog_keep_ctrl_slash() {
     assert_eq!(bytes(&a), before);
     key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
     assert!(!a.patterns.workspace.input_open());
+    // Leaving the filter keeps candidate focus; hidden cells cannot be edited.
+    comment_out(&mut a, &c, Pane::Song);
+    assert_eq!(bytes(&a), before);
+    // Clear the filter's IME preedit before choosing a candidate again.
+    click(
+        &mut a,
+        &c,
+        song,
+        egui::Id::new((Pane::Song.title(), "query")),
+    );
+    key(&mut a, &c, song, Key::A, Modifiers::CTRL);
+    key(&mut a, &c, song, Key::Backspace, Modifiers::NONE);
+    key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
+    key(&mut a, &c, song, Key::F, Modifiers::NONE);
+    assert!(a.patterns.workspace.song_cell.placing);
     comment_out(&mut a, &c, Pane::Song);
     assert!(song_disabled(&a, lane, 3));
 }

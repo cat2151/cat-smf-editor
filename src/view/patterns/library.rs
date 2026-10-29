@@ -1,23 +1,25 @@
 //! Independent pattern editing uses the ordinary note tools without a song placement.
 use super::*;
-use cat_smf_editor::score::pattern::{editing::Context, operations, Catalog};
+use cat_smf_editor::score::pattern::{operations, Catalog};
 
 /// With several containers the target is chosen each time, starting from the current one.
 pub fn add(a: &mut App, ctx: &eframe::egui::Context) {
-    let several = first::choices(a).is_ok_and(|c| c.len() > 1);
-    let result = if several {
-        first::open(a)
-    } else {
-        create(a, None)
-    };
-    if let Err(error) = result {
+    if let Err(error) = begin_add(a, ctx) {
         a.load_error = Some(error);
-    } else {
-        input(a, ctx);
     }
 }
+pub(crate) fn begin_add(a: &mut App, ctx: &eframe::egui::Context) -> Result<(), String> {
+    let several = first::choices(a).is_ok_and(|c| c.len() > 1);
+    if several {
+        first::open(a)?;
+    } else {
+        create(a, None)?;
+    }
+    input(a, ctx);
+    Ok(())
+}
 /// A new body starts in the same input as `i`.
-pub(super) fn input(a: &mut App, ctx: &eframe::egui::Context) {
+pub(crate) fn input(a: &mut App, ctx: &eframe::egui::Context) {
     presentation::focus_root(a, ctx);
     if !a.patterns.confirming_creation() {
         crate::view::drums::input(a, ctx);
@@ -38,6 +40,21 @@ pub fn create(a: &mut App, duplicate: Option<u64>) -> Result<(), String> {
     let Some(source) = source else {
         return first::open(a);
     };
+    create_at(a, source, duplicate)
+}
+pub(crate) fn create_for_container(a: &mut App, id: u64) -> Result<(), String> {
+    let catalog = Catalog::read(&a.loaded.as_ref().ok_or("No SMF is loaded")?.music)?;
+    let source = catalog
+        .tracks
+        .get(&id)
+        .copied()
+        .filter(|t| catalog.sources.contains(t))
+        .ok_or("Missing sound container")?;
+    create_at(a, source, None)?;
+    a.patterns.container = Some(id);
+    Ok(())
+}
+fn create_at(a: &mut App, source: usize, duplicate: Option<u64>) -> Result<(), String> {
     let mut created = None;
     a.edit_tracks(|music| {
         created = Some(operations::create(music, source, duplicate)?);
@@ -118,42 +135,4 @@ fn commit(
     edit(a, id)
 }
 
-pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
-    if !a.note_mode {
-        super::mode::toggle(a);
-    }
-    a.patterns.raw_context = None;
-    let music = &a.loaded.as_ref().ok_or("No SMF is loaded")?.music;
-    let catalog = Catalog::read(music)?;
-    let pattern = catalog.patterns.get(&id).ok_or("Missing pattern")?;
-    a.patterns.container = Some(pattern.container);
-    let context = Context {
-        track: pattern.track,
-        measure: 1,
-        pattern: id,
-        placement: None,
-        scene: None,
-        standalone: true,
-    };
-    context.project(music)?;
-    let track = pattern.track;
-    let measure = 1;
-    crate::play::transport::stop(a);
-    a.select_track(track);
-    a.patterns.selected = Some(id);
-    a.patterns.editing = Some(context);
-    a.patterns.edit_song = a.song_id;
-    a.patterns.workspace_open = true;
-    a.generation = a.generation.wrapping_add(1);
-    refresh(a);
-    let map = a
-        .loaded
-        .as_ref()
-        .unwrap()
-        .time
-        .map(track)
-        .ok_or("Missing pattern meter")?;
-    let tick = cat_smf_editor::score::same_measure::bounds(map, measure)?.0;
-    crate::cursor::moves::at_tick(a, tick);
-    Ok(())
-}
+pub use super::navigation::edit;

@@ -8,7 +8,24 @@ use crate::{
 };
 
 pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
-    let (kind, value) = if data.starts_with(crate::score::performance::PREFIX) {
+    let (kind, value) = if let Some(value) = data.strip_prefix(crate::score::chord_guide::ROLE) {
+        (
+            "Track role",
+            if value == [1] {
+                "Chord guide"
+            } else {
+                "invalid"
+            }
+            .into(),
+        )
+    } else if data.starts_with(crate::score::chord_guide::CHORD) {
+        (
+            "Chord",
+            crate::score::chord_guide::chord_text(data)
+                .unwrap_or("invalid")
+                .to_owned(),
+        )
+    } else if data.starts_with(crate::score::performance::PREFIX) {
         (
             "Performance parameter",
             crate::score::performance::describe(data),

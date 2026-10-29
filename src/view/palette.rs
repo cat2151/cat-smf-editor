@@ -1,21 +1,11 @@
 //! A modal over a suspended input owner. Transport and workers keep updating.
-use super::commands::{self, Command, Screen};
+use super::commands::{self, Command};
 use crate::app::App;
 use eframe::egui::{self, Key, Modifiers};
 mod history;
-mod input;
-use input::clear;
-pub(crate) use input::{frame_token, suspended};
-mod insert_event;
-mod origin;
-mod pattern_args;
-pub(super) mod row;
-mod same_measure;
-mod views;
-use origin::Origin;
-pub(crate) use views::preview::{
-    active as preview_active, id as preview_id, window as preview_window,
-};
+use super::command_row as row;
+use super::modal::Origin;
+use super::modal::{clear, frame_token};
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -31,15 +21,8 @@ pub struct State {
     composing: bool,
     geometry: Option<(f32, f32)>,
     handled: Option<(egui::ViewportId, u64)>,
-    views: Option<views::State>,
-    insert_event: Option<insert_event::State>,
-    same_measure: Option<same_measure::State>,
-    pattern_args: Option<pattern_args::State>,
 }
 impl State {
-    pub(crate) fn browsing_views(&self) -> bool {
-        self.views.is_some()
-    }
     pub fn is_open(&self) -> bool {
         self.origin.is_some()
     }
@@ -50,23 +33,8 @@ impl State {
     }
 }
 
-pub(crate) use same_measure::open as open_same_measure;
-
 /// Save the real input, then give background widgets an inert input state.
 pub(crate) fn begin(a: &mut App, ctx: &egui::Context) -> Option<egui::InputState> {
-    if (a.palette.browsing_views()
-        || a.palette.pattern_args.is_some()
-        || a.palette.same_measure.is_some()
-        || a.palette.insert_event.is_some())
-        && ctx.viewport_id() == egui::ViewportId::ROOT
-        && a.palette
-            .origin
-            .as_ref()
-            .is_some_and(|o| o.viewport != egui::ViewportId::ROOT)
-    {
-        a.palette.origin = Some(Origin::capture(a, ctx));
-        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-    }
     let token = frame_token(ctx);
     let opening=ctx.input(|i|i.events.iter().any(|e|matches!(e,egui::Event::Key{key:Key::P,pressed:true,repeat:false,modifiers,..} if commands::matches(*modifiers,Modifiers::CTRL|Modifiers::SHIFT))));
     if !a.palette.is_open() && opening && a.palette.handled != Some(token) {
@@ -87,22 +55,14 @@ pub(crate) fn begin(a: &mut App, ctx: &egui::Context) -> Option<egui::InputState
         }
         return None;
     }
-    let argument_focus = ctx.memory(|m| m.focused());
-    let focus_id = egui::Id::new(("palette-argument-focus", ctx.viewport_id()));
-    ctx.data_mut(|d| d.insert_temp(focus_id, argument_focus));
-    let saved = ctx.input(Clone::clone);
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new("palette-suspended"), true));
-    if let Some(origin) = &a.palette.origin
-        && origin.viewport == ctx.viewport_id()
-    {
-        origin.restore_focus(ctx);
-    }
-    clear(ctx);
-    Some(saved)
+    Some(super::modal::suspend(
+        ctx,
+        a.palette.origin.as_ref().unwrap(),
+    ))
 }
 
 pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputState>) {
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new("palette-suspended"), false));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("modal-suspended"), false));
     let Some(input) = input else {
         return;
     };
@@ -116,76 +76,16 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
         clear(ctx);
         return;
     }
-    origin.restore_cursor(a);
-    ctx.input_mut(|i| *i = input);
-    let focus_id = egui::Id::new(("palette-argument-focus", ctx.viewport_id()));
-    if palette.pattern_args.is_some()
-        && let Some(id) = ctx
-            .data(|d| d.get_temp::<Option<egui::Id>>(focus_id))
-            .flatten()
-    {
-        ctx.memory_mut(|m| m.request_focus(id));
+    let invalid = !origin.current(a, ctx);
+    if !invalid {
+        origin.restore_cursor(a);
     }
+    super::modal::resume(ctx, input);
     let token = frame_token(ctx);
     let fresh = palette.handled != Some(token);
     palette.handled = Some(token);
     let mut execute = false;
     let mut cancel = false;
-    let invalid = !origin.current(a, ctx);
-    if palette.pattern_args.is_some() {
-        pattern_args::handle(a, ctx, &mut palette, fresh, invalid);
-        a.palette = palette;
-        clear(ctx);
-        return;
-    }
-    if let Some(state) = &mut palette.same_measure {
-        if invalid || same_measure::show(a, ctx, state, fresh) {
-            if invalid {
-                a.load_error = Some("Same measure target changed".into());
-            }
-            origin.restore_focus(ctx);
-            palette.origin = None;
-            palette.same_measure = None;
-            palette.commands.clear();
-        }
-        a.palette = palette;
-        clear(ctx);
-        return;
-    }
-    if palette.insert_event.is_some() {
-        if invalid {
-            palette.insert_event = None;
-        } else {
-            let done = insert_event::show(a, ctx, palette.insert_event.as_mut().unwrap(), fresh);
-            if done {
-                origin.restore_focus(ctx);
-                palette.origin = None;
-                palette.insert_event = None;
-                palette.commands.clear();
-            }
-            a.palette = palette;
-            clear(ctx);
-            return;
-        }
-    }
-    if palette.views.is_some() {
-        if invalid {
-            palette.views = None;
-        } else {
-            let done = views::show(a, ctx, palette.views.as_mut().unwrap(), fresh);
-            if done {
-                if let Some(origin) = &palette.origin {
-                    origin.restore_focus(ctx);
-                }
-                palette.origin = None;
-                palette.views = None;
-                palette.commands.clear();
-            }
-            a.palette = palette;
-            clear(ctx);
-            return;
-        }
-    }
     if invalid {
         palette.commands = commands::candidates(a, ctx);
         palette.origin = Some(Origin::capture_with_focus(a, ctx, origin));
@@ -267,46 +167,6 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     let chosen = (execute && !search_input)
         .then(|| filtered.get(palette.selected).copied())
         .flatten();
-    if !cancel && let Some(index) = chosen {
-        let id = palette.commands[index].id.clone();
-        if pattern_args::choose(a, ctx, &mut palette, &id) {
-            a.palette = palette;
-            return;
-        }
-    }
-    if !cancel
-        && let Some(index) = chosen
-        && matches!(
-            palette.commands[index].id.as_str(),
-            "insert-same-measure" | "generate-same-measures"
-        )
-    {
-        match same_measure::State::new(a, palette.commands[index].id == "generate-same-measures") {
-            Ok(state) => palette.same_measure = Some(state),
-            Err(error) => a.load_error = Some(error),
-        }
-        a.palette = palette;
-        clear(ctx);
-        ctx.request_repaint();
-        return;
-    }
-    if !cancel
-        && let Some(state) =
-            chosen.and_then(|i| insert_event::State::for_command(&palette.commands[i].id))
-    {
-        palette.insert_event = Some(state);
-        a.palette = palette;
-        clear(ctx);
-        ctx.request_repaint();
-        return;
-    }
-    if !cancel && chosen.is_some_and(|i| palette.commands[i].id == "browse-views") {
-        palette.views = Some(views::State::new(a));
-        a.palette = palette;
-        clear(ctx);
-        ctx.request_repaint();
-        return;
-    }
     if cancel || chosen.is_some() {
         clear(ctx);
         if let Some(origin) = &palette.origin {

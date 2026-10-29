@@ -100,7 +100,10 @@ pub fn show(app: &App, ui: &mut egui::Ui, track: usize) -> Option<Action> {
             );
         }
     }
-    let id = super::palette::preview_id(ui.ctx(), visible_id(app.generation, track, app.note_mode));
+    let id = super::command_input::preview_id(
+        ui.ctx(),
+        visible_id(app.generation, track, app.note_mode),
+    );
     let visible = ui
         .ctx()
         .data_mut(|d| d.get_temp::<(u64, u64)>(id))

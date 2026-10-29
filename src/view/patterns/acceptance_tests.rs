@@ -132,9 +132,10 @@ fn acceptance_native_current_smf_notes_drums_pa() {
     track_selected(&mut a);
     key(&mut a, Key::I);
     assert!(
-        a.drum_editor.open,
+        crate::view::drums::is_open(&a),
         "{:?} / {:?}",
-        a.load_error, a.patterns.error
+        a.load_error,
+        a.patterns.error
     );
     key(&mut a, Key::Enter);
     assert!(drums::active(
@@ -218,7 +219,7 @@ fn acceptance_empty_drum_notes_i_and_palette_open_owned_pattern_grid() {
         } else {
             press(&mut a, &c, Key::I);
         }
-        assert!(a.drum_editor.open, "i opens Drum sequencer");
+        assert!(crate::view::drums::is_open(&a), "i opens Drum sequencer");
         assert!(!a.mml_input.open);
         let context = a.patterns.editing.as_ref().unwrap().clone();
         assert_eq!(context.track, drum);
@@ -247,7 +248,7 @@ fn acceptance_empty_drum_notes_i_and_palette_open_owned_pattern_grid() {
             .patterns
             .len();
         press(&mut a, &c, Key::I);
-        assert!(a.drum_editor.open);
+        assert!(crate::view::drums::is_open(&a));
         assert!(!a.mml_input.open);
         assert_eq!(
             pattern::Catalog::read(&a.loaded.as_ref().unwrap().music)
@@ -271,11 +272,11 @@ fn adding_a_drum_pattern_opens_the_drum_sequencer() {
     assert!(a.patterns.confirming_creation());
     press(&mut a, &c, Key::Enter);
     assert_eq!(a.track, drum);
-    assert!(a.drum_editor.open);
+    assert!(crate::view::drums::is_open(&a));
     assert!(!a.mml_input.open);
 }
 #[test]
-fn song_cell_plays_and_drum_candidate_opens_the_drum_sequencer() {
+fn song_cell_auditions_and_both_entries_open_the_drum_editor() {
     let (mut a, drum, _) = song();
     let c = super::workspace_tests::context();
     a.patterns.container = pattern::Catalog::read(&a.loaded.as_ref().unwrap().music)
@@ -296,10 +297,10 @@ fn song_cell_plays_and_drum_candidate_opens_the_drum_sequencer() {
     super::workspace::enable(&mut a);
     let song = super::workspace::Pane::Song;
     super::workspace_tests::row_cell(&mut a, &c, song, 1, 3);
-    assert!(!a.drum_editor.open, "a cell only plays");
+    assert!(crate::view::drums::is_open(&a));
     assert!(a.playback.pending.is_some() || a.playback.active.is_some());
     super::workspace_tests::candidate(&mut a, &c, song, PatternOrScene::Pattern(id));
     assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
-    assert!(a.drum_editor.open, "{:?}", a.load_error);
+    assert!(crate::view::drums::is_open(&a), "{:?}", a.load_error);
     assert!(!a.mml_input.open);
 }

@@ -44,6 +44,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 dependency_shas=None):
         config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
         Path('release.json').write_text(json.dumps(config), encoding='utf-8')
+        Path('.github').mkdir(exist_ok=True)
+        shutil.copyfile(ROOT / '.github/release-notes.md', '.github/release-notes.md')
         # Different app identity catches copied player/editor names in generic code.
         Path('Cargo.toml').write_text('[package]\nname="another-app"\nversion="2.3.4"\n', encoding='utf-8')
         Path('outputs').write_text('', encoding='utf-8')
@@ -76,8 +78,54 @@ class ReleaseWorkflowTests(unittest.TestCase):
                              ['uapmd', 'cat-plugin-player', 'clap-mml-play-server',
                               'clap-mml-render-tui', 'cat-music-patterns', 'mascot-render-server'])
             self.assertTrue(all(dep['sha'] == SHA for dep in dependencies))
-            self.assertIn('cat2151/cat-plugin-player', notes)
-            self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {SHA}', notes)
+            self.assertIn(f'cat-plugin-player: {SHA}', notes)
+            self.assertIn(f'clap-mml-play-server: {SHA}', notes)
+
+    def test_player_and_editor_generate_identical_common_prose(self):
+        player = ROOT.parent / 'cat-plugin-player'
+        self.assertEqual((ROOT / '.github/release-notes.md').read_bytes(),
+                         (player / '.github/release-notes.md').read_bytes())
+        workflow = yaml.safe_load((player / '.github/workflows/release.yml').read_text(encoding='utf-8'))
+        renderer = next(s for s in workflow['jobs']['resolve']['steps']
+                        if s.get('name') == 'Write the release notes')
+        self.assertEqual(renderer['shell'], 'python')
+        checkout = workflow['jobs']['resolve']['steps'][0]['with']['sparse-checkout']
+        self.assertIn('.github/release-notes.md', checkout)
+        verified = workflow['env']['UAPMD_VERIFIED_SHA']
+        for sha in [verified, OTHER_SHA]:
+            with self.subTest(sha=sha), workspace():
+                _, editor_notes = self.resolve(missing=True, sha=sha)
+                env = {'VERSION': '2.3.4', 'GITHUB_SHA': SHA, 'UAPMD': sha,
+                       'UAPMD_VERIFIED_SHA': verified, 'TUI': sha, 'SERVER': sha,
+                       'INPUTS': '<!-- build-inputs player-test -->',
+                       'GITHUB_STEP_SUMMARY': str(Path('player-summary').resolve())}
+                with patch.dict(os.environ, env):
+                    exec(compile(renderer['run'], '<player-notes>', 'exec'), {})
+                player_notes = Path('notes.md').read_text(encoding='utf-8')
+                config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
+                files = '、'.join(Path(file).name for file in config['package_files'])
+                common = editor_notes.split('<details>')[0].replace('another-app', 'cat-plugin-player')
+                common = common.replace('exe と ' + files + '。', 'exe と LICENSE。')
+                self.assertEqual(common, player_notes.split('<details>')[0])
+                uapmd_lines = lambda notes: [line for line in notes.splitlines()
+                                             if 'uapmd' in line and not line.startswith('<!--')]
+                self.assertEqual(uapmd_lines(editor_notes), uapmd_lines(player_notes))
+                for notes in [editor_notes, player_notes]:
+                    self.assertEqual(notes.count('<details>'), 1)
+                    self.assertEqual(notes.count('</details>'), 1)
+                    start, end = notes.index('<details>'), notes.index('</details>')
+                    self.assertIn('<summary>ビルドに使った commit</summary>\n\n', notes[start:end])
+                    self.assertIn(SHA, notes[start:end])
+                    self.assertNotIn('<!-- build-inputs ', notes[:end])
+                    self.assertIn('\n<!-- build-inputs ', notes[end:])
+                    self.assertNotIn('Surge XT', notes)
+
+    def test_distribution_build_and_tests_use_static_crt(self):
+        self.assertEqual(WORKFLOW['jobs']['build']['env']['CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS'],
+                         '-C target-feature=+crt-static')
+        # A step-level replacement could silently compile tests with different flags.
+        for configured in WORKFLOW['jobs']['build']['steps']:
+            self.assertNotIn('CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS', configured.get('env', {}))
 
     def test_all_cargo_path_dependencies_have_release_checkouts(self):
         manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))
@@ -106,7 +154,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             changed = {'https://github.com/cat2151/mascot-render-server': OTHER_SHA}
             out, notes = self.resolve(body=body, dependency_shas=changed)
             self.assertEqual(out['build'], 'true')
-            self.assertIn(f'cat2151/mascot-render-server (refs/heads/main): {OTHER_SHA}', notes)
+            self.assertIn(f'mascot-render-server: {OTHER_SHA}', notes)
             out, _ = self.resolve(body=notes, dependency_shas=changed)
             self.assertEqual(out['build'], 'false')
 
@@ -134,7 +182,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             out, notes = self.resolve(body=body, dependency_shas={
                 'https://github.com/cat2151/clap-mml-render-tui': OTHER_SHA})
             self.assertEqual(out['build'], 'true')
-            self.assertIn(f'cat2151/clap-mml-render-tui (refs/heads/main): {OTHER_SHA}', notes)
+            self.assertIn(f'clap-mml-render-tui: {OTHER_SHA}', notes)
 
     def test_corpus_checkout_and_corpus_only_change_rebuilds(self):
         config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
@@ -148,7 +196,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertEqual(out['build'], 'true')
             self.assertEqual([dep['sha'] for dep in json.loads(out['dependencies'])],
                              [SHA, SHA, SHA, SHA, OTHER_SHA, SHA])
-            self.assertIn(f'cat2151/cat-music-patterns (refs/heads/main): {OTHER_SHA}', notes)
+            self.assertIn(f'cat-music-patterns: {OTHER_SHA}', notes)
             out, _ = self.resolve(body=notes, dependency_shas=changed)
             self.assertEqual(out['build'], 'false')
 
@@ -183,7 +231,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             dependencies = json.loads(out['dependencies'])
             self.assertEqual([dep['sha'] for dep in dependencies],
                              [SHA, SHA, OTHER_SHA, SHA, SHA, SHA])
-            self.assertIn(f'cat2151/clap-mml-play-server (refs/heads/main): {OTHER_SHA}', notes)
+            self.assertIn(f'clap-mml-play-server: {OTHER_SHA}', notes)
             out, _ = self.resolve(body=notes, dependency_shas={
                 'https://github.com/cat2151/clap-mml-play-server': OTHER_SHA})
             self.assertEqual(out['build'], 'false')

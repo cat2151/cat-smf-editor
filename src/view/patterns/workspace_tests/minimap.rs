@@ -84,6 +84,7 @@ fn minimap_playhead_follows_the_arrangement_and_disappears_on_stop() {
     crate::play::transport::advance(&mut a);
     // Half of the six-second song.
     a.audition.set_test_seconds(3.0);
+    key(&mut a, &c, id, Key::PageUp, Modifiers::NONE);
     let (map, x) = playheads(&mut a);
     assert_eq!(x.len(), 1);
     assert!((x[0] - map.center().x).abs() < 0.5, "{x:?} {map:?}");

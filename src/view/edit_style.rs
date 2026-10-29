@@ -17,7 +17,9 @@ fn choose(app: &mut App, ctx: &egui::Context, style: Style) {
     app.edit_style = None;
     match style {
         Style::Pattern => {
-            if let Err(error) = super::patterns::matrix::enter(app, ctx) {
+            let request =
+                super::commands::Request::new(app, super::commands::Operation::PatternWork);
+            if let Err(error) = super::commands::submit(app, ctx, request) {
                 app.load_error = Some(error);
             }
         }

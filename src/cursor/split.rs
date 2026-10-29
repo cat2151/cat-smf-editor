@@ -114,7 +114,7 @@ pub fn go(app: &mut App, track: usize, tick: u64) {
         return;
     }
     let scroll = (app.track_view.scroll_tick, app.track_view.scroll_fraction);
-    app.select_track(track);
+    app.set_track(track);
     app.track_view.scroll_tick = scroll.0;
     app.track_view.scroll_fraction = scroll.1;
     app.track_view.cursor_tick = Some(tick);

@@ -9,7 +9,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context, layer: u64) {
             ui::show(app, ctx);
         }
         Err(error) => {
-            crate::view::palette::preview_window(ctx, "Macros").show(ctx, |ui| {
+            crate::view::command_input::preview_window(ctx, "Macros").show(ctx, |ui| {
                 ui.colored_label(ui.visuals().error_fg_color, error);
             });
         }

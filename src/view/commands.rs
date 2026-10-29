@@ -3,18 +3,23 @@ use crate::app::App;
 use eframe::egui::{self, Key, Modifiers};
 
 mod basic;
+mod execution;
+pub(crate) use execution::{invoke, submit, Execution, Operation, Request};
 mod menus;
+mod mixer;
 mod navigation;
 mod ownership;
 mod search;
 pub(crate) use search::SearchQuery;
+#[cfg(test)]
+mod boundary;
 #[cfg(test)]
 mod keybind_tests;
 #[cfg(test)]
 mod tests;
 pub(crate) use ownership::{owner, Screen};
 
-type Execute = dyn Fn(&mut App, &egui::Context);
+type Execute = dyn Fn(&mut App, &egui::Context) -> bool;
 
 pub struct Command {
     pub id: String,
@@ -41,7 +46,10 @@ impl Command {
             keys: keys.into(),
             repeat: false,
             target: None,
-            run: Box::new(run),
+            run: Box::new(move |a, c| {
+                run(a, c);
+                true
+            }),
         }
     }
     pub fn plain(
@@ -97,6 +105,18 @@ pub(crate) struct Target {
     effect: (Option<super::effects::Target>, usize),
     mixer: (bool, usize, bool),
     pane: usize,
+    cursor: (
+        Option<usize>,
+        Option<u64>,
+        Option<cat_smf_editor::score::musical_time::Position>,
+    ),
+    pattern: (Option<u64>, Option<u64>),
+    measures: Option<(u64, u64)>,
+    projection: (
+        bool,
+        Option<cat_smf_editor::score::pattern::editing::Context>,
+        Option<cat_smf_editor::score::pattern::editing::Context>,
+    ),
 }
 impl Target {
     pub(crate) fn of(a: &App) -> Self {
@@ -114,6 +134,18 @@ impl Target {
                 a.playback.mixer_master,
             ),
             pane: a.track_view.active,
+            cursor: (
+                a.cursor_row,
+                a.track_view.cursor_tick,
+                a.cursor_position.clone(),
+            ),
+            pattern: (a.patterns.selected, a.patterns.container),
+            measures: super::event_selection::measures(a),
+            projection: (
+                a.note_mode,
+                a.patterns.editing.clone(),
+                a.patterns.raw_context.clone(),
+            ),
         }
     }
 }
@@ -154,6 +186,7 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     }
     super::patterns::mode::collect(app, screen, &mut result);
     basic::collect(app, screen, &mut result);
+    super::recording::collect(app, screen, &mut result);
     super::patterns::collect(app, screen, &mut result);
     menus::collect(app, screen, &mut result);
     navigation::collect(app, screen, &mut result);
@@ -242,8 +275,7 @@ pub fn execute(app: &mut App, ctx: &egui::Context, command: &Command) -> bool {
         .into_iter()
         .find(|c| c.id == fresh.id)
     {
-        (valid.run)(app, ctx);
-        true
+        (valid.run)(app, ctx)
     } else {
         false
     }
@@ -251,10 +283,10 @@ pub fn execute(app: &mut App, ctx: &egui::Context, command: &Command) -> bool {
 
 /// One owner per input batch, including its closing frame. No synthetic key events.
 pub fn route(app: &mut App, ctx: &egui::Context) {
-    if app.palette.is_open() {
+    if crate::view::modal::is_open(app) || super::modal::owns_frame(ctx) {
         return;
     }
-    let token = super::palette::frame_token(ctx);
+    let token = super::modal::frame_token(ctx);
     let guard = egui::Id::new(("command-route", ctx.viewport_id()));
     if ctx.data(|d| d.get_temp::<(egui::ViewportId, u64)>(guard)) == Some(token) {
         return;
@@ -303,6 +335,10 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
             (command.run)(app, ctx);
             ctx.request_repaint();
             ctx.input_mut(|i| i.events.retain(|e| e != &event));
+            if super::modal::is_open(app) {
+                super::comma_menu::swallow(ctx);
+                break;
+            }
             let next = owner(app, ctx);
             if next != screen {
                 if matches!(
@@ -336,7 +372,7 @@ pub(crate) fn run_direct(a: &mut App, c: &egui::Context, command: &Command) {
 
 /// Stop runs before transport advance; other commands run after it.
 pub(crate) fn route_stop(app: &mut App, ctx: &egui::Context) {
-    if app.palette.is_open() {
+    if crate::view::modal::is_open(app) || super::modal::owns_frame(ctx) {
         return;
     }
     let screen = owner(app, ctx);
@@ -360,3 +396,5 @@ fn contextual_definitions(app: &App, ctx: &egui::Context, screen: Screen) -> Vec
     }
     definitions
 }
+
+mod guide;

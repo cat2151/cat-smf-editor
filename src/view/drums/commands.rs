@@ -9,6 +9,7 @@ pub(super) enum Op {
     Activate,
     Confirm,
     Cancel,
+    Close,
     Help,
     Toggle,
     Scope,
@@ -44,7 +45,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         add("drum-confirm", "確定", &[Key::Enter], Op::Confirm);
     } else {
         add("help", "ヘルプ", &[Key::F1], Op::Help);
-        if !app.drum_editor.help {
+        {
             add(
                 "drum-row-next",
                 "次の行",
@@ -104,7 +105,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             );
         }
     }
-    if screen == Screen::Drums && !app.drum_editor.help {
+    if screen == Screen::Drums {
         for (id, key, delta) in [
             ("drum-b-prev", Key::OpenBracket, -1),
             ("drum-b-next", Key::CloseBracket, 1),
@@ -125,11 +126,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         &[(Key::Space, Modifiers::SHIFT)],
         |a, _| apply(a, Op::Stop),
     ));
-    if !app.drum_editor.confirm_create
-        && app.drum_editor.input.is_none()
-        && !app.drum_editor.help
-        && app.undo.available()
-    {
+    if !app.drum_editor.confirm_create && app.drum_editor.input.is_none() && app.undo.available() {
         out.push(Command::new(
             screen,
             "undo",
@@ -140,21 +137,25 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
     }
 }
 pub(super) fn apply(app: &mut App, op: Op) {
+    if !is_open(app) {
+        return;
+    }
     let s = &mut app.drum_editor;
     let r = match op {
         Op::Cancel => {
             if s.input.is_some() {
                 s.input = None;
-            } else if s.help {
-                s.help = false;
             } else {
-                s.open = false;
-                playback::close(app);
+                dismiss(app);
             }
             Ok(())
         }
+        Op::Close => {
+            dismiss(app);
+            Ok(())
+        }
         Op::Help => {
-            s.help = !s.help;
+            app.help_open = !app.help_open;
             Ok(())
         }
         Op::Move(y, x) => {

@@ -36,7 +36,7 @@ fn key(key: egui::Key) -> egui::Event {
     }
 }
 #[test]
-fn navigation_counts_empty_rows_pages_clamps_and_does_not_move_with_help() {
+fn navigation_counts_empty_rows_pages_clamps_and_moves_with_help() {
     let mut app = fixture();
     let ctx = egui::Context::default();
     let press = |app: &mut crate::app::App, k| {
@@ -70,7 +70,7 @@ fn navigation_counts_empty_rows_pages_clamps_and_does_not_move_with_help() {
     press(&mut app, egui::Key::Home);
     app.help_open = true;
     press(&mut app, egui::Key::PageDown);
-    assert_eq!(app.cursor_row, Some(0));
+    assert_eq!(app.cursor_row, Some(10));
     app.select_track(0);
     assert_eq!(app.cursor_row, None);
 }

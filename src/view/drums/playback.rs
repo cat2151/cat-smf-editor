@@ -17,7 +17,7 @@ pub(super) fn measure(app: &App) -> Result<drums::Measure, String> {
     Ok(result)
 }
 
-fn range(app: &App) -> Result<(u64, u64), String> {
+pub(super) fn range(app: &App) -> Result<(u64, u64), String> {
     let loaded = app.loaded.as_ref().ok_or("No song")?;
     let map = loaded.time.map(app.track).ok_or("Missing measure map")?;
     let s = &app.drum_editor;
@@ -36,7 +36,7 @@ fn range(app: &App) -> Result<(u64, u64), String> {
 
 pub(crate) fn scope(app: &App, requested: (u64, u64)) -> Option<(Vec<usize>, usize)> {
     let s = &app.drum_editor;
-    if !s.open || !s.loop_enabled || s.confirm_create || range(app).ok()? != requested {
+    if !is_open(app) || !s.loop_enabled || s.confirm_create || range(app).ok()? != requested {
         return None;
     }
     let loaded = app.loaded.as_ref()?;
@@ -112,7 +112,7 @@ pub(super) fn close(app: &mut App) {
 }
 
 pub(crate) fn validate(app: &mut App) {
-    if !app.drum_editor.open {
-        close(app);
+    if !is_open(app) {
+        super::close(app);
     }
 }

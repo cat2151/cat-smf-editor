@@ -121,40 +121,27 @@ fn count_matches_repeated_keys_and_saturates_without_looping() {
 }
 
 #[test]
-fn question_overlay_owns_input_and_clears_count() {
+fn question_help_allows_editing_and_editor_escape_cancels() {
     let mut app = setup();
     let ctx = egui::Context::default();
     key(&mut app, &ctx, Key::Num9);
     question(&mut app, &ctx);
-    assert!(app.macro_editor.help);
-    for k in [
-        Key::J,
-        Key::L,
-        Key::Num3,
-        Key::D,
-        Key::PageDown,
-        Key::OpenBracket,
-        Key::Enter,
-    ] {
-        key(&mut app, &ctx, k);
-    }
-    let s = app.macro_editor.session.as_ref().unwrap();
-    assert_eq!(s.selected, 0);
-    assert_eq!(s.rows[0].get(), 0.25);
-    assert_eq!(s.keyboard.step, 0.125);
-    assert_eq!(s.variation, 0);
-    key(&mut app, &ctx, Key::Escape);
-    assert!(!app.macro_editor.help);
-    assert!(app.macro_editor.open());
+    assert!(app.help_open);
+    assert!(app
+        .macro_editor
+        .session
+        .as_ref()
+        .unwrap()
+        .keyboard
+        .count
+        .is_none());
     key(&mut app, &ctx, Key::L);
     assert_eq!(
         app.macro_editor.session.as_ref().unwrap().rows[0].get(),
         0.375
     );
-    question(&mut app, &ctx);
-    question(&mut app, &ctx);
-    assert!(!app.macro_editor.help);
-    key(&mut app, &ctx, Key::Enter);
+    key(&mut app, &ctx, Key::Escape);
+    assert!(app.help_open);
     assert!(!app.macro_editor.open());
 }
 

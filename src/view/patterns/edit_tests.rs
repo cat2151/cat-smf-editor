@@ -228,7 +228,7 @@ fn pattern_edit_source_direct_input_is_disabled_and_running_sequence_refreshes()
 }
 
 #[test]
-fn pattern_edit_old_note_input_and_mml_beyond_measure_do_not_commit() {
+fn pattern_edit_old_note_input_is_rejected_and_long_mml_extends_the_current_pattern() {
     let (mut a, source, id) = fixture();
     let c = egui::Context::default();
     library::edit(&mut a, id).unwrap();
@@ -257,9 +257,11 @@ fn pattern_edit_old_note_input_and_mml_beyond_measure_do_not_commit() {
     press(&mut a, &c, Key::Enter);
     frame(&mut a, &c, vec![]);
     frame(&mut a, &c, vec![]);
-    assert!(a.mml_input.open);
-    assert_eq!(bytes(&a), before);
-    press(&mut a, &c, Key::Escape);
+    assert!(!a.mml_input.open);
+    let catalog = pattern::Catalog::read(&a.loaded.as_ref().unwrap().music).unwrap();
+    assert_eq!(catalog.patterns[&other].meters.len(), 3);
+    assert_eq!(catalog.patterns[&id].meters.len(), 1);
+    a.undo_music().unwrap();
     assert_eq!(bytes(&a), before);
 }
 

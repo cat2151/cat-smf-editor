@@ -163,7 +163,7 @@ fn keyboard_edit_confirm_cancel_duplicate_delete_and_recreate() {
 }
 
 #[test]
-fn invalid_numeric_edits_are_not_saved_and_help_owns_navigation() {
+fn invalid_numeric_edits_are_not_saved_and_help_allows_editing() {
     let mut app = fixture();
     open(&mut app);
     let ctx = egui::Context::default();
@@ -178,12 +178,12 @@ fn invalid_numeric_edits_are_not_saved_and_help_owns_navigation() {
     assert_eq!(app.loaded.as_ref().unwrap().patches[0], Patch::default());
     press(&mut app, &ctx, egui::Key::Escape);
     frame(&mut app, &ctx, vec![egui::Event::Text("?".into())]);
-    assert!(app.layer_editor.help);
+    assert!(app.help_open);
     press(&mut app, &ctx, egui::Key::A);
-    assert_eq!(app.loaded.as_ref().unwrap().patches[0].layers.len(), 1);
+    assert_eq!(app.loaded.as_ref().unwrap().patches[0].layers.len(), 2);
     press(&mut app, &ctx, egui::Key::Escape);
-    assert!(app.layer_editor.open);
-    assert!(!app.layer_editor.help);
+    assert!(!app.layer_editor.open);
+    assert!(app.help_open);
 }
 
 #[test]

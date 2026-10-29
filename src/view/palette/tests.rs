@@ -1,4 +1,5 @@
 use super::*;
+use crate::view::commands::Screen;
 use cat_smf_editor::model::{Event, Music, Track};
 mod feedback;
 mod migemo;
@@ -304,9 +305,9 @@ fn application_viewport_palette_keeps_its_close_target() {
         };
         raw.viewports.insert(viewport, Default::default());
         let _ = c.run(raw, |c| {
-            let input = begin(&mut a, c);
+            let input = crate::view::modal::begin(&mut a, c);
             commands::route(&mut a, c);
-            end(&mut a, c, input);
+            crate::view::modal::end(&mut a, c, input);
         });
     };
     run(vec![key(Key::P, Modifiers::CTRL | Modifiers::SHIFT)]);

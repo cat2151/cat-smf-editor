@@ -214,5 +214,11 @@ pub fn resize(music: &mut Music, id: u64, meters: Vec<Meter>) -> Result<(), Stri
             meters,
         },
     );
+    let collection = crate::score::scene::read(&next)?;
+    if collection.song.iter().any(|placement| {
+        placement.part == crate::score::scene::arrangement::PatternOrScene::Pattern(id)
+    }) {
+        crate::score::scene::arrangement::commit(&mut next, &collection)?;
+    }
     commit(music, next)
 }

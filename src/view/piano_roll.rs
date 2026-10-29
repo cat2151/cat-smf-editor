@@ -41,6 +41,11 @@ pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
     crate::view::commands::route(app, ctx);
 }
 
+/// A new live input owner must detach the previous pointer gesture first.
+pub(crate) fn cancel_keyboard(app: &mut App, ctx: &egui::Context) {
+    keyboard::cancel(app, ctx);
+}
+
 impl State {
     pub(crate) fn open_at_cursor(&mut self) {
         self.open = true;
@@ -57,7 +62,7 @@ pub(crate) fn open(app: &mut App) {
         super::drums::open(app);
         return;
     }
-    app.drum_editor.open = false;
+    crate::view::drums::close(app);
     if super::parameter_editor::is_track(app) {
         super::parameter_editor::open(app);
         return;
@@ -263,6 +268,7 @@ fn layout_with(
         .map(|s| s.events.last().map_or(s.end, |e| e.tick.max(s.end)))
         .max()
         .unwrap_or(0);
+    let end = end.max(super::meta_text::guide_end(loaded, tracks));
     let map = loaded.time.map(meter);
     let beats = beats_of(loaded, meter, end, scale);
     let start = map

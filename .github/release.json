@@ -34,5 +34,5 @@
   ],
   "build_script": "scripts/release.ps1",
   "package_files": ["LICENSE", "assets/migemo/LICENSE_migemo_dict", "assets/migemo/LICENSE_Mozc", "assets/migemo/LICENSE_UniDic", "assets/migemo/LICENSE_rustmigemo"],
-  "runtime_notice": "最新版 Microsoft Visual C++ v14 x64 再頒布可能パッケージが必要（https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist/）。未設定trackの演奏にはSurge XT CLAP、保存済み設定には対応pluginと外部sampleが必要。音色・effect編集には別途cat-plugin-playerが必要。host DLLはeditor自身のexeに同梱。"
+  "notes_dependency_order": ["cat-plugin-player", "clap-mml-render-tui", "clap-mml-play-server", "cat-music-patterns", "mascot-render-server", "uapmd"]
 }

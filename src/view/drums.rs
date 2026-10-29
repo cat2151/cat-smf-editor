@@ -18,6 +18,8 @@ mod layout_tests;
 #[cfg(test)]
 mod native_tests;
 mod pattern;
+mod presentation;
+pub(crate) use presentation::{close, dismiss, display, is_open, open, reconcile};
 pub(crate) mod playback;
 #[cfg(test)]
 mod tests;
@@ -25,12 +27,11 @@ mod widgets;
 
 #[derive(Default)]
 pub struct State {
-    pub open: bool,
+    target: Option<presentation::Target>,
     pub(super) confirm_create: bool,
     row: usize,
     field: usize,
     page: u64,
-    help: bool,
     first: u64,
     last: u64,
     all_tracks: bool,
@@ -95,61 +96,6 @@ fn create_track_with(
 }
 pub(super) enum Input {
     Note { text: String, focus: bool },
-}
-
-pub fn open(app: &mut App) {
-    if app.loaded.is_none() || super::parameter_editor::is_track(app) {
-        return;
-    }
-    if let Err(error) = pattern::edit(app) {
-        app.load_error = Some(error);
-        return;
-    }
-    let division = app.loaded.as_ref().unwrap().music.division;
-    if let Err(e) = drums::tick(division, 0) {
-        app.load_error = Some(e);
-        return;
-    }
-    let tick = crate::play::playback::location(app).0;
-    let number = app
-        .loaded
-        .as_ref()
-        .and_then(|l| l.time.map(app.track))
-        .map_or(1, |map| {
-            u64::try_from(map.position(tick).measure).unwrap_or(1)
-        });
-    playback::close(app);
-    let page = number.saturating_sub(1);
-    app.drum_editor = State {
-        open: true,
-        confirm_create: needs_track(app),
-        field: 2,
-        page,
-        first: number,
-        last: number,
-        loop_enabled: true,
-        ..Default::default()
-    };
-    app.layer_editor.open = false;
-    app.piano_roll.open = false;
-    app.tempo_curve.open = false;
-    app.parameter_editor.close();
-    app.effect_editor = Default::default();
-    app.playback.open = false;
-    app.playback.mixer_open = false;
-    app.comma_menu.open = false;
-    app.edit_menu.open = false;
-    app.help_open = false;
-    app.track_view.go_open = false;
-    app.track_view.split_open = false;
-    app.note_edit = None;
-    app.trill_edit = None;
-    if !app.drum_editor.confirm_create {
-        let r = ensure(app)
-            .and_then(|()| app.edit_music(|_| Ok(())))
-            .and_then(|()| playback::restart(app));
-        result(app, r);
-    }
 }
 
 fn needs_track(app: &App) -> bool {
@@ -265,11 +211,11 @@ fn result(app: &mut App, result: Result<(), String>) {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
-    if !app.drum_editor.open {
+    if !is_open(app) {
         return;
     }
     super::commands::route(app, ctx);
-    if !app.drum_editor.open {
+    if !is_open(app) {
         return;
     }
     let mut action: Option<commands::Op> = None;

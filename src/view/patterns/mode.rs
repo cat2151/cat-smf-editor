@@ -62,7 +62,7 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if a.loaded.is_some()
         && (matches!(
             s,
-            Screen::Main | Screen::Timeline | Screen::Scene | Screen::Song
+            Screen::Main | Screen::Timeline | Screen::Scene | Screen::Song | Screen::Drums
         ))
         && !a.patterns.confirming_creation()
     {
@@ -117,6 +117,7 @@ pub fn toggle(a: &mut App) {
             e.tick = map(e.tick).unwrap_or(e.tick);
         }
     }
+    crate::view::drums::close(a);
     a.note_mode = !a.note_mode;
     a.piano_roll.open = false;
     a.tempo_curve.open = false;
@@ -184,6 +185,9 @@ pub fn toggle(a: &mut App) {
         }
     }
     a.reset_scroll = true;
+    if a.note_mode {
+        navigation::enter_notes(a);
+    }
 }
 fn arrangement_playing(a: &App) -> bool {
     a.playback

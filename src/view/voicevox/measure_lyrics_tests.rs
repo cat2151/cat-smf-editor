@@ -119,7 +119,7 @@ fn begin(app: &mut App, ctx: &egui::Context, q: &str) {
     eprintln!("query {q:?}: {found:?}");
     assert_eq!(found.first().map(String::as_str), Some(LABEL));
     press(app, ctx, Key::Enter);
-    assert!(!app.palette.is_open());
+    assert!(!crate::view::modal::is_open(app));
     frame(app, ctx, vec![]);
     let editing = app.voicevox.lyrics.as_ref().unwrap();
     assert_eq!(editing.replacing.range, MEASURE);

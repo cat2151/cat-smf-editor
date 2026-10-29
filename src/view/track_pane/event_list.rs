@@ -368,7 +368,7 @@ pub(super) fn body(
                         events.last().map_or(0, |e| e.tick)
                     },
                 );
-                let id = crate::view::palette::preview_id(
+                let id = crate::view::command_input::preview_id(
                     ui.ctx(),
                     crate::view::track_map::visible_id(app.generation, track, app.note_mode),
                 );

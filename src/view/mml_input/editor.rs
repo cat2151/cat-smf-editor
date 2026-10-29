@@ -21,7 +21,7 @@ pub(super) fn show(ctx: &egui::Context, state: &mut State, app: &crate::app::App
                 .desired_rows(5)
                 .desired_width(f32::INFINITY)
                 .show(ui);
-            if !crate::view::palette::suspended(ctx)
+            if !crate::view::modal::suspended(ctx)
                 && let Some(range) = output.cursor_range
             {
                 let cursor = range.primary.ccursor.index;
@@ -64,7 +64,7 @@ pub(super) fn show(ctx: &egui::Context, state: &mut State, app: &crate::app::App
                 }
             });
         });
-    if modal.should_close() && !crate::view::palette::suspended(ctx) {
+    if modal.should_close() && !crate::view::modal::suspended(ctx) {
         action = Action::Cancel;
     }
     action

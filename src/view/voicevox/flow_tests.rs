@@ -66,7 +66,7 @@ pub(super) fn palette(app: &mut App, ctx: &egui::Context, label: &str) {
         press(app, ctx, Key::ArrowDown);
     }
     press(app, ctx, Key::Enter);
-    assert!(!app.palette.is_open());
+    assert!(!crate::view::modal::is_open(app));
     if label == SINGER {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
         while app.voicevox.catalog.voices.is_empty() {

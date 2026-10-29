@@ -7,8 +7,7 @@ pub fn enter(a: &mut App, ctx: &eframe::egui::Context) -> Result<(), String> {
         .patterns
         .is_empty()
     {
-        library::add(a, ctx);
-        Ok(())
+        library::begin_add(a, ctx)
     } else {
         open(a)
     }

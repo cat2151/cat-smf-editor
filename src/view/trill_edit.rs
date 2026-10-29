@@ -118,7 +118,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
             cancel = ui.button("Cancel").clicked();
         });
     });
-    cancel |= response.should_close() && !crate::view::palette::suspended(ctx);
+    cancel |= response.should_close() && !crate::view::modal::suspended(ctx);
     if cancel {
         if !editing.previewed {
             return;

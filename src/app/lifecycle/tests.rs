@@ -32,10 +32,10 @@ fn drawing_without_readiness_does_not_offer_an_edit_style() {
     complete(&mut app, &ctx, true);
     assert!(app.edit_style.is_none());
     app.startup.pending = false;
-    app.help_open = true;
+    app.comma_menu.open = true;
     complete(&mut app, &ctx, true);
     assert!(app.edit_style.is_none());
-    app.help_open = false;
+    app.comma_menu.open = false;
     complete(&mut app, &ctx, true);
     assert!(app.edit_style.is_none());
     complete(&mut app, &ctx, true);
@@ -89,10 +89,10 @@ fn readiness_lost_before_dispatch_and_an_old_song_notification_are_discarded() {
     let mut app = new_song();
     let ctx = egui::Context::default();
     complete(&mut app, &ctx, true);
-    app.help_open = true;
+    app.comma_menu.open = true;
     complete(&mut app, &ctx, true);
     assert!(app.edit_style.is_none());
-    app.help_open = false;
+    app.comma_menu.open = false;
     complete(&mut app, &ctx, true);
     app.song_id += 1;
     complete(&mut app, &ctx, true);

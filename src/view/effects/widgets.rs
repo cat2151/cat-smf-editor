@@ -19,10 +19,6 @@ pub(super) fn show(
     let error = app.player_selection.error.clone();
     let state = &mut app.effect_editor;
     let contents = |ui: &mut egui::Ui| {
-        if state.help {
-            super::keyboard::help(state, ui);
-            return;
-        }
         ui.set_width(WIDTH);
         ui.horizontal(|ui| {
             ui.heading(match target {
@@ -66,8 +62,8 @@ pub(super) fn show(
             ui.colored_label(Color32::LIGHT_RED, error);
         }
     };
-    if crate::view::palette::preview_active(ctx) {
-        crate::view::palette::preview_window(ctx, "Preview").show(ctx, contents);
+    if crate::view::command_input::preview_active(ctx) {
+        crate::view::command_input::preview_window(ctx, "Preview").show(ctx, contents);
     } else {
         egui::Modal::new(egui::Id::new("effect-chain")).show(ctx, contents);
     };

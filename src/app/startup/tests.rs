@@ -182,7 +182,7 @@ fn first_frame_shortcut_sees_completed_display_indexes() {
         |ctx| crate::view::show(&mut app, ctx),
     );
     assert!(!app.startup.pending);
-    assert!(app.palette.is_open());
+    assert!(crate::view::modal::is_open(&app));
     assert!(!app.loaded.as_ref().unwrap().display_rows.is_empty());
 }
 

@@ -73,9 +73,13 @@ impl KeyMap {
     }
 
     fn build(music: &Music, track: Option<usize>) -> Self {
+        Self::excluding(music, track, None)
+    }
+
+    fn excluding(music: &Music, track: Option<usize>, excluded: Option<usize>) -> Self {
         let mut changes = Vec::new();
         for (t, source) in music.tracks.iter().enumerate() {
-            if track.is_some_and(|selected| selected != t) {
+            if excluded == Some(t) || track.is_some_and(|selected| selected != t) {
                 continue;
             }
             for (i, event) in source.events.iter().enumerate() {
@@ -101,13 +105,67 @@ pub struct KeySignatures {
 
 impl KeySignatures {
     pub fn new(music: &Music) -> Self {
-        let independent = music.format == 2;
+        let independent = music.format == 2 || crate::score::chord_guide::supported(music);
+        if crate::score::chord_guide::supported(music) {
+            let own: Vec<_> = (0..music.tracks.len())
+                .map(|t| KeyMap::build(music, Some(t)))
+                .collect();
+            let guide = crate::score::chord_guide::track(music);
+            let maps = (0..own.len())
+                .map(|t| {
+                    if crate::score::pattern::is_source(music, t) {
+                        return KeyMap::excluding(music, None, guide);
+                    }
+                    let mut ticks: Vec<_> = own
+                        .iter()
+                        .flat_map(|m| m.changes.iter().map(|c| c.0))
+                        .collect();
+                    ticks.sort_unstable();
+                    ticks.dedup();
+                    let changes = ticks
+                        .into_iter()
+                        .filter_map(|tick| {
+                            let key = own[t]
+                                .at(tick)
+                                .or_else(|| {
+                                    (t != 0)
+                                        .then(|| {
+                                            guide.filter(|&g| g != t).and_then(|g| own[g].at(tick))
+                                        })
+                                        .flatten()
+                                })
+                                .or_else(|| (t != 0).then(|| own[0].at(tick)).flatten());
+                            key.map(|k| (tick, k))
+                        })
+                        .collect();
+                    KeyMap { changes }
+                })
+                .collect();
+            return Self { maps, independent };
+        }
         let maps = if independent {
             (0..music.tracks.len())
                 .map(|t| KeyMap::build(music, Some(t)))
                 .collect()
         } else {
             vec![KeyMap::build(music, None)]
+        };
+        Self { maps, independent }
+    }
+
+    /// Pattern/Scene local time retains its existing key interpretation, without guide propagation.
+    pub fn local_timeline(music: &Music) -> Self {
+        let independent = music.format == 2;
+        let maps = if independent {
+            (0..music.tracks.len())
+                .map(|t| KeyMap::build(music, Some(t)))
+                .collect()
+        } else {
+            vec![KeyMap::excluding(
+                music,
+                None,
+                crate::score::chord_guide::track(music),
+            )]
         };
         Self { maps, independent }
     }

@@ -17,7 +17,7 @@ fn help_shortcuts_and_warnings_tooltip_preserve_view_state() {
             }],
         }],
     });
-    let ctx = egui::Context::default();
+    let ctx = super::native_tests::context();
     let render = |app: &mut crate::app::App, events| {
         ctx.run(
             egui::RawInput {
@@ -71,11 +71,11 @@ fn help_shortcuts_and_warnings_tooltip_preserve_view_state() {
         ],
     );
     assert!(app.help_open);
-    let opened = render(&mut app, vec![]);
-    let labels = texts(&opened);
+    render(&mut app, vec![]);
+    let labels = super::native_tests::texts(&ctx);
     assert!(
-        labels.iter().any(|(t, _)| t == "エフェクト"),
-        "the last key is visible without scrolling"
+        labels.iter().any(|t| t == "エフェクト"),
+        "the native help contains the last key"
     );
     assert!(app.note_mode);
     render(
@@ -102,7 +102,8 @@ fn help_shortcuts_and_warnings_tooltip_preserve_view_state() {
             modifiers: egui::Modifiers::NONE,
         }],
     );
-    assert!(!app.help_open);
+    assert!(app.help_open, "editor Escape leaves help open");
+    app.help_open = false;
     app.loaded = None;
     render(&mut app, vec![egui::Event::Text("?".into())]);
     assert!(app.help_open, "help is available before loading a file");

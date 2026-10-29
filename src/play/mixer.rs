@@ -132,9 +132,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     if app.playback.mixer_focus {
         frame.stroke = ctx.style().visuals.selection.stroke;
     }
-    let preview = crate::view::palette::preview_active(ctx);
+    let preview = crate::view::command_input::preview_active(ctx);
     let window = if preview {
-        crate::view::palette::preview_window(ctx, "Mixer (m)")
+        crate::view::command_input::preview_window(ctx, "Mixer (m)")
     } else {
         egui::Window::new("Mixer (m)")
             .frame(frame)

@@ -108,7 +108,7 @@ fn keyboard_grid_page_numeric_cancel_confirm_undo_and_close() {
         60
     );
     press(&mut app, &ctx, Key::Escape);
-    assert!(!app.drum_editor.open);
+    assert!(!crate::view::drums::is_open(&app));
     assert!(!app.piano_roll.open);
 }
 
@@ -170,7 +170,7 @@ fn confirmed_creation_adds_one_track_and_undo_preserves_the_original() {
     let before = cat_smf_editor::smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap();
     create_track_with(&mut app, |_| Ok((patch, Default::default()))).unwrap();
     assert_eq!(app.track, 2);
-    assert!(app.drum_editor.open);
+    assert!(crate::view::drums::is_open(&app));
     assert!(!app.drum_editor.confirm_create);
     assert!(app.loaded.as_ref().unwrap().patches[2].drums.is_some());
     app.undo_music().unwrap();
@@ -209,6 +209,8 @@ fn confirmation_draws_simple_english_choices() {
 fn fast_toggle_visual_navigation_and_scoped_silent_loops_survive_edits() {
     let mut app = fixture();
     let ctx = egui::Context::default();
+    assert!(app.playback.repeat.is_none());
+    press(&mut app, &ctx, Key::R);
     assert_eq!(app.playback.repeat, Some((0, 1920)));
     assert_eq!(
         app.playback
@@ -312,8 +314,10 @@ fn twelve_step_measures_bound_keyboard_and_wheel_changes_repeat_end() {
     .unwrap();
     open(&mut app);
     assert_eq!(playback::measure(&app).unwrap().steps.len(), 12);
-    assert_eq!(app.playback.repeat, Some((0, 1440)));
+    assert!(app.playback.repeat.is_none());
     let ctx = egui::Context::default();
+    press(&mut app, &ctx, Key::R);
+    assert_eq!(app.playback.repeat, Some((0, 1440)));
     for _ in 0..20 {
         press(&mut app, &ctx, Key::L);
     }

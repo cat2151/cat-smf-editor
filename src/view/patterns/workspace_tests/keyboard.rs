@@ -63,6 +63,8 @@ fn workspace_keyboard_reorders_scene_blocks_via_independent_lane_and_undo() {
     key(&mut a, &c, song, Key::Space, Modifiers::NONE);
     assert!(a.playback.pending.is_some());
     key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
+    assert!(mode::workspace_open(&a));
+    key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
     assert!(a.note_mode && !mode::workspace_open(&a));
     assert!(a.playback.pending.is_none() && a.playback.active.is_none());
     assert!(!mode::actual_source(&a, a.track));
@@ -252,13 +254,14 @@ fn shift_e_edits_the_chosen_unplaced_part_and_escape_returns_to_song() {
     let unplaced = add(&mut a, &c, "o5 l1 c");
     library::edit(&mut a, first).unwrap();
     let before = bytes(&a);
+    key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
     for _ in 0..workspace::choices(&a, Pane::Song).len() {
         if a.patterns.workspace.selection(Pane::Song).choice
             == Some(PatternOrScene::Pattern(unplaced))
         {
             break;
         }
-        key(&mut a, &c, song, Key::PageDown, Modifiers::NONE);
+        key(&mut a, &c, song, Key::J, Modifiers::NONE);
     }
     assert_eq!(
         a.patterns.workspace.selection(Pane::Song).choice,

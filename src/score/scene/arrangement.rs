@@ -110,7 +110,8 @@ fn check_pattern(m: &Music, c: &Catalog, id: u64, measure: u64) -> Result<(), St
     }
     Ok(())
 }
-fn commit(m: &mut Music, c: &Collection) -> Result<(), String> {
+/// Keep the declared Song long enough for every placement before validating.
+pub(crate) fn commit(m: &mut Music, c: &Collection) -> Result<(), String> {
     let mut next = m.clone();
     let mut c = c.clone();
     let time = MusicalTime::new(m);

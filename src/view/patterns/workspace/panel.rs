@@ -1,4 +1,8 @@
 use super::*;
+mod candidates;
+mod drawing;
+mod scrolling;
+use drawing::{cell, paint_part, place_beacon, trash};
 /// A placement being dragged: its row and first measure.
 #[derive(Clone, Copy)]
 struct Placed(usize, u64);
@@ -16,7 +20,19 @@ pub fn button(
     r
 }
 pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
-    if input_owner(a, ui.ctx()) || a.palette.is_open() {
+    if p == Pane::Song {
+        egui::ScrollArea::vertical()
+            .id_salt("song-body")
+            .drag_to_scroll(false)
+            .auto_shrink([false, false])
+            .show(ui, |ui| body(a, ui, p));
+    } else {
+        body(a, ui, p);
+    }
+}
+
+fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
+    if input_owner(a, ui.ctx()) || crate::view::modal::is_open(a) {
         ui.disable();
     }
     let Some(l) = &a.loaded else { return };
@@ -61,36 +77,7 @@ pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     if let Some(len) = length {
         s.measure = s.measure.min(len).max(1);
     }
-    if s.help {
-        ui.heading(p.title());
-        egui::Grid::new((p.title(), "help")).show(ui, |ui| {
-            for (key, label) in [
-                ("← → / ↑ ↓", "小節 / レーン"),
-                ("PageUp / PageDown", "部品選択"),
-                ("Enter", "Put"),
-                ("E", "本体編集"),
-                ("Shift+E", "部品編集"),
-                ("N", "新規pattern"),
-                ("Delete", "配置解除"),
-                ("Space", "再生"),
-                ("Shift+Space", "停止"),
-                ("P", "再生menu"),
-                ("S", "Scene window"),
-                ("Ctrl+Z", "Undo"),
-                ("Ctrl+← → ↑ ↓", "配置移動"),
-                ("Ctrl+/", "コメントアウト"),
-                ("Esc", "終了"),
-            ] {
-                if key == "S" && p != Pane::Song {
-                    continue;
-                }
-                ui.label(key);
-                ui.label(label);
-                ui.end_row();
-            }
-        });
-        return;
-    }
+
     super::minimap::show(a, ui, p);
     ui.horizontal(|ui| {
         if p == Pane::Scene {
@@ -147,9 +134,37 @@ pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
         rows(&c, id)
     };
     let s = a.patterns.workspace.selection(p);
-    let first = s.measure.saturating_sub(3).max(1);
-    let end = length.map_or(first + 12, |n| (n + 1).min(first + 12));
-    let selected = (s.row, s.measure);
+    let zoom = if p == Pane::Song {
+        a.patterns.workspace.timeline.zoom()
+    } else {
+        1.0
+    };
+    let cell_width = (90.0 * zoom).max(2.0);
+    let gap = ui.spacing().item_spacing.x * zoom.min(1.0);
+    let columns = ((ui.available_width() / (cell_width + gap)).ceil() as u64).max(12);
+    let end = length.map_or_else(
+        || {
+            c.song
+                .iter()
+                .map(|v| {
+                    v.measure
+                        .saturating_add(model::length(&c, v.part).unwrap_or(1))
+                })
+                .max()
+                .unwrap_or(1)
+                .max(
+                    cat_smf_editor::score::musical_time::MusicalTime::new(
+                        &a.loaded.as_ref().unwrap().music,
+                    )
+                    .map(0)
+                    .map_or(1, |map| map.position(c.song_length).measure as u64 + 1),
+                )
+                .max(s.measure.saturating_add(columns))
+        },
+        |n| n.saturating_add(1),
+    );
+    let position = (s.row, s.measure);
+    let selected = s.cells(p).then_some((s.row, s.measure));
     let choices = choices(a, p);
     let music = &a.loaded.as_ref().unwrap().music;
     let keys = &a.loaded.as_ref().unwrap().keys;
@@ -163,101 +178,157 @@ pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     let mut dropped = None;
     let mut moved = None;
     let mut commented = None;
-    egui::ScrollArea::both()
+    let mut scrolling = scrolling::Matrix::new(ui, p, position, end, cell_width, gap);
+    if p == Pane::Song
+        && let Some(offset) = a.patterns.workspace.timeline.viewport.pending.take()
+    {
+        scrolling.offset = offset.x;
+    }
+    let mut repeat_action = None;
+    let output = egui::ScrollArea::both()
         .drag_to_scroll(false)
         .id_salt((p.title(), "matrix"))
         .max_height(160.0)
-        .show(ui, |ui| {
-            egui::Grid::new((p.title(), "cells")).show(ui, |ui| {
-                ui.label("");
-                for m in first..end {
-                    ui.label(m.to_string());
-                }
-                ui.end_row();
-                for row in 0..count {
-                    let lane = lanes.get(row).copied();
-                    ui.label((row + 1).to_string());
-                    for measure in first..end {
-                        let covering = lane.and_then(|l| model::covering(&c, id, l, measure));
-                        let continuation = covering
-                            .filter(|(_, start)| *start < measure)
-                            .map(|(_, start)| start);
-                        let label = covering
-                            .filter(|_| continuation.is_none())
-                            .and_then(|(v, _)| {
-                                choices
-                                    .iter()
-                                    .find(|(p, _)| *p == v)
-                                    .map(|(_, s)| s.as_str())
-                            })
-                            .unwrap_or(if continuation.is_some() { "—" } else { "·" });
-                        let (rect, r) = ui.allocate_exact_size(
-                            egui::vec2(90.0, 30.0),
-                            egui::Sense::click_and_drag(),
-                        );
-                        if let Some((_, start)) = covering {
-                            r.dnd_set_drag_payload(Placed(row, start));
+        .horizontal_scroll_offset(scrolling.offset)
+        .show_viewport(ui, |ui, viewport| {
+            let (area, first, end) = scrolling.visible(ui, viewport);
+            if p == Pane::Song {
+                repeat_action = scrolling.repeat(
+                    ui,
+                    music,
+                    &mut a.patterns.workspace.timeline,
+                    a.playback.repeat,
+                );
+            }
+            let mut area = area;
+            if p == Pane::Song {
+                area.min.y = ui.cursor().top();
+            }
+            ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
+                egui::Grid::new((p.title(), "cells"))
+                    .min_col_width(0.0)
+                    .spacing(egui::vec2(gap, ui.spacing().item_spacing.y))
+                    .show(ui, |ui| {
+                        scrolling.row_label(ui, "");
+                        for m in first..end {
+                            let (rect, _) = ui.allocate_exact_size(
+                                egui::vec2(
+                                    cell_width,
+                                    ui.text_style_height(&egui::TextStyle::Body),
+                                ),
+                                egui::Sense::hover(),
+                            );
+                            ui.painter_at(rect).text(
+                                rect.left_top(),
+                                egui::Align2::LEFT_TOP,
+                                m.to_string(),
+                                egui::TextStyle::Body.resolve(ui.style()),
+                                ui.visuals().text_color(),
+                            );
                         }
-                        let target = r.dnd_hover_payload::<PatternOrScene>().is_some()
-                            || r.dnd_hover_payload::<Placed>().is_some();
-                        let faded = lane.is_some_and(|l| model::commented_out(&c, id, l, measure));
-                        cell(
-                            ui,
-                            rect,
-                            label,
-                            selected == (row, measure) || target,
-                            faded,
-                            |painter, area| {
-                                let Some((part, start)) = covering else {
-                                    return;
-                                };
-                                let k = (measure - start) as usize;
-                                paint_part(
-                                    painter,
-                                    area,
-                                    music,
-                                    keys,
-                                    &catalog,
-                                    &c,
-                                    part,
-                                    Some((k, k + 1)),
+                        ui.end_row();
+                        for row in 0..count {
+                            let lane = lanes.get(row).copied();
+                            scrolling.row_label(ui, &(row + 1).to_string());
+                            for measure in first..end {
+                                let covering =
+                                    lane.and_then(|l| model::covering(&c, id, l, measure));
+                                let continuation = covering
+                                    .filter(|(_, start)| *start < measure)
+                                    .map(|(_, start)| start);
+                                let label = covering
+                                    .filter(|_| continuation.is_none())
+                                    .and_then(|(v, _)| {
+                                        choices
+                                            .iter()
+                                            .find(|(p, _)| *p == v)
+                                            .map(|(_, s)| s.as_str())
+                                    })
+                                    .unwrap_or(if continuation.is_some() { "—" } else { "·" });
+                                let (rect, r) = ui.allocate_exact_size(
+                                    egui::vec2(cell_width, 30.0),
+                                    egui::Sense::click_and_drag(),
                                 );
-                            },
-                        );
-                        if (row, measure) == (0, 1) {
-                            first_cell = Some(rect);
+                                if let Some((_, start)) = covering {
+                                    r.dnd_set_drag_payload(Placed(row, start));
+                                }
+                                let target = r.dnd_hover_payload::<PatternOrScene>().is_some()
+                                    || r.dnd_hover_payload::<Placed>().is_some();
+                                let faded =
+                                    lane.is_some_and(|l| model::commented_out(&c, id, l, measure));
+                                cell(
+                                    ui,
+                                    rect,
+                                    label,
+                                    selected == Some((row, measure)) || target,
+                                    faded,
+                                    |painter, area| {
+                                        let Some((part, start)) = covering else {
+                                            return;
+                                        };
+                                        let k = (measure - start) as usize;
+                                        paint_part(
+                                            painter,
+                                            area,
+                                            music,
+                                            keys,
+                                            &catalog,
+                                            &c,
+                                            part,
+                                            Some((k, k + 1)),
+                                        );
+                                    },
+                                );
+                                if selected == Some((row, measure))
+                                    || selected.is_none() && (row, measure) == (0, 1)
+                                {
+                                    first_cell = Some(rect);
+                                }
+                                #[cfg(test)]
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(
+                                        egui::Id::new((p.title(), "cell", row, measure)),
+                                        r.rect,
+                                    )
+                                });
+                                // Taking a payload clears it whatever its type, so ask first.
+                                if r.dnd_hover_payload::<Placed>().is_some()
+                                    && let Some(from) = r.dnd_release_payload::<Placed>()
+                                {
+                                    moved = Some((*from, row, measure));
+                                } else if let Some(part) = r.dnd_release_payload::<PatternOrScene>()
+                                {
+                                    dropped = Some((row, measure, *part));
+                                } else if r.clicked() {
+                                    clicked = Some((row, measure, continuation.unwrap_or(measure)));
+                                } else if r.secondary_clicked() && covering.is_some() {
+                                    commented = Some((row, measure));
+                                }
+                            }
+                            ui.end_row();
                         }
-                        #[cfg(test)]
-                        ui.ctx().data_mut(|d| {
-                            d.insert_temp(egui::Id::new((p.title(), "cell", row, measure)), r.rect)
-                        });
-                        // Taking a payload clears it whatever its type, so ask first.
-                        if r.dnd_hover_payload::<Placed>().is_some()
-                            && let Some(from) = r.dnd_release_payload::<Placed>()
-                        {
-                            moved = Some((*from, row, measure));
-                        } else if let Some(part) = r.dnd_release_payload::<PatternOrScene>() {
-                            dropped = Some((row, measure, *part));
-                        } else if r.clicked() {
-                            clicked = Some((row, measure, continuation.unwrap_or(measure)));
-                        } else if r.secondary_clicked() && covering.is_some() {
-                            commented = Some((row, measure));
-                        }
-                    }
-                    ui.end_row();
-                }
+                    });
             });
         });
+    scrolling.finish(ui, p, &output);
+    if p == Pane::Song {
+        scrolling.finish_timeline(&output, &mut a.patterns.workspace.timeline);
+    }
+    if let Some(action) = repeat_action {
+        super::timeline::apply(a, action);
+    }
     if let Some((row, from, measure)) = clicked {
         let s = a.patterns.workspace.selection_mut(p);
+        s.placing = true;
         s.row = row;
         s.measure = measure;
-        // Showing a body stops the transport, so playback starts after it.
         click_body(a, p);
+        // Cell click explicitly auditions the arrangement; displaying a body never does.
         crate::play::arrangement::start_at(a, id, from);
     }
     if let Some((row, measure)) = commented {
         let s = a.patterns.workspace.selection_mut(p);
+        s.placing = true;
         s.row = row;
         s.measure = measure;
         super::commands::comment_out(a, p);
@@ -270,6 +341,7 @@ pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
         });
         if r.is_ok() {
             let s = a.patterns.workspace.selection_mut(p);
+            s.placing = true;
             s.row = row;
             s.measure = measure;
         }
@@ -277,236 +349,28 @@ pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     }
     if let Some((row, measure, part)) = dropped {
         let s = a.patterns.workspace.selection_mut(p);
+        s.placing = true;
         s.row = row;
         s.measure = measure;
         s.choice = Some(part);
         let r = place(a, p, Some(part));
         result(a, r);
     }
-    ui.horizontal(|ui| {
-        if let Some(Placed(row, start)) = trash(ui, p) {
+    let mut deleted = false;
+    ui.horizontal(|ui| match trash(ui, p) {
+        Some(drawing::Discard::Placement(Placed(row, start))) => {
             let r = mutate(a, |m| model::place(m, id, lanes[row], start, None));
             result(a, r);
         }
+        Some(drawing::Discard::Pattern(id)) => {
+            let r = super::deletion::pattern(a, id);
+            result(a, r);
+            deleted = true;
+        }
+        None => {}
     });
-    let s = a.patterns.workspace.selection_mut(p);
-    let response = ui.add(egui::TextEdit::singleline(&mut s.query).id(query_id(p)));
-    #[cfg(test)]
-    ui.ctx()
-        .data_mut(|d| d.insert_temp(egui::Id::new((p.title(), "query")), response.rect));
-    let confirm = !ime && response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-    let cancel = !ime && was_focused && ui.input(|i| i.key_pressed(Key::Escape));
-    if ime && was_focused && ui.input(|i| i.key_pressed(Key::Enter) || i.key_pressed(Key::Escape)) {
-        response.request_focus();
-    }
-    s.search.update(&s.query);
-    let filtered = choices
-        .into_iter()
-        .filter(|(_, label)| s.search.matches_text(label))
-        .collect::<Vec<_>>();
-    if !filtered.iter().any(|(part, _)| Some(*part) == s.choice) {
-        s.choice = filtered.first().map(|(part, _)| *part);
-    }
-    let selected = s.choice;
-    let mut clicked = None;
-    let mut card = None;
-    let mut edit = false;
-    let focused = super::super::beacon::focused(ui.ctx());
-    let music = &a.loaded.as_ref().unwrap().music;
-    let keys = &a.loaded.as_ref().unwrap().keys;
-    let catalog = Catalog::read(music).unwrap_or_default();
-    egui::ScrollArea::vertical()
-        .drag_to_scroll(false)
-        .id_salt((p.title(), "parts"))
-        .max_height(120.0)
-        .show(ui, |ui| {
-            for (part, label) in filtered {
-                let (rect, r) = ui.allocate_exact_size(
-                    egui::vec2(ui.available_width().min(240.0), 30.0),
-                    egui::Sense::click_and_drag(),
-                );
-                cell(
-                    ui,
-                    rect,
-                    &label,
-                    Some(part) == selected,
-                    false,
-                    |painter, area| {
-                        paint_part(painter, area, music, keys, &catalog, &c, part, None);
-                    },
-                );
-                r.dnd_set_drag_payload(part);
-                match beacon {
-                    Some(super::super::beacon::Step::Edit(id))
-                        if focused && part == PatternOrScene::Pattern(id) =>
-                    {
-                        let stroke = super::super::beacon::stroke(ui.ctx());
-                        let b = ui.put(rect, egui::Button::new("Edit · Shift+E").stroke(stroke));
-                        #[cfg(test)]
-                        ui.ctx().data_mut(|d| {
-                            d.insert_temp(egui::Id::new((p.title(), "beacon-edit")), b.rect)
-                        });
-                        edit |= b.clicked();
-                    }
-                    Some(super::super::beacon::Step::Place(id))
-                        if part == PatternOrScene::Pattern(id) =>
-                    {
-                        card = Some(rect);
-                    }
-                    _ => {}
-                }
-                #[cfg(test)]
-                if r.interact_rect.is_positive() {
-                    ui.ctx().data_mut(|d| {
-                        d.insert_temp(
-                            egui::Id::new((p.title(), "part", format!("{part:?}"))),
-                            r.interact_rect,
-                        )
-                    });
-                }
-                if r.clicked() {
-                    clicked = Some(part);
-                }
-            }
-        });
-    // Outside the scroll area, so it stays reachable however many parts there are.
-    if button(ui, p, "new-pattern", "+")
-        .on_hover_text("新規pattern (N)")
-        .clicked()
-    {
-        library::add(a, ui.ctx());
+    if deleted {
         return;
     }
-    if let (Some(card), Some(cell)) = (card, first_cell) {
-        place_beacon(ui, card, cell);
-    }
-    if edit {
-        edit_choice(a, ui.ctx(), p);
-        return;
-    }
-    if let Some(part) = clicked {
-        // Opening a pattern stops the transport, so the audition starts after it.
-        let opened = match part {
-            PatternOrScene::Pattern(id) => library::edit(a, id),
-            PatternOrScene::Scene(id) => open_scene(a, id),
-        };
-        choose(a, p, part);
-        if opened.is_err() {
-            result(a, opened);
-        } else if matches!(part, PatternOrScene::Pattern(_))
-            && a.loaded
-                .as_ref()
-                .is_some_and(|l| l.patches[a.track].drums.is_some())
-        {
-            // As if `i` were pressed: the drum loop replaces the audition.
-            crate::view::drums::open(a);
-            presentation::focus_root(a, ui.ctx());
-        }
-    }
-    if cancel {
-        ui.ctx().memory_mut(|m| m.surrender_focus(query_id(p)));
-    }
-    if confirm {
-        place_selected(a, p);
-    }
-}
-/// The notes of `measures` (part-relative, half-open) of a pattern, or of a scene in the minimap colors.
-#[allow(clippy::too_many_arguments)]
-fn paint_part(
-    painter: &egui::Painter,
-    area: egui::Rect,
-    music: &cat_smf_editor::model::Music,
-    keys: &cat_smf_editor::score::key_signature::KeySignatures,
-    catalog: &Catalog,
-    c: &scene::Collection,
-    part: PatternOrScene,
-    measures: Option<(usize, usize)>,
-) {
-    use super::super::cards;
-    match part {
-        PatternOrScene::Pattern(id) => {
-            if let Some(def) = catalog.patterns.get(&id) {
-                let gray = |_, e: &cat_smf_editor::model::Event| {
-                    crate::view::pitch_keyboard::note_color(e.data[0], None)
-                };
-                cards::paint_notes(painter, area, music, def, measures, &gray);
-            }
-        }
-        PatternOrScene::Scene(id) => {
-            if let Some(s) = c.scenes.iter().find(|s| s.id == id) {
-                let color = cards::minimap_color(keys);
-                cards::paint_scene(painter, area, music, catalog, s, measures, &color);
-            }
-        }
-    }
-}
-/// The only pattern, its first cell and a drag arrow between them.
-fn place_beacon(ui: &egui::Ui, card: egui::Rect, target: egui::Rect) {
-    let stroke = super::super::beacon::stroke(ui.ctx());
-    let painter = ui.ctx().layer_painter(egui::LayerId::new(
-        egui::Order::Foreground,
-        egui::Id::new("song-beacon"),
-    ));
-    super::super::beacon::frame(&painter, card, stroke);
-    super::super::beacon::frame(&painter, target, stroke);
-    let from = card.center_top() - egui::vec2(0.0, 4.0);
-    let to = target.center_bottom() + egui::vec2(0.0, 4.0);
-    painter.arrow(from, to - from, stroke);
-    #[cfg(test)]
-    ui.ctx()
-        .data_mut(|d| d.insert_temp(egui::Id::new("song-beacon-place"), (card, target)));
-}
-/// A placement dropped here is removed.
-fn trash(ui: &mut egui::Ui, p: Pane) -> Option<Placed> {
-    let (rect, r) = ui.allocate_exact_size(egui::vec2(40.0, 30.0), egui::Sense::hover());
-    let hovered = r.dnd_hover_payload::<Placed>().is_some();
-    cell(ui, rect, "", hovered, false, |painter, area| {
-        painter.text(
-            area.center(),
-            egui::Align2::CENTER_CENTER,
-            "🗑",
-            egui::FontId::proportional(area.height()),
-            ui.visuals().text_color(),
-        );
-    });
-    #[cfg(test)]
-    ui.ctx()
-        .data_mut(|d| d.insert_temp(egui::Id::new((p.title(), "trash")), r.rect));
-    let _ = p;
-    r.dnd_release_payload::<Placed>().map(|p| *p)
-}
-/// A part's name over its notes; selection is the frame and commenting out is faded
-/// contents, not text.
-fn cell(
-    ui: &egui::Ui,
-    rect: egui::Rect,
-    label: &str,
-    selected: bool,
-    faded: bool,
-    notes: impl FnOnce(&egui::Painter, egui::Rect),
-) {
-    let v = ui.visuals();
-    let mut painter = ui.painter_at(rect);
-    painter.rect(
-        rect,
-        3.0,
-        v.faint_bg_color,
-        if selected {
-            egui::Stroke::new(2.0_f32, v.selection.stroke.color)
-        } else {
-            egui::Stroke::new(1.0_f32, v.widgets.noninteractive.bg_stroke.color)
-        },
-        egui::StrokeKind::Inside,
-    );
-    if faded {
-        painter.multiply_opacity(0.3);
-    }
-    notes(&painter, rect.shrink(3.0));
-    painter.text(
-        rect.min + egui::vec2(4.0, 2.0),
-        egui::Align2::LEFT_TOP,
-        label,
-        egui::TextStyle::Small.resolve(ui.style()),
-        v.text_color(),
-    );
+    candidates::show(a, ui, p, &c, first_cell, beacon, (ime, was_focused));
 }

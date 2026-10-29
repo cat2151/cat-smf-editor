@@ -197,7 +197,7 @@ impl Viewport {
     pub fn notes(&mut self, ui: &mut egui::Ui, rect: egui::Rect, scale: f32) -> Option<u64> {
         let response = ui.interact(
             rect,
-            crate::view::palette::preview_id(ui.ctx(), egui::Id::new("tempo-notes")),
+            crate::view::command_input::preview_id(ui.ctx(), egui::Id::new("tempo-notes")),
             egui::Sense::click_and_drag(),
         );
         let local = |p: egui::Pos2| (p.x - rect.left()).max(0.0);

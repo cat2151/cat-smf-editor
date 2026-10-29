@@ -91,7 +91,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         if !visible {
             return;
         }
-        let palette_input = crate::view::palette::begin(app, ctx);
+        let palette_input = crate::view::modal::begin(app, ctx);
         crate::view::commands::route(app, ctx);
         let (requested, outer, inner) = ctx.input(|i| {
             let viewport = i.viewport();
@@ -108,7 +108,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             body(ui, spectrum.as_deref(), lissajous.as_deref());
         });
-        crate::view::palette::end(app, ctx, palette_input);
+        crate::view::modal::end(app, ctx, palette_input);
         // The child viewport is painted by the root update, which must keep running.
         ctx.request_repaint_after_for(Duration::from_millis(50), egui::ViewportId::ROOT);
         ctx.request_repaint_after(Duration::from_millis(50));
@@ -130,7 +130,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 /// command routing, so every modal (including future ones) gets an unobscured root.
 pub(crate) fn companion_visible(app: &App, ctx: &egui::Context) -> bool {
     use crate::view::commands::{owner, Screen};
-    !app.palette.owns_root()
+    !(app.palette.owns_root() || app.command_input.owns_root())
         && !app.patterns.workspace.input_open()
         && matches!(
             owner(app, ctx),
@@ -183,12 +183,26 @@ mod tests {
         assert!(!companion_visible(&app, &ctx));
         app.mml_input.open = false;
         app.help_open = true;
-        assert!(!companion_visible(&app, &ctx));
+        assert!(companion_visible(&app, &ctx));
         app.help_open = false;
         crate::view::palette::tests::open(&mut app, &ctx);
         assert!(!companion_visible(&app, &ctx));
         crate::view::palette::tests::query(&mut app, &ctx, "create scene");
         crate::view::palette::tests::press(&mut app, &ctx, egui::Key::Enter);
         assert!(!companion_visible(&app, &ctx));
+    }
+}
+
+#[cfg(test)]
+mod command_input_tests {
+    use super::*;
+    #[test]
+    fn independent_command_input_hides_native_companions() {
+        let mut a = crate::view::palette::tests::app();
+        let c = egui::Context::default();
+        let request =
+            crate::view::commands::Request::new(&a, crate::view::commands::Operation::Views);
+        crate::view::commands::submit(&mut a, &c, request).unwrap();
+        assert!(!companion_visible(&a, &c));
     }
 }

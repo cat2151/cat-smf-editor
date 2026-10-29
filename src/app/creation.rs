@@ -71,6 +71,7 @@ impl App {
         &mut self,
         edit: impl FnOnce(&mut cat_smf_editor::model::Music) -> Result<(), String>,
     ) -> Result<(), String> {
+        let editor = crate::view::patterns::navigation::snapshot(self);
         let before = self
             .loaded
             .as_ref()
@@ -113,6 +114,7 @@ impl App {
             .mixer_track
             .min(self.loaded.as_ref().unwrap().music.tracks.len() - 1);
         self.song_id = self.song_id.wrapping_add(1);
+        crate::view::patterns::navigation::restore(self, editor);
         self.undo.push(before);
         Ok(())
     }

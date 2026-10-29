@@ -156,9 +156,9 @@ fn question_opens_contextual_help_and_escape_closes_only_help() {
     let (ctx, _) = opened_in(&mut app, 0);
     at(&mut app, &ctx, 11.0, vec![egui::Event::Text("?".into())]);
     assert!(app.help_open);
-    let output = at(&mut app, &ctx, 12.0, vec![]);
-    assert!(output.shapes.iter().any(|s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text().contains("テンポ追加・移動"))));
-    super::super::super::piano_roll::tests::press(&mut app, &ctx, egui::Key::Escape);
+    at(&mut app, &ctx, 12.0, vec![]);
+    assert_eq!(crate::view::help::test_target(&app), "Tempo");
+    super::super::super::piano_roll::tests::press(&mut app, &ctx, egui::Key::F1);
     assert!(!app.help_open);
     assert!(app.tempo_curve.open);
     at(&mut app, &ctx, 13.0, vec![egui::Event::Text("?".into())]);

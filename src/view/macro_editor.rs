@@ -27,7 +27,6 @@ mod tests;
 #[derive(Default)]
 pub struct State {
     session: Option<Session>,
-    help: bool,
     error: Option<String>,
 }
 struct Session {
@@ -222,7 +221,6 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
     };
     app.layer_editor.open = false;
     app.comma_menu.open = false;
-    app.help_open = false;
     transport::repeat::start(app, (a, b));
     Ok(())
 }

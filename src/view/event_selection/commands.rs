@@ -11,19 +11,19 @@ impl State {
 }
 pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if matches!(s, Screen::Selection | Screen::SelectionMenu) {
-        out.push(Command::plain(
+        let mut command = Command::operation(
             s,
             "generate-same-measures",
             "Generate same measures",
-            if s == Screen::SelectionMenu {
-                &[egui::Key::G]
-            } else {
-                &[]
+            crate::view::commands::Operation::SameMeasure {
+                batch: true,
+                number: None,
             },
-            |a, c| {
-                crate::view::palette::open_same_measure(a, c, true);
-            },
-        ));
+        );
+        if s == Screen::SelectionMenu {
+            command.keys.push((egui::Key::G, egui::Modifiers::NONE));
+        }
+        out.push(command);
     }
     if s == Screen::Main && count(a) > 0 {
         out.push(Command::plain(

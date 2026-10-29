@@ -228,7 +228,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     response.request_focus();
                     editing.focus = false;
                 }
-                if response.lost_focus() && !app.palette.is_open() {
+                if response.lost_focus() && !crate::view::modal::is_open(app) {
                     close = true;
                 }
                 if let Some(error) = &editing.error {

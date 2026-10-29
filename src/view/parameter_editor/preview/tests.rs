@@ -257,6 +257,8 @@ fn focused_search_and_help_keep_navigation_and_ime_keys_isolated() {
         ]
     };
     frame(&mut app, vec![]);
+    // Install TextEdit's navigation focus filter after the initial focus request.
+    frame(&mut app, vec![]);
     frame(&mut app, press(egui::Key::ArrowDown));
     assert_eq!(app.parameter_editor.picker.as_ref().unwrap().selected, 1);
     assert_eq!(
@@ -270,9 +272,9 @@ fn focused_search_and_help_keep_navigation_and_ime_keys_isolated() {
         "102"
     );
     frame(&mut app, press(egui::Key::F1));
-    assert!(app.parameter_editor.picker.as_ref().unwrap().help);
-    frame(&mut app, press(egui::Key::Escape));
-    assert!(!app.parameter_editor.picker.as_ref().unwrap().help);
+    assert!(app.help_open);
+    frame(&mut app, press(egui::Key::F1));
+    assert!(!app.help_open);
     frame(&mut app, vec![egui::Event::Text("onshoku".into())]);
     assert_eq!(
         app.parameter_editor.picker.as_ref().unwrap().query,

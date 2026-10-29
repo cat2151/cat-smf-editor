@@ -89,7 +89,7 @@ fn run(app: &mut App, ctx: &egui::Context) {
         press(app, ctx, Key::ArrowDown);
     }
     press(app, ctx, Key::Enter);
-    assert!(!app.palette.is_open());
+    assert!(!crate::view::modal::is_open(app));
     frame(app, ctx, vec![]);
 }
 

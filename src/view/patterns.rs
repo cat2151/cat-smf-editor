@@ -9,6 +9,7 @@ pub(crate) mod membership;
 pub(crate) mod mode;
 #[cfg(test)]
 mod native_tests;
+pub(crate) mod navigation;
 pub(crate) mod presentation;
 pub(crate) mod preview;
 pub(crate) mod windows;
@@ -21,7 +22,9 @@ impl Default for PreviewTempo {
 }
 #[derive(Default)]
 pub struct State {
+    pub recording: crate::view::recording::State,
     pub workspace: workspace::State,
+    pub navigation: navigation::State,
     first: Option<first::Pending>,
     pub selected: Option<u64>,
     pub container: Option<u64>,
@@ -43,15 +46,19 @@ impl State {
 }
 
 pub fn refresh(a: &mut App) {
-    let workspace_open = mode::workspace_open(a);
-    let Some(loaded) = &mut a.loaded else { return };
+    let Some(loaded) = &a.loaded else { return };
     if let Some(edit) = &mut a.patterns.editing {
         if edit.rebind(&loaded.music).is_err() {
             a.patterns.editing = None;
         } else if edit.standalone {
             a.track = edit.track;
+            if let Some(tracks) = &mut a.track_view.split {
+                tracks[a.track_view.active] = a.track;
+            }
         }
     }
+    let workspace_open = mode::workspace_open(a);
+    let loaded = a.loaded.as_mut().unwrap();
     loaded.display_music = a
         .patterns
         .editing
@@ -61,6 +68,11 @@ pub fn refresh(a: &mut App) {
     if loaded.display_music.is_none() {
         a.patterns.editing = None;
     }
+    loaded.keys = if loaded.display_music.is_some() {
+        cat_smf_editor::score::key_signature::KeySignatures::local_timeline(&loaded.music)
+    } else {
+        cat_smf_editor::score::key_signature::KeySignatures::new(&loaded.music)
+    };
     loaded.time = cat_smf_editor::score::musical_time::MusicalTime::new(loaded.visible());
     loaded.note_views = loaded
         .visible()
@@ -80,6 +92,7 @@ pub fn refresh(a: &mut App) {
 }
 
 pub fn validate(a: &mut App) {
+    crate::view::drums::reconcile(a);
     let Some(context) = &a.patterns.editing else {
         return;
     };
@@ -96,6 +109,7 @@ pub fn validate(a: &mut App) {
         a.generation = a.generation.wrapping_add(1);
         refresh(a);
         crate::cursor::moves::at_tick(a, tick);
+        crate::view::drums::reconcile(a);
     }
 }
 
@@ -103,7 +117,6 @@ pub fn validate(a: &mut App) {
 pub enum Action {
     Create,
     Duplicate,
-    Delete,
     Preview,
     MoveContainer,
     Structure,
@@ -115,7 +128,6 @@ impl Action {
         match self {
             Self::Create => "create-pattern",
             Self::Duplicate => "duplicate-pattern",
-            Self::Delete => "delete-pattern",
             Self::Preview => "preview-pattern",
             Self::MoveContainer => "move-pattern-container",
             Self::Structure => "pattern-structure",
@@ -127,27 +139,12 @@ impl Action {
         match self {
             Self::Create => "Add pattern",
             Self::Duplicate => "Duplicate pattern",
-            Self::Delete => "Delete pattern",
             Self::Preview => "Preview pattern",
             Self::MoveContainer => "Move pattern to container",
             Self::Structure => "Pattern measures / meter",
             Self::AuditionTempo => "Audition tempo",
             Self::MidiBaseline => "Container MIDI baseline",
         }
-    }
-    pub fn from_id(id: &str) -> Option<Self> {
-        [
-            Self::Create,
-            Self::Duplicate,
-            Self::Delete,
-            Self::Preview,
-            Self::MoveContainer,
-            Self::Structure,
-            Self::AuditionTempo,
-            Self::MidiBaseline,
-        ]
-        .into_iter()
-        .find(|a| a.id() == id)
     }
 }
 pub(crate) fn collect(app: &App, s: Screen, out: &mut Vec<Command>) {
@@ -161,33 +158,26 @@ pub(crate) fn collect(app: &App, s: Screen, out: &mut Vec<Command>) {
     if !matches!(s, Screen::Main | Screen::Scene | Screen::Song) || app.loaded.is_none() {
         return;
     }
-    out.push(Command::plain(
+    out.push(Command::operation(
         s,
         "open-song-matrix",
         "Pattern / Song",
-        &[],
-        |a, ctx| {
-            if let Err(error) = matrix::enter(a, ctx) {
-                a.load_error = Some(error);
-            }
-        },
+        super::commands::Operation::PatternWork,
     ));
     for action in [
         Action::Create,
         Action::Duplicate,
-        Action::Delete,
         Action::Preview,
         Action::MoveContainer,
         Action::Structure,
         Action::AuditionTempo,
         Action::MidiBaseline,
     ] {
-        out.push(Command::plain(
+        out.push(Command::operation(
             s,
             action.id(),
             action.label(),
-            &[],
-            |_, _| {},
+            super::commands::Operation::pattern(action),
         ));
     }
 }
@@ -198,40 +188,7 @@ pub fn show(a: &mut App, ctx: &eframe::egui::Context) {
     }
 }
 
-/// Selecting a sound container in Notes makes it the target of new patterns and shows Song.
-pub fn track_selected(a: &mut App) {
-    if a.patterns
-        .editing
-        .as_ref()
-        .is_some_and(|c| c.track != a.track)
-    {
-        a.patterns.editing = None;
-        refresh(a);
-    }
-    if !a.note_mode || !mode::actual_source(a, a.track) {
-        return;
-    }
-    let catalog = a
-        .loaded
-        .as_ref()
-        .and_then(|l| cat_smf_editor::score::pattern::Catalog::read(&l.music).ok());
-    if let Some(c) = catalog {
-        let container = c
-            .tracks
-            .iter()
-            .find_map(|(&id, &t)| (t == a.track).then_some(id));
-        a.patterns.container = container;
-        a.patterns.selected = c
-            .patterns
-            .values()
-            .filter(|p| Some(p.container) == container)
-            .min_by_key(|p| p.tick)
-            .map(|p| p.id);
-    }
-    if let Err(error) = matrix::open(a) {
-        a.load_error = Some(error);
-    }
-}
+pub use navigation::track_selected;
 
 pub use presentation::heading;
 

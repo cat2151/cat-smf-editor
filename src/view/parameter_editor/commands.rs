@@ -9,28 +9,8 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             "parameter-help",
             "ヘルプ",
             &[Key::F1],
-            |a, _| {
-                if let Some(p) = &mut a.parameter_editor.picker {
-                    p.help = !p.help;
-                    p.focus = !p.help;
-                }
-            },
+            |a, _| a.help_open = !a.help_open,
         ));
-        if app.parameter_editor.picker.as_ref().is_some_and(|p| p.help) {
-            out.push(Command::plain(
-                screen,
-                "parameter-help-close",
-                "閉じる",
-                &[Key::Escape],
-                |a, _| {
-                    if let Some(p) = &mut a.parameter_editor.picker {
-                        p.help = false;
-                        p.focus = true;
-                    }
-                },
-            ));
-            return;
-        }
         out.push(Command::plain(
             screen,
             "parameter-cancel",

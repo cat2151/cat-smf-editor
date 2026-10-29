@@ -187,6 +187,8 @@ fn session_json_is_renamed_and_existing_status_takes_priority() {
         patch_cursors: Default::default(),
         analysis_window: None,
         analysis_open: false,
+        help_open: false,
+        help_window: None,
         pattern_windows: Default::default(),
         voicevox_engine: None,
         mascot_enabled: false,

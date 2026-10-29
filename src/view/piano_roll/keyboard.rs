@@ -19,7 +19,10 @@ pub(super) fn show(
 ) -> Option<u8> {
     let response = ui.interact(
         rect.intersect(clip),
-        crate::view::palette::preview_id(ui.ctx(), egui::Id::new(("piano-roll-keyboard", slot))),
+        crate::view::command_input::preview_id(
+            ui.ctx(),
+            egui::Id::new(("piano-roll-keyboard", slot)),
+        ),
         egui::Sense::click_and_drag(),
     );
     if ui.input(|i| i.pointer.primary_pressed()) && response.is_pointer_button_down_on() {
@@ -82,6 +85,7 @@ pub(super) fn finish(app: &mut App, ctx: &egui::Context, target: Option<(usize, 
                 .any(|e| matches!(e, egui::Event::WindowFocused(false)))
             && i.pointer.primary_down()
     });
+    let target = target.filter(|&(track, _)| app.can_edit_notes(track));
     let state = &mut app.piano_roll.keyboard;
     if !down {
         state.held = false;
@@ -113,4 +117,33 @@ pub(super) fn cancel(app: &mut App, ctx: &egui::Context) {
 #[cfg(test)]
 pub(super) fn sounding(app: &App) -> Option<(usize, u8)> {
     app.piano_roll.keyboard.sounding
+}
+
+#[cfg(test)]
+mod recording_tests {
+    use super::*;
+    use crate::view::commands::{self, Screen};
+
+    #[test]
+    fn starting_recording_detaches_the_old_mouse_key_before_opening_its_voice() {
+        let mut app = crate::view::tests::app(cat_smf_editor::edit::tracks::new_song());
+        let ctx = egui::Context::default();
+        app.piano_roll.keyboard.held = true;
+        app.piano_roll.keyboard.sounding = Some((0, 60));
+        app.audition
+            .play_key(0, &app.loaded.as_ref().unwrap().patches[0], 60, None);
+        let record = commands::definitions(&app, Screen::Song)
+            .into_iter()
+            .find(|c| c.id == "record-pattern")
+            .unwrap();
+        commands::run_direct(&mut app, &ctx, &record);
+        assert!(app.patterns.recording.is_open());
+        assert!(app.audition.key_active());
+        finish(&mut app, &ctx, None);
+        assert!(
+            app.audition.key_active(),
+            "the old pointer gesture must not stop the new recording voice"
+        );
+        assert!(sounding(&app).is_none());
+    }
 }
