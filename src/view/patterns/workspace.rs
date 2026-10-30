@@ -52,6 +52,7 @@ pub fn pane(ctx: &egui::Context) -> Option<Pane> {
 #[derive(Default)]
 pub struct State {
     timeline: timeline::State,
+    scene_timeline: timeline::State,
     pub scene: Option<u64>,
     pub scene_cell: Selection,
     pub song_cell: Selection,
@@ -164,6 +165,8 @@ pub fn focus(a: &mut App, ctx: &egui::Context, p: Pane) {
     ctx.request_repaint();
 }
 pub fn reset_windows(a: &mut App) {
+    a.patterns.workspace.timeline.suspend();
+    a.patterns.workspace.scene_timeline.suspend();
     for p in [Pane::Scene, Pane::Song] {
         let s = a.patterns.workspace.selection_mut(p);
         s.owned = false;
@@ -359,6 +362,12 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
                 && !a.patterns.confirming_creation()
                 && crate::view::analysis::companion_visible(a, ctx)
         };
+        if !visible {
+            match p {
+                Pane::Song => a.patterns.workspace.timeline.suspend(),
+                Pane::Scene => a.patterns.workspace.scene_timeline.suspend(),
+            }
+        }
         ctx.show_viewport_immediate(
             p.viewport(),
             super::windows::builder(a, p.title())

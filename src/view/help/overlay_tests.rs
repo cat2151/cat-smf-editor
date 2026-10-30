@@ -96,7 +96,7 @@ fn help_headings_and_arrangement_colors_identify_the_active_editor() {
                 for section in ["候補", "セル", "共通"] {
                     assert!(texts.iter().any(|t| t.galley.text() == section));
                 }
-                assert!(!texts.iter().any(|t| t.galley.text() == "PageUp / PageDown"));
+                assert!(texts.iter().any(|t| t.galley.text() == "PageUp / PageDown"));
                 ["j k", "h j k l", "Space", "N"]
             } else {
                 ["Enter", "← → / ↑ ↓", "Space", "Esc"]

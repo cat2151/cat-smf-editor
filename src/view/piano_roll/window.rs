@@ -10,6 +10,8 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         app.piano_roll.generation = app.generation;
     }
     if !app.piano_roll.open {
+        app.piano_roll.viewport.suspend();
+        app.piano_roll.repeat_drag = Default::default();
         keyboard::cancel(app, ctx);
         return;
     }
@@ -51,6 +53,9 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
     let range = app.playback.repeat;
     let state = &mut app.piano_roll;
+    state
+        .viewport
+        .begin(crate::view::timeline_controls::Screen::PianoRoll);
     state.viewport.panes = tracks.len();
     let reveal = std::mem::take(&mut state.reveal);
     let mut released = None;
@@ -72,10 +77,19 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                     && state.repeat_drag.is_none()
                     && state.edge_drag.is_none(),
             );
-            let (area, navigated) =
-                state
-                    .viewport
-                    .minimap(ui, area, &overview, minimap.layers(), playing);
+            let time_scale = overview.scale * state.viewport.zoom().x;
+            let timeline = state.viewport.binding(
+                &time_scale,
+                (overview.size.x / overview.scale).round() as u64,
+            );
+            let (area, navigated) = state.viewport.minimap_on(
+                ui,
+                area,
+                &overview,
+                minimap.layers(),
+                playing,
+                &timeline,
+            );
             following.minimap(&mut app.playback.follow, navigated);
             let area = area.with_min_x(area.left() + keyboard::WIDTH);
             ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
@@ -110,7 +124,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                             .max(0.0),
                         pending.unwrap_or(state.viewport.scroll).y,
                     ));
-                } else if reveal {
+                } else if reveal && !navigated {
                     scroll = scroll.scroll_offset(egui::vec2(layouts[0].start, 0.0));
                 } else if let Some(offset) = pending {
                     scroll = scroll.scroll_offset(offset);
@@ -139,8 +153,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         egui::vec2(width, repeat::HEIGHT),
                     );
                     state.repeat_rect = Some(row.intersect(screen));
-                    repeat_action =
-                        repeat::row(ui, row, &layouts[0].scale, range, &mut state.repeat_drag);
+                    repeat_action = timeline.repeat(ui, row, range, &mut state.repeat_drag);
                     for (slot, (&track, layout)) in tracks.iter().zip(&layouts).enumerate() {
                         let clip = egui::Rect::from_min_size(
                             egui::pos2(
@@ -240,7 +253,12 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         keyboard::cancel(app, ctx);
     }
     if let Some(tick) = app.piano_roll.viewport.seek.take() {
-        crate::play::transport::timeline::seek(app, app.track, tick);
+        crate::view::timeline_domain::click(
+            crate::view::timeline_controls::Screen::PianoRoll,
+            app,
+            app.track,
+            tick,
+        );
     }
     if trill_click.is_some() {
         audition = None;

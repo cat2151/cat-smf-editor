@@ -29,7 +29,7 @@ impl Viewport {
         {
             self.zoom_drag = Some(Drag {
                 edge,
-                start: if edge < 2 { origin.x } else { origin.y },
+                start: origin.y,
                 panel,
             });
         }
@@ -37,16 +37,12 @@ impl Viewport {
             return;
         };
         if let Some(pos) = response.interact_pointer_pos() {
-            let (origin, length, end) = if edge < 2 {
-                (drag.panel.left(), self.width, pos.x)
-            } else {
-                (drag.panel.top(), drag.panel.height(), pos.y)
-            };
+            let (origin, length, end) = (drag.panel.top(), drag.panel.height(), pos.y);
             let length = length.max(1.0);
             let a = (drag.start - origin).clamp(0.0, length);
             let b = (end - origin).clamp(0.0, length);
             let mut selected = zone;
-            let axis = usize::from(edge >= 2);
+            let axis = 1;
             selected.min[axis] = origin + a.min(b);
             selected.max[axis] = origin + a.max(b);
             ui.painter()
@@ -55,11 +51,7 @@ impl Viewport {
             if response.drag_stopped_by(primary) && (a - b).abs() > 2.0 {
                 let factor = length * timeline_zoom::FIT / (a - b).abs();
                 let center = (a + b) / 2.0;
-                if edge < 2 {
-                    self.zoom_time(self.zoom * factor, center);
-                } else {
-                    self.zoom_bpm(base, f64::from(factor), center / length);
-                }
+                self.zoom_bpm(base, f64::from(factor), center / length);
             }
         }
         if response.drag_stopped_by(primary) || !ui.input(|i| i.pointer.button_down(primary)) {

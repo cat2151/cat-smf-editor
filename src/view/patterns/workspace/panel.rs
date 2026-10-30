@@ -179,9 +179,12 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     let mut moved = None;
     let mut commented = None;
     let mut scrolling = scrolling::Matrix::new(ui, p, position, end, cell_width, gap);
-    if p == Pane::Song
-        && let Some(offset) = a.patterns.workspace.timeline.viewport.pending.take()
-    {
+    let timeline = if p == Pane::Song {
+        &mut a.patterns.workspace.timeline
+    } else {
+        &mut a.patterns.workspace.scene_timeline
+    };
+    if let Some(offset) = timeline.viewport.pending.take() {
         scrolling.offset = offset.x;
     }
     let mut repeat_action = None;
@@ -311,9 +314,12 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
             });
         });
     scrolling.finish(ui, p, &output);
-    if p == Pane::Song {
-        scrolling.finish_timeline(&output, &mut a.patterns.workspace.timeline);
-    }
+    let timeline = if p == Pane::Song {
+        &mut a.patterns.workspace.timeline
+    } else {
+        &mut a.patterns.workspace.scene_timeline
+    };
+    scrolling.finish_timeline(&output, timeline);
     if let Some(action) = repeat_action {
         super::timeline::apply(a, action);
     }

@@ -9,6 +9,13 @@ pub(super) fn show(
     browse_patch: &mut bool,
     replace_effect: &mut Option<usize>,
 ) -> Option<(usize, usize, u64)> {
+    if !app.note_mode
+        || app.track_view.split.is_some()
+        || app.piano_roll.open
+        || app.tempo_curve.open
+    {
+        staff::suspend(app);
+    }
     let mut map_click = None;
     // Raw rows are too wide for two columns.
     if let Some(tracks) = app.track_view.split.filter(|_| app.note_mode) {

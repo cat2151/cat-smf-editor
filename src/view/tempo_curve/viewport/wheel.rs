@@ -5,7 +5,6 @@ use super::*;
 pub(super) enum Mode {
     TimeScroll,
     BpmScroll,
-    TimeZoom,
     BpmZoom,
 }
 
@@ -66,9 +65,6 @@ impl Viewport {
                     low,
                     high: low + span,
                 });
-            }
-            Mode::TimeZoom => {
-                self.zoom_time(self.zoom * timeline_zoom::wheel(delta), self.width / 2.0);
             }
             Mode::BpmZoom => self.zoom_bpm(base, timeline_zoom::wheel_f64(f64::from(delta)), 0.5),
         }
@@ -134,8 +130,12 @@ mod tests {
             high: 200.0,
         };
         let mut view = Viewport {
-            scroll: 500.0,
-            width: 400.0,
+            horizontal: {
+                let mut horizontal = crate::view::timeline_controls::Horizontal::default();
+                horizontal.scroll = 500.0;
+                horizontal.width = 400.0;
+                horizontal
+            },
             ..Default::default()
         };
         view.apply_wheel(-40.0, base, Mode::TimeScroll);
@@ -145,7 +145,7 @@ mod tests {
 
         view.zoom_edge(0, true, base, 200.0);
         let zoom = view.zoom;
-        view.apply_wheel(40.0, base, Mode::TimeZoom);
+        view.zoom_time(view.zoom * timeline_zoom::wheel(40.0), view.width / 2.0);
         assert!(view.zoom > zoom);
         assert_eq!(view.axis, None);
         view.pending_scroll = None;

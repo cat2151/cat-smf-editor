@@ -3,6 +3,14 @@ use eframe::egui::{self, Pos2, Rect};
 // Fast native input may deliver an entire gesture before egui's next frame.
 // Its pointer state has already released the button and has no drag response.
 pub(super) fn completed(ui: &egui::Ui, rect: Rect) -> Option<(Pos2, Pos2)> {
+    completed_by(ui, rect, egui::PointerButton::Primary)
+}
+
+pub(super) fn completed_by(
+    ui: &egui::Ui,
+    rect: Rect,
+    button: egui::PointerButton,
+) -> Option<(Pos2, Pos2)> {
     let pair = ui.input(|i| {
         let mut start = None;
         let mut pair = None;
@@ -10,10 +18,11 @@ pub(super) fn completed(ui: &egui::Ui, rect: Rect) -> Option<(Pos2, Pos2)> {
         for event in &i.events {
             if let egui::Event::PointerButton {
                 pos,
-                button: egui::PointerButton::Primary,
+                button: event_button,
                 pressed,
                 ..
             } = event
+                && *event_button == button
             {
                 if *pressed {
                     presses += 1;
@@ -23,7 +32,7 @@ pub(super) fn completed(ui: &egui::Ui, rect: Rect) -> Option<(Pos2, Pos2)> {
                 }
             }
         }
-        (presses == 1 && !i.pointer.primary_down())
+        (presses == 1 && !i.pointer.button_down(button))
             .then_some(pair)
             .flatten()
     })?;

@@ -39,6 +39,8 @@ pub(crate) mod tempo_curve;
 pub(crate) mod tests;
 mod text_input;
 pub(crate) mod time_columns;
+mod timeline_controls;
+mod timeline_domain;
 mod timeline_drag;
 mod timeline_follow;
 mod timeline_minimap;

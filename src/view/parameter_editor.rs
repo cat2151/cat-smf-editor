@@ -24,7 +24,7 @@ mod navigation_tests;
 mod picker_navigation_tests;
 pub(crate) mod preview;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 mod variation;
 mod window;
 pub(crate) use variation::open as open_variation;

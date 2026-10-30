@@ -19,7 +19,7 @@ pub struct State {
     reveal: bool,
     /// Track and measure the open context menu acts on.
     menu: Option<(usize, u64)>,
-    viewport: crate::view::piano_roll::viewport::Viewport,
+    viewport: crate::view::timeline_controls::Viewport,
     repeat_drag: crate::view::timeline_repeat::State,
 }
 

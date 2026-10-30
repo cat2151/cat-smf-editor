@@ -213,7 +213,14 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
         app.playback.follow = false;
     }
     if let Some((tick, audition)) = seek {
-        if crate::play::transport::timeline::running(app) {
+        if navigated {
+            crate::view::timeline_domain::click(
+                crate::view::timeline_controls::Screen::Parameter,
+                app,
+                app.track,
+                tick,
+            );
+        } else if crate::play::transport::timeline::running(app) {
             crate::play::transport::timeline::seek(app, app.track, tick);
         } else {
             crate::cursor::moves::at_tick(app, tick);

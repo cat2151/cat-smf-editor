@@ -50,6 +50,8 @@ fn canvas(
         low: c.minimum,
         high: c.maximum,
     };
+    s.viewport
+        .begin(crate::view::timeline_controls::Screen::Parameter);
     s.viewport.limit_to_fit = s.variation_layer.is_some();
     s.viewport.bounds = Some(if s.viewport.limit_to_fit {
         let padding = (base.high - base.low) * 1.5;
@@ -70,11 +72,15 @@ fn canvas(
     let area = s
         .viewport
         .bars(ui, base, !s.drag && s.repeat_drag.is_none());
+    let time_scale = layout.scale * s.viewport.time_zoom();
+    let timeline = s
+        .viewport
+        .binding(&time_scale, (unzoomed_end / layout.scale).round() as u64);
     let (area, navigated) = s.viewport.minimap(
         ui,
         area,
         layout,
-        unzoomed_end,
+        &timeline,
         tempo_curve::viewport::minimap_tempos(&[], None, &[]),
         playing,
     );
@@ -114,10 +120,9 @@ fn canvas(
                 Sense::hover(),
             );
             let row = Rect::from_min_size(whole.min, egui::vec2(whole.width(), repeat::HEIGHT));
-            action = repeat::row(
+            action = timeline.repeat(
                 ui,
                 row.shrink2(egui::vec2(8.0, 0.0)),
-                &scale,
                 range,
                 &mut s.repeat_drag,
             );
@@ -377,8 +382,10 @@ fn canvas(
             rect.max.x = output.inner_rect.right() - 8.0;
             s.viewport.vertical_bar(ui, rect, base);
         }
-        s.viewport.scroll = output.state.offset.x;
-        s.viewport.width = (output.inner_rect.width() - 16.0).max(0.0);
+        s.viewport.horizontal.finish(
+            output.inner_rect.shrink2(egui::vec2(8.0, 0.0)),
+            output.state.offset.x,
+        );
         s.viewport.horizontal_pages(
             ui,
             Rect::from_min_max(

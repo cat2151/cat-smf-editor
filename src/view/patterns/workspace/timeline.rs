@@ -2,25 +2,29 @@
 use super::*;
 use crate::view::{timeline_minimap, timeline_repeat as repeat, timeline_zoom};
 mod axis;
-pub(super) use axis::Cells;
+pub(super) use axis::{Cells, SceneCells};
 
 #[derive(Default)]
 pub(super) struct State {
-    pub(super) viewport: crate::view::piano_roll::viewport::Viewport,
+    pub(super) viewport: crate::view::timeline_controls::Viewport,
     pub(super) repeat: repeat::State,
     pub(super) cells: Option<(f32, f32)>,
-    drag: Option<f32>,
+    pub(super) scope: Option<u64>,
     anchor: Option<u64>,
 }
 
 impl State {
+    pub(super) fn suspend(&mut self) {
+        self.viewport.suspend();
+        self.repeat = Default::default();
+    }
+
     pub(super) fn zoom(&self) -> f32 {
         self.viewport.zoom().x
     }
 }
 
 pub(super) fn show(a: &mut App, ui: &mut egui::Ui) {
-    use crate::view::timeline_repeat::TickAxis;
     let Some(l) = &a.loaded else { return };
     let Ok((occurrences, end)) = model::occurrences(&l.music, None) else {
         return;
@@ -35,6 +39,9 @@ pub(super) fn show(a: &mut App, ui: &mut egui::Ui) {
         .filter(|active| active.mode == crate::play::playback::Mode::Arrangement(None))
         .and_then(|active| crate::play::transport::tick_for(a, active.clock_track));
     let state = &mut a.patterns.workspace.timeline;
+    state
+        .viewport
+        .begin(crate::view::timeline_controls::Screen::Song);
     let height = timeline_minimap::height(ui.available_height());
     let (outer, _) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), timeline_zoom::BAR + height),
@@ -53,90 +60,63 @@ pub(super) fn show(a: &mut App, ui: &mut egui::Ui) {
             d.insert_temp(egui::Id::new((Pane::Song.title(), "minimap")), rect);
         });
         let scale = rect.width().max(1.0) / end.max(1) as f32;
-        let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 2.0, timeline_minimap::BACKGROUND);
-        let x = |tick: u64| rect.left() + tick as f32 * scale;
-        for &(pattern, start) in &occurrences {
-            let Some(def) = catalog.patterns.get(&pattern) else {
-                continue;
-            };
-            let Ok(length) = def.length() else { continue };
-            let part = egui::Rect::from_x_y_ranges(x(start)..=x(start + length), rect.y_range());
-            let color = super::super::cards::minimap_color(&l.keys);
-            super::super::cards::paint_notes(&painter, part, &l.music, def, None, &color);
-        }
         if let Some((stride, label)) = state.cells {
             let axis = Cells { map, stride, label };
-            let left = axis.tick(state.viewport.scroll.x);
-            let width = state.viewport.panel.map_or(rect.width(), |p| p.width());
-            let right = axis.tick(state.viewport.scroll.x + width);
-            let visible = egui::Rect::from_x_y_ranges(
-                x(left).clamp(rect.left(), rect.right())
-                    ..=x(right).clamp(rect.left(), rect.right()),
-                rect.y_range(),
-            );
-            painter.rect_filled(visible, 0.0, timeline_minimap::COLOR.gamma_multiply(0.12));
-            painter.rect_stroke(
-                visible,
-                0.0,
-                egui::Stroke::new(1.0_f32, timeline_minimap::COLOR),
-                egui::StrokeKind::Inside,
+            let binding = state.viewport.binding(&axis, end);
+            let action = state.viewport.minimap_state.show_on(
+                ui,
+                rect,
+                &binding,
+                playing,
+                |painter, rect| {
+                    let x = |tick: u64| rect.left() + tick as f32 * scale;
+                    for &(pattern, start) in &occurrences {
+                        let Some(def) = catalog.patterns.get(&pattern) else {
+                            continue;
+                        };
+                        let Ok(length) = def.length() else { continue };
+                        let part = egui::Rect::from_x_y_ranges(
+                            x(start)..=x(start + length),
+                            rect.y_range(),
+                        );
+                        let color = super::super::cards::minimap_color(&l.keys);
+                        super::super::cards::paint_notes(
+                            painter, part, &l.music, def, None, &color,
+                        );
+                    }
+                },
             );
             #[cfg(test)]
-            ui.ctx().data_mut(|d| {
-                d.insert_temp(
-                    egui::Id::new((Pane::Song.title(), "minimap-visible")),
-                    visible,
-                )
-            });
-            let response = ui.interact(
-                rect,
-                ui.id().with("song-notes"),
-                egui::Sense::click_and_drag(),
-            );
-            let local = |pos: egui::Pos2| ((pos.x - rect.left()) / scale).clamp(0.0, end as f32);
-            if response.drag_started_by(egui::PointerButton::Primary) {
-                state.drag = ui.input(|i| i.pointer.press_origin()).map(|pos| {
-                    let start = local(pos);
-                    if (left as f32..=right as f32).contains(&start) {
-                        axis.x(start.round() as u64) - state.viewport.scroll.x
-                    } else {
-                        width / 2.0
-                    }
+            if let Some(visible) = ui.ctx().data(|d| {
+                d.get_temp::<egui::Rect>(egui::Id::new((
+                    crate::view::timeline_controls::Screen::Song,
+                    "visible",
+                )))
+            }) {
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(
+                        egui::Id::new((Pane::Song.title(), "minimap-visible")),
+                        visible,
+                    )
                 });
             }
-            if let Some((grab, pos)) = state.drag.zip(response.interact_pointer_pos()) {
-                let scroll = (axis.x(local(pos).round() as u64) - grab)
-                    .clamp(0.0, (axis.x(end) - width).max(0.0));
-                state.viewport.pending = Some(egui::vec2(scroll, 0.0));
+            if let Some(action) = action {
+                state.viewport.pending = Some(egui::vec2(action.scroll, 0.0));
+                seek = action.seek;
                 navigated = true;
             }
-            if response.clicked()
-                && let Some(pos) = response.interact_pointer_pos()
-            {
-                let tick = local(pos).round() as u64;
-                seek = Some(tick);
-                navigated = true;
-                state.viewport.pending =
-                    Some(egui::vec2((axis.x(tick) - width / 2.0).max(0.0), 0.0));
-            }
-            if !ui.input(|i| i.pointer.primary_down()) {
-                state.drag = None;
-            }
-        }
-        if let Some(tick) = playing {
-            painter.vline(
-                x(tick),
-                rect.y_range(),
-                egui::Stroke::new(2.0_f32, repeat::PLAYHEAD),
-            );
         }
     });
     if navigated {
         a.playback.follow = false;
     }
     if let Some(tick) = seek {
-        crate::play::arrangement::start_from(a, None, tick);
+        crate::view::timeline_domain::click(
+            crate::view::timeline_controls::Screen::Song,
+            a,
+            0,
+            tick,
+        );
     }
 }
 

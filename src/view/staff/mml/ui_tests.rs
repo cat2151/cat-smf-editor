@@ -372,7 +372,7 @@ fn wide_pitch_ranges_yield_space_to_mml_and_remain_vertically_scrollable() {
 }
 
 #[test]
-fn vertical_zoom_bar_shrinks_with_the_staff_instead_of_imposing_a_minimum_height() {
+fn vertical_zoom_keeps_the_staff_area_and_the_zoom_bar() {
     fn vertical_bar(output: &egui::FullOutput) -> egui::Rect {
         let center = output
             .shapes
@@ -428,8 +428,8 @@ fn vertical_zoom_bar_shrinks_with_the_staff_instead_of_imposing_a_minimum_height
         output = render(&mut app, &ctx);
     }
     assert!(app.staff.viewport.zoom().y < 0.2);
-    assert!(app.staff.viewport.panel.unwrap().height() < original_staff * 0.7);
-    assert!(vertical_bar(&output).height() < original_bar * 0.7);
+    assert_eq!(app.staff.viewport.panel.unwrap().height(), original_staff);
+    assert_eq!(vertical_bar(&output).height(), original_bar);
     assert_eq!(mml(&output).len(), 2);
 }
 

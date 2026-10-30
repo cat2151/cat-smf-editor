@@ -1,5 +1,8 @@
-//! Timeline zoom numbers and page buttons shared by the piano roll and the tempo curve.
+//! Zoom constants and page buttons for timelines and their vertical-axis adapters.
 use eframe::egui;
+
+/// Color of the zoom bars' selection and of the minimap's frame after release.
+pub(crate) const ACTIVE: egui::Color32 = egui::Color32::from_rgb(0xe6, 0xdb, 0x74);
 
 /// Thickness of the zoom bars along the top and left edges.
 pub(crate) const BAR: f32 = 24.0;

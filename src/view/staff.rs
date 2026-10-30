@@ -28,13 +28,18 @@ const INK: Color32 = Color32::from_gray(24);
 
 #[derive(Default)]
 pub struct State {
-    viewport: piano_roll::viewport::Viewport,
+    viewport: crate::view::timeline_controls::Viewport,
     repeat_drag: repeat::State,
     light: bool,
     /// Cursor tick last scrolled into view while stopped.
     revealed: Option<u64>,
     mml_track: Option<usize>,
     mml_measure: Option<(u64, u64)>,
+}
+
+pub(super) fn suspend(app: &mut App) {
+    app.staff.viewport.suspend();
+    app.staff.repeat_drag = Default::default();
 }
 
 struct Palette {
@@ -128,6 +133,9 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     tempos.extend_timeline(loaded, track, &mut layout);
     let range = app.playback.repeat;
     let state = &mut app.staff;
+    state
+        .viewport
+        .begin(crate::view::timeline_controls::Screen::Staff);
     state.viewport.panes = 1;
     // Stopping also reveals the cursor, since playback scrolled away from it.
     let reveal = playing.is_none() && state.revealed != Some(cursor);
@@ -157,17 +165,22 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     let measure = mml::measure(loaded, track, reference);
     let beats = mml::beats(loaded, track, measure);
     let mml = mml::rows(&tracks, measure, ppqn, &beats);
-    let gap = GAP * state.viewport.zoom().y;
+    // The area keeps the unzoomed staff's height; vertical zoom scales the staff inside it.
     let steps = tracks.iter().flatten().map(|note| note.spelled.step);
-    let mut staff = Staff::from_steps(steps, gap);
-    let bar = ui.spacing().scroll.allocated_width();
+    let mut staff = Staff::from_steps(steps, GAP);
+    // The staff's scroll area does not float its scrollbars.
+    let bar = egui::style::ScrollStyle {
+        floating: false,
+        ..ui.spacing().scroll
+    }
+    .allocated_width();
     let required = |height| {
         crate::view::timeline_zoom::BAR
             + crate::view::timeline_minimap::height_with_content(
-                repeat::HEIGHT + COMMENTS + height + gap + bar,
+                repeat::HEIGHT + COMMENTS + height + GAP + bar,
             )
     };
-    let core = required(Staff::from_steps(std::iter::empty(), gap).height());
+    let core = required(Staff::from_steps(std::iter::empty(), GAP).height());
     let available = (ui.available_height() - ui.spacing().item_spacing.y).max(0.0);
     let mml_height = mml::height(&mml) + bar;
     let mml_min = mml::height(&mml[..mml.len().min(1)]) + bar;
@@ -211,17 +224,11 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
         &[0, track],
         |tick| spacing.x(tick),
     ));
-    let (area, navigated) = state.viewport.minimap_on(
-        ui,
-        area,
-        &overview,
-        tempos.layers(),
-        playing,
-        &spacing::Minimap {
-            spacing: &spacing,
-            scale: overview.scale,
-        },
-    );
+    let timeline = state.viewport.binding(&spacing, end);
+    let (area, navigated) =
+        state
+            .viewport
+            .minimap_on(ui, area, &overview, tempos.layers(), playing, &timeline);
     following.minimap(&mut app.playback.follow, navigated);
     let left_tick = spacing.tick(state.viewport.scroll.x.max(0.0));
     let sharps = loaded
@@ -259,7 +266,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 center(tick),
                 pending.unwrap_or(state.viewport.scroll).y,
             ));
-        } else if reveal {
+        } else if reveal && !navigated {
             scroll = scroll.scroll_offset(egui::vec2(center(cursor), state.viewport.scroll.y));
         } else if let Some(offset) = pending {
             scroll = scroll.scroll_offset(offset);
@@ -282,7 +289,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
                 egui::pos2(whole.left(), screen.top()),
                 egui::vec2(whole.width(), repeat::HEIGHT),
             );
-            repeat_action = repeat::row(ui, row, &spacing, range, &mut state.repeat_drag);
+            repeat_action = timeline.repeat(ui, row, range, &mut state.repeat_drag);
             if response.clicked()
                 && let Some(pos) = response.interact_pointer_pos()
             {
@@ -353,7 +360,12 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     state.mml_track = Some(track);
     state.mml_measure = measure;
     if let Some(tick) = app.staff.viewport.seek.take() {
-        crate::play::transport::timeline::seek(app, app.track, tick);
+        crate::view::timeline_domain::click(
+            crate::view::timeline_controls::Screen::Staff,
+            app,
+            app.track,
+            tick,
+        );
     }
     if let Some(tick) = clicked {
         crate::view::beat_audition::start(app, app.track, tick);

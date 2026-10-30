@@ -71,3 +71,89 @@ impl Data {
         }
     }
 }
+
+// Note rendering is deliberately outside the gesture and viewport controller.
+pub(crate) fn draw(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    layout: &crate::view::piano_roll::Layout,
+    end: f32,
+) {
+    for (note, color) in layout
+        .references
+        .iter()
+        .map(|n| (n, crate::view::piano_roll::REFERENCE_COLOR))
+        .chain(
+            layout
+                .notes
+                .iter()
+                .zip(&layout.colors)
+                .map(|((_, n), &c)| (n, c)),
+        )
+    {
+        let point = |p: egui::Pos2| {
+            rect.min
+                + egui::vec2(
+                    p.x / end.max(1.0) * rect.width(),
+                    p.y / layout.size.y.max(1.0) * rect.height(),
+                )
+        };
+        let mut note = egui::Rect::from_min_max(point(note.min), point(note.max));
+        note.max = note.max.max(note.min + egui::Vec2::splat(1.0));
+        painter.rect_filled(note, 0.0, color.gamma_multiply(0.65));
+    }
+}
+
+impl crate::view::timeline_controls::Viewport {
+    pub fn minimap_on(
+        &mut self,
+        ui: &mut egui::Ui,
+        area: egui::Rect,
+        layout: &Layout,
+        tempos: crate::view::timeline_minimap::tempos::Tempos<'_>,
+        playing: Option<u64>,
+        binding: &crate::view::timeline_controls::Binding<'_>,
+    ) -> (egui::Rect, bool) {
+        let (rect, area) = crate::view::timeline_minimap::area(area);
+        let navigation = self
+            .minimap_state
+            .show_on(ui, rect, binding, playing, |painter, rect| {
+                draw(painter, rect, layout, layout.size.x);
+                crate::view::timeline_minimap::tempos::draw(
+                    painter,
+                    rect,
+                    layout.size.x / layout.scale,
+                    tempos,
+                );
+            });
+        if let Some(navigation) = &navigation {
+            self.seek = navigation.seek.or(self.seek);
+            let mut offset = self.pending.unwrap_or(self.scroll);
+            offset.x = navigation.scroll;
+            self.pending = Some(offset);
+        }
+        (area, navigation.is_some())
+    }
+
+    pub fn scale_layout(&self, layout: &mut Layout) {
+        let zoom = self.zoom();
+        layout.size = layout.size * zoom;
+        layout.start *= zoom.x;
+        layout.scale *= zoom.x;
+        for (x, _) in &mut layout.beats {
+            *x *= zoom.x;
+        }
+        for y in &mut layout.staff {
+            *y *= zoom.y;
+        }
+        for note in layout
+            .notes
+            .iter_mut()
+            .map(|(_, note)| note)
+            .chain(&mut layout.references)
+        {
+            note.min = (note.min.to_vec2() * zoom).to_pos2();
+            note.max = (note.max.to_vec2() * zoom).to_pos2();
+        }
+    }
+}

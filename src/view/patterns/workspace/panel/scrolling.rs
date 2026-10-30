@@ -104,7 +104,10 @@ impl Matrix {
         #[cfg(test)]
         ui.ctx()
             .data_mut(|d| d.insert_temp(egui::Id::new((Pane::Song.title(), "repeat")), rect));
-        crate::view::timeline_repeat::row(ui, rect, &axis, range, &mut state.repeat)
+        state
+            .viewport
+            .binding(&axis, 0)
+            .repeat(ui, rect, range, &mut state.repeat)
     }
     pub fn finish_timeline<R>(
         &self,

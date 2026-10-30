@@ -43,7 +43,7 @@ fn notes(list: &[(u64, u64, u8)]) -> Track {
 }
 
 /// Conductor at 120 then 150 BPM, and two tracks of two notes each, at 480 PPQN.
-fn music() -> Music {
+pub(crate) fn music() -> Music {
     let mut music = Music {
         format: 1,
         division: 480,

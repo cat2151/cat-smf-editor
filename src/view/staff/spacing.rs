@@ -99,28 +99,19 @@ impl Spacing {
 }
 
 impl crate::view::timeline_repeat::TickAxis for Spacing {
+    fn x_at(&self, tick: f64) -> f32 {
+        Spacing::x_at(self, tick)
+    }
+    fn tick_at(&self, x: f32) -> f64 {
+        Spacing::tick_at(self, x)
+    }
+
     fn x(&self, tick: u64) -> f32 {
         Spacing::x(self, tick)
     }
 
     fn tick(&self, x: f32) -> u64 {
         Spacing::tick(self, x)
-    }
-}
-
-/// The engraved x and the minimap's linear timeline, which uses `scale` px per tick.
-pub(super) struct Minimap<'a> {
-    pub spacing: &'a Spacing,
-    pub scale: f32,
-}
-
-impl crate::view::timeline_minimap::Axis for Minimap<'_> {
-    fn to_minimap(&self, x: f32) -> f32 {
-        self.spacing.tick_at(x).max(0.0) as f32 * self.scale
-    }
-
-    fn to_content(&self, x: f32) -> f32 {
-        self.spacing.x_at(f64::from(x / self.scale))
     }
 }
 

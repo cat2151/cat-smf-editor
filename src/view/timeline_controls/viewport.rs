@@ -1,24 +1,32 @@
 //! Fixed zoom zones and independent time / pitch navigation.
-use super::*;
-use crate::view::timeline_zoom::{self, BAR};
-
-const ACTIVE: Color32 = Color32::from_rgb(0xe6, 0xdb, 0x74);
+use crate::view::timeline_zoom::{self, ACTIVE, BAR};
+use eframe::egui::{self, Color32};
 
 #[derive(Default)]
 pub(crate) struct Viewport {
     pub seek: Option<u64>,
+    screen: Option<crate::view::timeline_controls::Screen>,
+    horizontal_zoom: crate::view::timeline_controls::Zoom,
     zoom: egui::Vec2,
     pub pending: Option<egui::Vec2>,
     pub(crate) scroll: egui::Vec2,
     pub(crate) panel: Option<egui::Rect>,
-    pub(super) bars: [Option<egui::Rect>; 2],
+    pub(crate) bars: [Option<egui::Rect>; 2],
     drag: Option<(usize, f32, egui::Rect)>,
     pub(crate) minimap_state: crate::view::timeline_minimap::State,
-    pub(super) zoom_bars: [Option<egui::Rect>; 2],
+    pub(crate) zoom_bars: [Option<egui::Rect>; 2],
     pub(crate) panes: usize,
 }
 
 impl Viewport {
+    pub fn suspend(&mut self) {
+        self.minimap_state = Default::default();
+        self.horizontal_zoom = Default::default();
+        self.seek = None;
+        self.pending = None;
+        self.drag = None;
+    }
+
     fn axis_length(&self, axis: usize) -> f32 {
         self.panel.map_or(0.0, |p| {
             p.size()[axis]
@@ -30,61 +38,35 @@ impl Viewport {
         })
     }
 
-    pub fn minimap(
-        &mut self,
-        ui: &mut egui::Ui,
-        area: egui::Rect,
-        layout: &Layout,
-        tempos: crate::view::timeline_minimap::tempos::Tempos<'_>,
-        playing: Option<u64>,
-    ) -> (egui::Rect, bool) {
-        let axis = crate::view::timeline_minimap::Zoomed(self.zoom().x);
-        self.minimap_on(ui, area, layout, tempos, playing, &axis)
-    }
-
-    /// [`Self::minimap`] for content whose x maps to the timeline through `axis`.
-    pub fn minimap_on(
-        &mut self,
-        ui: &mut egui::Ui,
-        area: egui::Rect,
-        layout: &Layout,
-        tempos: crate::view::timeline_minimap::tempos::Tempos<'_>,
-        playing: Option<u64>,
-        axis: &impl crate::view::timeline_minimap::Axis,
-    ) -> (egui::Rect, bool) {
-        use crate::view::timeline_minimap::View;
-        let left = axis.to_minimap(self.scroll.x);
-        let (area, action) = self.minimap_state.show(
-            ui,
-            area,
-            layout,
-            View {
-                end: layout.size.x,
-                playing: playing.map(|tick| tick as f32 * layout.scale),
-                zoom: 1.0,
-                scroll: left,
-                width: axis.to_minimap(self.scroll.x + self.axis_length(0)) - left,
-            },
-            |painter, rect| {
-                crate::view::timeline_minimap::tempos::draw(
-                    painter,
-                    rect,
-                    layout.size.x / layout.scale,
-                    tempos,
-                )
-            },
-        );
-        if let Some(action) = action {
-            let navigation = action.navigate(layout.scale, self.axis_length(0), axis);
-            self.seek = navigation.seek.or(self.seek);
-            let mut offset = self.pending.unwrap_or(self.scroll);
-            offset.x = navigation.scroll;
-            self.pending = Some(offset);
+    pub fn begin(&mut self, screen: crate::view::timeline_controls::Screen) {
+        assert!(crate::view::timeline_controls::Screen::ALL.contains(&screen));
+        if self.screen != Some(screen) {
+            self.minimap_state = Default::default();
+            self.horizontal_zoom = Default::default();
+            self.seek = None;
+            self.pending = None;
         }
-        (area, action.is_some())
+        self.screen = Some(screen);
     }
 
-    pub(super) fn fit_time_range(&mut self, start: f32, end: f32, fraction: f32) {
+    pub fn binding<'a>(
+        &self,
+        axis: &'a dyn crate::view::timeline_repeat::TickAxis,
+        end: u64,
+    ) -> crate::view::timeline_controls::Binding<'a> {
+        crate::view::timeline_controls::Binding {
+            screen: self
+                .screen
+                .expect("register timeline before drawing controls"),
+            axis,
+            viewport: self.panel.unwrap_or(egui::Rect::NOTHING),
+            scroll: self.scroll.x,
+            end,
+            zoom_range: self.horizontal_zoom.range(),
+        }
+    }
+
+    pub(crate) fn fit_time_range(&mut self, start: f32, end: f32, fraction: f32) {
         let span = (end - start).abs();
         if span > 0.0 {
             self.zoom_axis(
@@ -115,28 +97,6 @@ impl Viewport {
         );
     }
 
-    pub fn scale_layout(&self, layout: &mut Layout) {
-        let zoom = self.zoom();
-        layout.size = layout.size * zoom;
-        layout.start *= zoom.x;
-        layout.scale *= zoom.x;
-        for (x, _) in &mut layout.beats {
-            *x *= zoom.x;
-        }
-        for y in &mut layout.staff {
-            *y *= zoom.y;
-        }
-        for note in layout
-            .notes
-            .iter_mut()
-            .map(|(_, note)| note)
-            .chain(&mut layout.references)
-        {
-            note.min = (note.min.to_vec2() * zoom).to_pos2();
-            note.max = (note.max.to_vec2() * zoom).to_pos2();
-        }
-    }
-
     fn zoom_axis(&mut self, axis: usize, factor: f32, anchor: f32) {
         if self.panel.is_none() {
             return;
@@ -148,13 +108,24 @@ impl Viewport {
             (zoom[axis] * factor).clamp(1.0 / 64.0, 64.0)
         };
         let mut offset = self.pending.unwrap_or(self.scroll);
-        offset[axis] = timeline_zoom::rescroll(
-            self.scroll[axis],
-            anchor,
-            zoom[axis],
-            next,
-            self.axis_length(axis),
-        );
+        offset[axis] = if axis == 0 {
+            crate::view::timeline_controls::zoom(
+                self.scroll.x,
+                self.axis_length(0),
+                zoom.x,
+                next,
+                anchor,
+            )
+            .1
+        } else {
+            timeline_zoom::rescroll(
+                self.scroll[axis],
+                anchor,
+                zoom[axis],
+                next,
+                self.axis_length(axis),
+            )
+        };
         zoom[axis] = next;
         self.zoom = zoom;
         self.pending = Some(offset);
@@ -213,6 +184,22 @@ impl Viewport {
                     Color32::from_gray(220)
                 },
             );
+            if axis == 0 {
+                let screen = self.screen.expect("register timeline before zoom input");
+                if let Some(panel) = self.panel
+                    && let Some((factor, anchor)) = self.horizontal_zoom.show(
+                        ui,
+                        zone,
+                        (screen, panel),
+                        enabled,
+                        ACTIVE,
+                        &response,
+                    )
+                {
+                    self.zoom_axis(0, factor, anchor);
+                }
+                continue;
+            }
             if !enabled {
                 self.drag = None;
                 continue;
@@ -225,9 +212,6 @@ impl Viewport {
             };
             let count = self.panes.max(1) as f32;
             let axis_panel = |pos: egui::Pos2| {
-                if axis == 0 {
-                    return panel;
-                }
                 let height = panel.height() / count;
                 let slot = ((pos.y - panel.top()) / height)
                     .floor()
@@ -331,7 +315,8 @@ impl Viewport {
         offset: egui::Vec2,
         horizontal: bool,
     ) {
-        self.scroll = offset;
+        let (panel, x) = crate::view::timeline_controls::finish(panel, offset.x);
+        self.scroll = egui::vec2(x, offset.y);
         self.panel = Some(panel);
         let bars = [
             egui::Rect::from_min_max(

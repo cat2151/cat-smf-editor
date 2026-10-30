@@ -26,7 +26,7 @@ pub struct State {
     reveal: bool,
     drag: Option<drag::Drag>,
     generation: u64,
-    viewport: viewport::Viewport,
+    viewport: crate::view::timeline_controls::Viewport,
     drag_pane: Option<usize>,
     range_drag: Option<(usize, f32)>,
     edge_drag: Option<navigation::Edge>,
@@ -433,7 +433,6 @@ pub(super) mod lyrics;
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub(crate) mod viewport;
 mod window;
 
 mod canvas;

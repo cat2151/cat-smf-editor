@@ -9,10 +9,39 @@ const RESTART_INTERVAL: f64 = 0.25;
 pub(crate) trait TickAxis {
     fn x(&self, tick: u64) -> f32;
     fn tick(&self, x: f32) -> u64;
+
+    /// Subtick precision for navigation; repeat events still use integer ticks.
+    fn x_at(&self, tick: f64) -> f32 {
+        let a = tick.floor().max(0.0) as u64;
+        let x = self.x(a);
+        x + (self.x(a.saturating_add(1)) - x) * tick.fract() as f32
+    }
+    fn tick_at(&self, x: f32) -> f64 {
+        let tick = self.tick(x);
+        let a = if self.x(tick) > x {
+            tick.saturating_sub(1)
+        } else {
+            tick
+        };
+        let left = self.x(a);
+        let span = self.x(a.saturating_add(1)) - left;
+        if span > 0.0 {
+            a as f64 + f64::from((x - left) / span)
+        } else {
+            tick as f64
+        }
+    }
 }
 
 /// Evenly spaced ticks, in pixels per tick.
 impl TickAxis for f32 {
+    fn x_at(&self, tick: f64) -> f32 {
+        (tick * f64::from(*self)) as f32
+    }
+    fn tick_at(&self, x: f32) -> f64 {
+        f64::from(x) / f64::from(*self)
+    }
+
     fn x(&self, tick: u64) -> f32 {
         tick as f32 * self
     }
@@ -103,20 +132,26 @@ pub(crate) fn apply(app: &mut crate::app::App, action: Action) {
 }
 
 /// Range feedback follows the pointer; forced audio restarts are rate limited.
-pub(crate) fn row(
+fn row(
     ui: &mut egui::Ui,
     rect: egui::Rect,
-    axis: &impl TickAxis,
+    axis: &(impl TickAxis + ?Sized),
     range: Option<(u64, u64)>,
     drag: &mut State,
 ) -> Option<Action> {
+    if !ui.is_enabled() {
+        *drag = Default::default();
+    }
     let response = ui.interact(
         rect,
         ui.id().with("timeline-repeat"),
         egui::Sense::click_and_drag(),
     );
     let tick = |pos: egui::Pos2| axis.tick(pos.x.clamp(rect.left(), rect.right()) - rect.left());
-    let completed = super::timeline_drag::completed(ui, rect);
+    let completed = ui
+        .is_enabled()
+        .then(|| super::timeline_drag::completed(ui, rect))
+        .flatten();
     if response.drag_started_by(egui::PointerButton::Primary) || completed.is_some() {
         drag.left = completed
             .map(|p| p.0)
@@ -193,5 +228,28 @@ pub(crate) fn row(
     right_action.or_else(|| response.clicked().then_some(Action::Clear))
 }
 
+impl super::timeline_controls::Binding<'_> {
+    pub fn repeat(
+        &self,
+        ui: &mut egui::Ui,
+        row: egui::Rect,
+        range: Option<(u64, u64)>,
+        state: &mut State,
+    ) -> Option<Action> {
+        assert!(self.screen.has_bars());
+        #[cfg(test)]
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new((self.screen, "repeat")),
+                row.intersect(ui.clip_rect()),
+            )
+        });
+        self::row(ui, row, self.axis, range, state)
+    }
+}
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod ownership_tests;

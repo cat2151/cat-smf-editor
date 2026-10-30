@@ -1,5 +1,4 @@
-//! Fixed song overview and navigation shared by the two timeline overlays.
-use super::piano_roll::Layout;
+//! Full-target overview gestures shared by registered horizontal timelines.
 use eframe::egui::{self, Color32};
 
 pub(crate) const COLOR: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
@@ -35,114 +34,39 @@ pub(crate) struct State {
     drag: Option<f32>,
 }
 
-pub(crate) struct View {
-    pub end: f32,
-    pub zoom: f32,
-    pub scroll: f32,
-    pub width: f32,
-    /// Playback position in the unzoomed layout coordinates.
-    pub playing: Option<f32>,
-}
-
-/// Maps the scrolled content's x to the minimap's unzoomed timeline x and back.
-pub(crate) trait Axis {
-    fn to_minimap(&self, x: f32) -> f32;
-    fn to_content(&self, x: f32) -> f32;
-}
-
-/// Content that is the timeline stretched by this zoom.
-pub(crate) struct Zoomed(pub f32);
-
-impl Axis for Zoomed {
-    fn to_minimap(&self, x: f32) -> f32 {
-        x / self.0
-    }
-
-    fn to_content(&self, x: f32) -> f32 {
-        x * self.0
-    }
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum Action {
-    Center(f32),
-    Scroll(f32),
-}
-
-/// What an [`Action`] asks the overlay to do, in its content coordinates.
+/// A navigation request in content coordinates, with a tick only for a click.
 pub(crate) struct Navigation {
     pub seek: Option<u64>,
     pub scroll: f32,
 }
 
-impl Action {
-    pub fn navigate(self, scale: f32, width: f32, axis: &impl Axis) -> Navigation {
-        match self {
-            Action::Center(center) => Navigation {
-                seek: Some((center / scale).round().max(0.0) as u64),
-                scroll: (axis.to_content(center) - width / 2.0).max(0.0),
-            },
-            Action::Scroll(left) => Navigation {
-                seek: None,
-                scroll: axis.to_content(left),
-            },
-        }
-    }
-}
-
 impl State {
-    pub fn show(
+    /// Background rendering belongs to the adapter. All gestures use the same
+    /// actual content binding, including nonuniform spacing and fixed-label gaps.
+    pub fn show_on(
         &mut self,
         ui: &mut egui::Ui,
-        area: egui::Rect,
-        layout: &Layout,
-        view: View,
-        overlay: impl FnOnce(&egui::Painter, egui::Rect),
-    ) -> (egui::Rect, Option<Action>) {
-        let height = height(area.height());
-        let rect = egui::Rect::from_min_max(
-            area.min + egui::vec2(INSET, 2.0),
-            egui::pos2(
-                (area.right() - 16.0 - INSET).max(area.left() + INSET + 1.0),
-                area.top() + height,
-            ),
-        );
+        rect: egui::Rect,
+        binding: &super::timeline_controls::Binding<'_>,
+        playing: Option<u64>,
+        background: impl FnOnce(&egui::Painter, egui::Rect),
+    ) -> Option<Navigation> {
         self.rect = Some(rect);
-        let end = view.end.max(1.0);
+        if !rect.is_positive() {
+            self.drag = None;
+            return None;
+        }
         let painter = ui.painter().with_clip_rect(ui.clip_rect().intersect(rect));
         painter.rect_filled(rect, 2.0, BACKGROUND);
-        for (note, color) in layout
-            .references
-            .iter()
-            .map(|note| (note, super::piano_roll::REFERENCE_COLOR))
-            .chain(
-                layout
-                    .notes
-                    .iter()
-                    .zip(&layout.colors)
-                    .map(|((_, note), &color)| (note, color)),
-            )
-        {
-            let point = |p: egui::Pos2| {
-                rect.min
-                    + egui::vec2(
-                        p.x / end * rect.width(),
-                        p.y / layout.size.y * rect.height(),
-                    )
-            };
-            let mut note = egui::Rect::from_min_max(point(note.min), point(note.max));
-            note.max.x = note.max.x.max(note.min.x + 1.0);
-            note.max.y = note.max.y.max(note.min.y + 1.0);
-            painter.rect_filled(note, 0.0, color.gamma_multiply(NOTE_TINT));
-        }
-        overlay(&painter, rect);
-        let x = |offset: f32| {
-            (rect.left() + offset / view.zoom / end * rect.width()).clamp(rect.left(), rect.right())
+        background(&painter, rect);
+        let end = binding.end.max(1) as f32;
+        let x = |tick: f64| rect.left() + (tick as f32 / end).clamp(0.0, 1.0) * rect.width();
+        let (left, right) = binding.visible();
+        let visible = if binding.end == 0 {
+            rect
+        } else {
+            egui::Rect::from_x_y_ranges(x(left)..=x(right), rect.y_range())
         };
-        let visible = egui::Rect::from_x_y_ranges(
-            x(view.scroll)..=x(view.scroll + view.width),
-            rect.y_range(),
-        );
         painter.rect_filled(visible, 0.0, COLOR.gamma_multiply(0.12));
         painter.rect_stroke(
             visible,
@@ -150,49 +74,150 @@ impl State {
             egui::Stroke::new(1.0_f32, COLOR),
             egui::StrokeKind::Inside,
         );
+        let forecast = binding
+            .forecast()
+            .filter(|_| binding.end > 0)
+            .map(|(left, right)| egui::Rect::from_x_y_ranges(x(left)..=x(right), rect.y_range()));
+        if let Some(forecast) = forecast {
+            painter.rect_stroke(
+                forecast,
+                0.0,
+                egui::Stroke::new(1.5_f32, super::timeline_zoom::ACTIVE),
+                egui::StrokeKind::Inside,
+            );
+        }
+        #[cfg(test)]
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(egui::Id::new((binding.screen, "minimap")), rect);
+            d.insert_temp(egui::Id::new((binding.screen, "visible")), visible);
+            d.insert_temp(egui::Id::new((binding.screen, "forecast")), forecast);
+        });
+        #[cfg(test)]
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new((binding.screen, "snapshot")),
+                super::timeline_controls::Snapshot {
+                    scroll: binding.scroll,
+                    width: binding.width(),
+                    end_x: binding.axis.x(binding.end),
+                },
+            )
+        });
         let response = ui.interact(
             rect,
-            ui.id().with("timeline-minimap"),
+            ui.id().with((binding.screen, "timeline-minimap")),
             egui::Sense::click_and_drag(),
         );
-        let local = |p: egui::Pos2| ((p.x - rect.left()) / rect.width()).clamp(0.0, 1.0) * end;
-        let span = view.width / view.zoom;
-        if response.drag_started_by(egui::PointerButton::Primary) {
-            self.drag = ui.input(|i| i.pointer.press_origin()).map(|pos| {
-                let start = local(pos);
-                let left = view.scroll / view.zoom;
-                if (left..=left + span).contains(&start) {
-                    start - left
-                } else {
-                    span / 2.0
-                }
+        if !ui.is_enabled() {
+            self.drag = None;
+            return None;
+        }
+        let tick = |pos: egui::Pos2| {
+            (f64::from(((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0) * end))
+                .min(binding.end as f64)
+        };
+        let completed = super::timeline_drag::completed(ui, rect);
+        if !ui.input(|i| i.pointer.primary_down())
+            && !response.drag_stopped_by(egui::PointerButton::Primary)
+            && completed.is_none()
+        {
+            self.drag = None;
+        }
+        if response.drag_started_by(egui::PointerButton::Primary) || completed.is_some() {
+            self.drag = completed
+                .map(|p| p.0)
+                .or_else(|| ui.input(|i| i.pointer.press_origin()))
+                .map(|pos| {
+                    if visible.contains(pos) {
+                        binding.axis.x_at(tick(pos)) - binding.scroll
+                    } else {
+                        binding.width() / 2.0
+                    }
+                });
+        }
+        let mut navigation = self
+            .drag
+            .zip(
+                completed
+                    .map(|p| p.1)
+                    .or_else(|| response.interact_pointer_pos()),
+            )
+            .map(|(grab, pos)| Navigation {
+                seek: None,
+                scroll: binding.clamp(binding.axis.x_at(tick(pos)) - grab),
+            });
+        if self.drag.is_none()
+            && response.clicked()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let tick = tick(pos);
+            navigation = Some(Navigation {
+                seek: Some(tick.round() as u64),
+                scroll: binding.center(tick),
             });
         }
-        let mut action = None;
-        if let Some((grab, pos)) = self.drag.zip(response.interact_pointer_pos()) {
-            let scroll = (local(pos) - grab).clamp(0.0, (end - span).max(0.0));
-            action = Some(Action::Scroll(scroll));
-        }
-        if let Some(position) = view.playing {
+        if let Some(tick) = playing {
             painter.vline(
-                (rect.left() + position / end * rect.width()).clamp(rect.left(), rect.right()),
+                x(tick as f64),
                 rect.y_range(),
                 egui::Stroke::new(2.0_f32, super::timeline_repeat::PLAYHEAD),
             );
         }
-        if response.clicked()
-            && let Some(pos) = response.interact_pointer_pos()
-        {
-            action = Some(Action::Center(local(pos)));
-        }
         if !ui.input(|i| i.pointer.primary_down()) {
             self.drag = None;
         }
-        (
-            egui::Rect::from_min_max(egui::pos2(area.left(), rect.bottom() + AFTER), area.max),
-            action,
-        )
+        navigation
     }
 }
 
+/// The standard fixed overview placement; adapters can provide a grid-specific rect.
+pub(crate) fn area(area: egui::Rect) -> (egui::Rect, egui::Rect) {
+    let rect = egui::Rect::from_min_max(
+        area.min + egui::vec2(INSET, 2.0),
+        egui::pos2(
+            (area.right() - 16.0 - INSET).max(area.left() + INSET + 1.0),
+            area.top() + height(area.height()),
+        ),
+    );
+    (
+        rect,
+        egui::Rect::from_min_max(egui::pos2(area.left(), rect.bottom() + AFTER), area.max),
+    )
+}
+
 pub(crate) mod tempos;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn resizing_a_drag_to_zero_width_releases_it_without_invalid_navigation() {
+        let ctx = egui::Context::default();
+        let mut state = State {
+            drag: Some(20.0),
+            ..Default::default()
+        };
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let binding = super::super::timeline_controls::Binding {
+                    screen: super::super::timeline_controls::Screen::PianoRoll,
+                    axis: &1.0_f32,
+                    viewport: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 100.0)),
+                    scroll: 0.0,
+                    end: 100,
+                    zoom_range: None,
+                };
+                assert!(state
+                    .show_on(
+                        ui,
+                        egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(0.0, 20.0)),
+                        &binding,
+                        None,
+                        |_, _| panic!("empty overview has no background")
+                    )
+                    .is_none());
+            });
+        });
+        assert!(state.drag.is_none());
+    }
+}

@@ -26,6 +26,8 @@ enum Action {
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     if !app.track_overview.open {
+        app.track_overview.viewport.suspend();
+        app.track_overview.repeat_drag = Default::default();
         return;
     }
     let Some(loaded) = &app.loaded else {
@@ -55,6 +57,9 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     }
     let range = app.playback.repeat;
     let state = &mut app.track_overview;
+    state
+        .viewport
+        .begin(crate::view::timeline_controls::Screen::TrackOverview);
     state.viewport.panes = 1;
     let reveal = std::mem::take(&mut state.reveal);
     let mut action = None;
@@ -67,10 +72,19 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                 ui.colored_label(Color32::LIGHT_RED, error);
             }
             let area = state.viewport.bars(ui, state.repeat_drag.is_none());
-            let (area, navigated) =
-                state
-                    .viewport
-                    .minimap(ui, area, &overview, minimap.layers(), playing);
+            let time_scale = overview.scale * state.viewport.zoom().x;
+            let timeline = state.viewport.binding(
+                &time_scale,
+                (overview.size.x / overview.scale).round() as u64,
+            );
+            let (area, navigated) = state.viewport.minimap_on(
+                ui,
+                area,
+                &overview,
+                minimap.layers(),
+                playing,
+                &timeline,
+            );
             following.minimap(&mut app.playback.follow, navigated);
             let names = area.with_max_x(area.left() + NAMES_WIDTH);
             let area = area.with_min_x(names.right());
@@ -100,7 +114,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         (tick as f32 * scale - shown.x / 2.0).max(0.0),
                         current.y,
                     ));
-                } else if reveal {
+                } else if reveal && !navigated {
                     let (track, start) = state.cell;
                     let end = next_measure(loaded, track, start);
                     let cell = egui::Rect::from_x_y_ranges(
@@ -128,7 +142,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         egui::pos2(whole.left(), screen.top()),
                         egui::vec2(width, repeat::HEIGHT),
                     );
-                    repeat_action = repeat::row(ui, row, &scale, range, &mut state.repeat_drag);
+                    repeat_action = timeline.repeat(ui, row, range, &mut state.repeat_drag);
                     let panes = screen.with_min_y(screen.top() + repeat::HEIGHT);
                     for (slot, layout) in layouts.iter().enumerate() {
                         let rect = egui::Rect::from_min_size(
@@ -239,7 +253,12 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         app.track_overview.open = false;
     }
     if let Some(tick) = app.track_overview.viewport.seek.take() {
-        crate::play::transport::timeline::seek(app, app.track, tick);
+        crate::view::timeline_domain::click(
+            crate::view::timeline_controls::Screen::TrackOverview,
+            app,
+            app.track,
+            tick,
+        );
     }
     if let Some(action) = repeat_action {
         repeat::apply(app, action);

@@ -33,7 +33,7 @@ fn owner_view_edits_the_parameter_lane_without_replacing_the_score_track() {
     a.parameter_editor.close();
     assert_eq!(a.track, 0);
 }
-pub(super) fn app() -> App {
+pub(crate) fn app() -> App {
     let mut a = crate::view::tests::app(tracks::new_song());
     a.create_parameter_track(
         0,

@@ -13,51 +13,57 @@ mod wheel;
 mod zoom_drag;
 use wheel::Mode;
 
+#[derive(Default)]
 pub(crate) struct Viewport {
+    pub horizontal: crate::view::timeline_controls::Horizontal,
     /// Native scalar limits; absent for the existing tempo viewport.
     pub bounds: Option<Axis>,
     /// Variation axes stay centered and cannot enlarge beyond the initial fit.
     pub limit_to_fit: bool,
     pub axis: Option<Axis>,
-    zoom: f32,
-    pub scroll: f32,
-    pub width: f32,
-    pub pending_scroll: Option<f32>,
     pub notes_drag: Option<f32>,
     pub tempo_rect: Option<egui::Rect>,
     edge_drag: Option<edges::Drag>,
     zoom_drag: Option<zoom_drag::Drag>,
-    minimap_state: crate::view::timeline_minimap::State,
-    pub minimap_rect: Option<egui::Rect>,
-    pub seek: Option<u64>,
-    horizontal_bar: Option<egui::Rect>,
     vertical_scrollbar: Option<egui::Rect>,
 }
 
-impl Default for Viewport {
-    fn default() -> Self {
-        Self {
-            bounds: None,
-            limit_to_fit: false,
-            axis: None,
-            zoom: 1.0,
-            scroll: 0.0,
-            width: 0.0,
-            pending_scroll: None,
-            notes_drag: None,
-            tempo_rect: None,
-            edge_drag: None,
-            zoom_drag: None,
-            minimap_state: Default::default(),
-            minimap_rect: None,
-            seek: None,
-            horizontal_bar: None,
-            vertical_scrollbar: None,
-        }
+impl std::ops::Deref for Viewport {
+    type Target = crate::view::timeline_controls::Horizontal;
+    fn deref(&self) -> &Self::Target {
+        &self.horizontal
+    }
+}
+impl std::ops::DerefMut for Viewport {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.horizontal
     }
 }
 
 impl Viewport {
+    pub fn suspend(&mut self) {
+        self.horizontal.suspend();
+        self.zoom_drag = None;
+        self.notes_drag = None;
+        self.edge_drag = None;
+    }
+    pub fn begin(&mut self, screen: crate::view::timeline_controls::Screen) {
+        self.horizontal.begin(screen);
+    }
+    pub fn binding<'a>(
+        &self,
+        axis: &'a dyn crate::view::timeline_repeat::TickAxis,
+        end: u64,
+    ) -> crate::view::timeline_controls::Binding<'a> {
+        self.horizontal.binding(axis, end)
+    }
+    pub fn zoom_time(&mut self, zoom: f32, anchor: f32) {
+        self.horizontal.zoom_time(zoom, anchor);
+    }
+    pub fn time_zoom(&self) -> f32 {
+        self.horizontal.time_zoom()
+    }
+
     pub fn scale_layout(&self, layout: &mut Layout) {
         layout.scale *= self.zoom;
         layout.start *= self.zoom;
@@ -107,27 +113,35 @@ impl Viewport {
                     Color32::from_gray(220)
                 },
             );
+            if edge == 0 {
+                let screen = self.screen.expect("register timeline before zoom input");
+                if let Some(panel) = self.tempo_rect
+                    && let Some((factor, anchor)) = self.horizontal_zoom.show(
+                        ui,
+                        rect,
+                        (screen, panel),
+                        enabled,
+                        TEMPO,
+                        &response,
+                    )
+                {
+                    self.zoom_time(self.zoom * factor, anchor);
+                }
+                continue;
+            }
             self.drag_zoom(ui, rect, base, enabled, edge, &response);
             if enabled
                 && response.hovered()
                 && ui.input(|i| i.smooth_scroll_delta != egui::Vec2::ZERO)
             {
-                mode = if edge == 0 {
-                    Mode::TimeZoom
-                } else {
-                    Mode::BpmZoom
-                };
+                mode = Mode::BpmZoom;
             }
             if enabled
                 && (response.clicked() || response.secondary_clicked())
                 && let Some(pos) = response.interact_pointer_pos()
             {
-                let anchor = if edge < 2 {
-                    (pos.x - inner.left() - HIT).clamp(0.0, self.width)
-                } else {
-                    let panel = self.tempo_rect.unwrap_or(inner);
-                    ((pos.y - panel.top()) / panel.height()).clamp(0.0, 1.0)
-                };
+                let panel = self.tempo_rect.unwrap_or(inner);
+                let anchor = ((pos.y - panel.top()) / panel.height()).clamp(0.0, 1.0);
                 self.zoom_edge(edge, response.clicked(), base, anchor);
             }
         }
@@ -171,22 +185,6 @@ impl Viewport {
             low,
             high: (low + span).min(*range.end()),
         });
-    }
-
-    pub(crate) fn zoom_time(&mut self, zoom: f32, anchor: f32) {
-        let next = timeline_zoom::clamp(zoom);
-        self.pending_scroll = Some(timeline_zoom::rescroll(
-            self.scroll,
-            anchor,
-            self.zoom,
-            next,
-            self.width,
-        ));
-        self.zoom = next;
-    }
-
-    pub(crate) fn time_zoom(&self) -> f32 {
-        self.zoom
     }
 
     fn bounds(&self) -> std::ops::RangeInclusive<f64> {
