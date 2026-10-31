@@ -138,10 +138,12 @@ mod recording_tests {
             .unwrap();
         commands::run_direct(&mut app, &ctx, &record);
         assert!(app.patterns.recording.is_open());
-        assert!(app.audition.key_active());
+        // Opening goes straight to the pads and their recording voice.
+        assert!(!app.patterns.recording.preparing());
+        assert!(app.audition.live_active());
         finish(&mut app, &ctx, None);
         assert!(
-            app.audition.key_active(),
+            app.audition.live_active(),
             "the old pointer gesture must not stop the new recording voice"
         );
         assert!(sounding(&app).is_none());

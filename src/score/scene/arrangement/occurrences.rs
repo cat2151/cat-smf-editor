@@ -1,4 +1,4 @@
-//! Performed pattern occurrences. Commented-out placements still count toward the length.
+//! Performed pattern occurrences. The Song ends with its last placement, commented out or not.
 use super::*;
 /// A body occurrence and its global tick offset; no saved note copies.
 pub fn occurrences(m: &Music, scene: Option<u64>) -> Result<(Vec<(u64, u64)>, u64), String> {
@@ -15,7 +15,11 @@ pub fn occurrences_in(
     let time = MusicalTime::new(m);
     let map = time.map(0).ok_or("Missing song meter")?;
     let mut out = vec![];
-    let mut end = c.song_length;
+    let mut end = if c.song.is_empty() {
+        c.song_length
+    } else {
+        song_end(map, c)?
+    };
     if let Some(id) = scene {
         let s = c
             .scenes
@@ -29,13 +33,6 @@ pub fn occurrences_in(
     } else {
         for p in &c.song {
             let start = same_measure::bounds(map, p.measure.into())?.0;
-            end = end.max(
-                same_measure::bounds(
-                    map,
-                    u128::from(p.measure) + u128::from(length(c, p.part)?) - 1,
-                )?
-                .1,
-            );
             if p.disabled {
                 continue;
             }

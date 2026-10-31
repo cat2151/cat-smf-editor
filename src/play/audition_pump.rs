@@ -18,26 +18,27 @@ impl Audition {
             voice.poll_diagnostics();
         }
         self.expire_cached(std::time::Instant::now());
-        if let Some(voice) = &mut self.key_voice {
+        for voice in self.side_voices() {
             voice.poll_voices();
         }
     }
 
     fn pump_with(&mut self, native_work: bool) {
-        let key_voice = &mut self.key_voice;
+        let side = [&mut self.key_voice, &mut self.live_voice];
+        let pump_side = |side: [&mut Option<Box<Self>>; 2]| {
+            for voice in side.into_iter().flatten() {
+                voice.pump_with(native_work);
+            }
+        };
         if let Some(voice) = &mut self.voice {
-            if let Err(error) = voice.pump(native_work, || {
-                if let Some(voice) = key_voice {
-                    voice.pump_with(native_work);
-                }
-            }) {
+            if let Err(error) = voice.pump(native_work, || pump_side(side)) {
                 self.voice = None;
                 self.progress = None;
                 self.error = Some(format!("Audio automation refresh: {error}"));
                 return;
             }
-        } else if let Some(voice) = key_voice {
-            voice.pump_with(native_work);
+        } else {
+            pump_side(side);
         }
         if let Some(voice) = &mut self.voice
             && voice.failed.load(Ordering::Relaxed)

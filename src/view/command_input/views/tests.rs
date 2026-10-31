@@ -227,7 +227,8 @@ fn help_escape_and_double_score_keep_the_score_context() {
     press(&mut a, &c, Key::F1);
     assert!(a.help_open);
     press(&mut a, &c, Key::F1);
-    assert!(!a.help_open);
+    // Pressing again keeps help open and lifts it above the other windows.
+    assert!(a.help_open && a.help.raise);
     assert!(crate::view::modal::is_open(&a));
     select(&mut a, Target::View(View::DoubleScore));
     press(&mut a, &c, Key::Enter);

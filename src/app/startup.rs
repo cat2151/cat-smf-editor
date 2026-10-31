@@ -220,6 +220,7 @@ impl App {
         {
             self.restore_position(&session);
         }
+        crate::view::patterns::matrix::reveal(self);
         let persist_span = cat_smf_editor::startup_trace::span("history_status_write");
         if let Some(path) = current {
             self.config.navigation.last_mid = Some(path);

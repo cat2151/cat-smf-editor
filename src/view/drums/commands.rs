@@ -155,7 +155,7 @@ pub(super) fn apply(app: &mut App, op: Op) {
             Ok(())
         }
         Op::Help => {
-            app.help_open = !app.help_open;
+            crate::view::help::summon(app);
             Ok(())
         }
         Op::Move(y, x) => {

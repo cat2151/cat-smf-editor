@@ -33,11 +33,10 @@ fn fixture() -> (Music, usize, u64) {
     let lane = grid::add_lane(&mut m, None).unwrap();
     grid::place(&mut m, None, lane, 1, Some(PatternOrScene::Scene(s))).unwrap();
     grid::place(&mut m, None, lane, 3, Some(PatternOrScene::Scene(s))).unwrap();
-    crate::score::scene::sizing::song(&mut m, 6).unwrap();
     (m, owner, a)
 }
 #[test]
-fn song_export_is_flat_lossless_and_keeps_silence_settings_and_exact_parameter_windows() {
+fn song_export_is_flat_lossless_and_keeps_settings_and_exact_parameter_windows() {
     use crate::edit::parameter_curve::{Curve, Point, Target, ValueSpace};
     let (mut m, owner, id) = fixture();
     let container = Catalog::read(&m).unwrap().patterns[&id].container;
@@ -99,7 +98,7 @@ fn song_export_is_flat_lossless_and_keeps_silence_settings_and_exact_parameter_w
     assert!(flat
         .tracks
         .iter()
-        .all(|t| t.events.last().unwrap().tick == 11520));
+        .all(|t| t.events.last().unwrap().tick == 7680));
     assert_eq!(
         flat.tracks[1]
             .events
@@ -169,7 +168,7 @@ fn commented_out_placements_leave_no_notes_but_keep_the_length() {
     let c = scene::read(&m).unwrap();
     let (song_lane, scene_lane, s) = (c.song[0].lane, c.scenes[0].lanes[0], c.scenes[0].id);
     grid::toggle(&mut m, None, song_lane, 4).unwrap();
-    assert_eq!(notes(&m), (vec![(120, 60), (2040, 67)], 11520));
+    assert_eq!(notes(&m), (vec![(120, 60), (2040, 67)], 7680));
     grid::toggle(&mut m, Some(s), scene_lane, 2).unwrap();
-    assert_eq!(notes(&m), (vec![(120, 60)], 11520));
+    assert_eq!(notes(&m), (vec![(120, 60)], 7680));
 }

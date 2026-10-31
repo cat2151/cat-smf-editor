@@ -274,7 +274,8 @@ fn focused_search_and_help_keep_navigation_and_ime_keys_isolated() {
     frame(&mut app, press(egui::Key::F1));
     assert!(app.help_open);
     frame(&mut app, press(egui::Key::F1));
-    assert!(!app.help_open);
+    // Pressing again keeps help open and lifts it above the other windows.
+    assert!(app.help_open && app.help.raise);
     frame(&mut app, vec![egui::Event::Text("onshoku".into())]);
     assert_eq!(
         app.parameter_editor.picker.as_ref().unwrap().query,

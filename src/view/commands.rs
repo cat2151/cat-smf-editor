@@ -308,9 +308,6 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
         super::text_input::keep_ime(ctx);
     }
     let events = ctx.input(|i| i.events.clone());
-    let question_repeat = events
-        .iter()
-        .any(|e| matches!(e, egui::Event::Key { repeat: true, .. }));
     for event in events {
         let defs = contextual_definitions(app, ctx, screen);
         let command = match event {
@@ -326,9 +323,6 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
                         .iter()
                         .any(|(k, m)| *k == key && matches(modifiers, *m))
             }),
-            egui::Event::Text(ref t) if t == "?" && !question_repeat => {
-                defs.into_iter().find(|c| c.id == "help")
-            }
             _ => None,
         };
         if let Some(command) = command {
@@ -368,6 +362,18 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
 #[cfg(test)]
 pub(crate) fn run_direct(a: &mut App, c: &egui::Context, command: &Command) {
     (command.run)(a, c);
+}
+
+/// Runs the help command of the screen owning `ctx`; `false` when it has none.
+pub(crate) fn help(app: &mut App, ctx: &egui::Context) -> bool {
+    let Some(c) = definitions(app, owner(app, ctx))
+        .into_iter()
+        .find(|c| c.id == "help")
+    else {
+        return false;
+    };
+    (c.run)(app, ctx);
+    true
 }
 
 /// Stop runs before transport advance; other commands run after it.

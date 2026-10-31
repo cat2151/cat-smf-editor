@@ -123,6 +123,7 @@ impl App {
             && let Some(session) = session
         {
             self.restore_position(&session);
+            crate::view::patterns::matrix::reveal(self);
         }
     }
 

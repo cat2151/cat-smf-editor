@@ -159,12 +159,14 @@ fn question_opens_contextual_help_and_escape_closes_only_help() {
     at(&mut app, &ctx, 12.0, vec![]);
     assert_eq!(crate::view::help::test_target(&app), "Tempo");
     super::super::super::piano_roll::tests::press(&mut app, &ctx, egui::Key::F1);
-    assert!(!app.help_open);
+    // Pressing again keeps help open and lifts it above the other windows.
+    assert!(app.help_open && app.help.raise);
     assert!(app.tempo_curve.open);
+    app.help_open = false;
     at(&mut app, &ctx, 13.0, vec![egui::Event::Text("?".into())]);
     assert!(app.help_open);
     at(&mut app, &ctx, 14.0, vec![egui::Event::Text("?".into())]);
-    assert!(!app.help_open);
+    assert!(app.help_open);
     assert!(app.tempo_curve.open);
 }
 

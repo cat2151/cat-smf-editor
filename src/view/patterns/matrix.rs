@@ -13,6 +13,18 @@ pub fn enter(a: &mut App, ctx: &eframe::egui::Context) -> Result<(), String> {
     }
 }
 
+/// A song with patterns opens on its Song window.
+pub fn reveal(a: &mut App) {
+    let has_patterns = a.loaded.as_ref().is_some_and(|l| {
+        cat_smf_editor::score::pattern::Catalog::read(&l.music)
+            .is_ok_and(|c| !c.patterns.is_empty())
+    });
+    if has_patterns {
+        // `open` fails only without a loaded song.
+        let _ = open(a);
+    }
+}
+
 // Raw window opening is internal to patterns; other UI must use `enter`.
 pub(super) fn open(a: &mut App) -> Result<(), String> {
     if a.loaded.is_none() {

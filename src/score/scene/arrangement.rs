@@ -110,21 +110,26 @@ fn check_pattern(m: &Music, c: &Catalog, id: u64, measure: u64) -> Result<(), St
     }
     Ok(())
 }
-/// Keep the declared Song long enough for every placement before validating.
-pub(crate) fn commit(m: &mut Music, c: &Collection) -> Result<(), String> {
-    let mut next = m.clone();
-    let mut c = c.clone();
-    let time = MusicalTime::new(m);
-    let map = time.map(0).ok_or("Missing Song meter")?;
+/// The tick where the last Song placement ends, commented-out ones included; 0 without any.
+pub fn song_end(map: &crate::score::musical_time::MeterMap, c: &Collection) -> Result<u64, String> {
+    let mut end = 0;
     for p in &c.song {
-        c.song_length = c.song_length.max(
+        end = end.max(
             same_measure::bounds(
                 map,
-                u128::from(p.measure) + u128::from(length(&c, p.part)?) - 1,
+                u128::from(p.measure) + u128::from(length(c, p.part)?) - 1,
             )?
             .1,
         );
     }
+    Ok(end)
+}
+/// The declared Song ends where its last placement ends.
+pub(crate) fn commit(m: &mut Music, c: &Collection) -> Result<(), String> {
+    let mut next = m.clone();
+    let mut c = c.clone();
+    let time = MusicalTime::new(m);
+    c.song_length = song_end(time.map(0).ok_or("Missing Song meter")?, &c)?;
     write(&mut next, &c)?;
     Catalog::read(&next)?;
     *m = next;

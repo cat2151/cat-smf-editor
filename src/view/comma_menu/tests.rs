@@ -201,7 +201,8 @@ fn f1_opens_help_and_escape_closes_without_changing_the_view() {
     press(&mut app, &ctx, egui::Key::F1);
     assert!(app.help_open);
     press(&mut app, &ctx, egui::Key::F1);
-    assert!(!app.help_open);
+    // Pressing again keeps help open and lifts it above the other windows.
+    assert!(app.help_open && app.help.raise);
     assert!(app.piano_roll.open);
 }
 

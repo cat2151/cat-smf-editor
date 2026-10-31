@@ -25,6 +25,7 @@ fn question(app: &mut App, ctx: &egui::Context) {
             ..Default::default()
         },
         |ctx| {
+            crate::view::help::input(app, ctx);
             crate::view::commands::route(app, ctx);
             show(app, ctx);
         },

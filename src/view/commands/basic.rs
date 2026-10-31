@@ -237,7 +237,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         Screen::Main | Screen::Timeline | Screen::Mixer => {
             if s != Screen::Mixer {
                 add("help", "ヘルプ", &[Key::F1], |a, _| {
-                    a.help_open = !a.help_open
+                    crate::view::help::summon(a)
                 });
             }
             if a.loaded.is_none() {

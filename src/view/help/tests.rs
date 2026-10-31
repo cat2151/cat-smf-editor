@@ -108,7 +108,8 @@ fn help_shortcuts_and_warnings_tooltip_preserve_view_state() {
     render(&mut app, vec![egui::Event::Text("?".into())]);
     assert!(app.help_open, "help is available before loading a file");
     render(&mut app, vec![egui::Event::Text("?".into())]);
-    assert!(!app.help_open);
+    // Pressing again keeps help open and lifts it above the other windows.
+    assert!(app.help_open);
 }
 
 #[test]

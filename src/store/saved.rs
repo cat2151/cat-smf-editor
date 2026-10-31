@@ -232,6 +232,10 @@ impl crate::app::App {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             return;
         }
+        if !crate::view::recording::close_for_exit(self) {
+            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+            return;
+        }
         if !self.config.navigation.close_approved {
             self.request_close(ctx);
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);

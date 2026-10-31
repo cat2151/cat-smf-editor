@@ -183,7 +183,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         |a, _| a.track_overview.open = false,
     );
     add("help", "ヘルプ", &[Key::F1], false, |a, _| {
-        a.help_open = !a.help_open
+        crate::view::help::summon(a)
     });
     add(
         "overview-measure-next",

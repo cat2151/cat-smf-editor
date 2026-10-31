@@ -78,6 +78,7 @@ impl Command {
             "arrangement-play-song" => "play scene order song",
             "save" | "save-confirm" => "save",
             "recent" => "recent files history",
+            "record-pattern" => "recording 録音",
             "undo" | "edit-undo" => "undo",
             "stop" | "play-stop" => "stop",
             "play-close" => "close cancel",

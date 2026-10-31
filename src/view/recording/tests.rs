@@ -1,12 +1,18 @@
 use super::*;
 use cat_smf_editor::{edit, score::pattern::body};
 use std::time::Duration;
+mod loop_takes;
+mod mouse;
 mod native;
+mod play;
+mod preparing;
+mod transport;
 
+/// A key whose physical position matches its US letter, as on the measured Japanese keyboard.
 fn key(key: Key, pressed: bool, modifiers: Modifiers) -> egui::Event {
     egui::Event::Key {
         key,
-        physical_key: None,
+        physical_key: Some(key),
         pressed,
         repeat: false,
         modifiers,
@@ -25,15 +31,34 @@ fn frame(a: &mut App, c: &egui::Context, events: Vec<egui::Event>, focused: bool
         },
         |ctx| {
             let input = modal::begin(a, ctx);
-            commands::route(a, ctx);
+            // The embedded keyboard shares this input; native windows each get their own.
+            if !a.patterns.recording.is_open() {
+                commands::route(a, ctx);
+            }
             egui::CentralPanel::default().show(ctx, |_| {});
             modal::end(a, ctx, input);
+            show(a, ctx);
         },
     );
 }
+/// Shift+R, leaving the window playing.
 fn open_key(a: &mut App, ctx: &egui::Context) {
     frame(a, ctx, vec![key(Key::R, true, Modifiers::SHIFT)], true);
     assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
+    assert!(!a.patterns.recording.preparing(), "{:?}", session(a).error);
+}
+/// Keys pressed in the settings window.
+fn settings_keys(a: &mut App, keys: &[(Key, Modifiers)]) {
+    let mut state = std::mem::take(&mut a.patterns.recording);
+    let events: Vec<_> = keys.iter().map(|&(k, m)| key(k, true, m)).collect();
+    companions::settings_keys(a, state.session.as_mut().unwrap(), &events);
+    a.patterns.recording = state;
+}
+fn session(a: &App) -> &Session {
+    a.patterns.recording.session.as_ref().unwrap()
+}
+fn recorder(a: &App) -> &Recorder {
+    session(a).recorder.as_ref().unwrap()
 }
 fn app() -> App {
     crate::view::tests::app(edit::tracks::new_song())
@@ -49,13 +74,14 @@ fn keyboard_recording_commit_round_trip_and_single_undo() {
         &mut a,
         &ctx,
         vec![
+            key(Key::Space, true, Modifiers::NONE),
+            key(Key::Z, true, Modifiers::NONE),
             key(Key::C, true, Modifiers::NONE),
-            key(Key::E, true, Modifiers::NONE),
         ],
         true,
     );
-    let s = a.patterns.recording.session.as_ref().unwrap();
-    assert!(s.take.held(60) && s.take.held(64));
+    assert!(recorder(&a).sounding(60) && recorder(&a).sounding(64));
+    let s = session(&a);
     let queued = s
         .queue
         .as_ref()
@@ -77,13 +103,13 @@ fn keyboard_recording_commit_round_trip_and_single_undo() {
         &mut a,
         &ctx,
         vec![
-            key(Key::C, false, Modifiers::SHIFT),
+            key(Key::Z, false, Modifiers::SHIFT),
             key(Key::Escape, true, Modifiers::NONE),
         ],
         true,
     );
     assert!(!a.patterns.recording.is_open());
-    assert!(!a.audition.key_active());
+    assert!(!a.audition.live_active());
     let music = &a.loaded.as_ref().unwrap().music;
     let c = Catalog::read(music).unwrap();
     assert_eq!(c.patterns.len(), 1);
@@ -141,24 +167,25 @@ fn empty_cancel_repeat_and_focus_loss_do_not_stick_notes_or_leak_keys() {
         true,
     );
     assert!(!a.patterns.recording.is_open());
+    assert!(!a.audition.live_active());
     assert!(!a.mml_input.open && !a.undo.available());
     open_key(&mut a, &ctx);
-    frame(&mut a, &ctx, vec![key(Key::C, true, Modifiers::NONE)], true);
-    let mut repeat = key(Key::C, true, Modifiers::NONE);
+    frame(&mut a, &ctx, vec![key(Key::Z, true, Modifiers::NONE)], true);
+    let mut repeat = key(Key::Z, true, Modifiers::NONE);
     if let egui::Event::Key { repeat: r, .. } = &mut repeat {
         *r = true;
     }
     frame(
         &mut a,
         &ctx,
-        vec![repeat, key(Key::J, true, Modifiers::NONE)],
+        vec![repeat, key(Key::J, true, Modifiers::SHIFT)],
         true,
     );
-    let s = a.patterns.recording.session.as_ref().unwrap();
+    let s = session(&a);
     assert_eq!(s.queue.as_ref().unwrap().lock().unwrap().len(), 1);
     frame(&mut a, &ctx, vec![egui::Event::WindowFocused(false)], false);
-    let s = a.patterns.recording.session.as_ref().unwrap();
-    assert!(!s.take.held(60));
+    let s = session(&a);
+    assert!(!recorder(&a).sounding(60));
     assert_eq!(
         s.queue.as_ref().unwrap().lock().unwrap().back(),
         Some(&0x2080_3c00)
@@ -186,16 +213,10 @@ fn ambiguous_container_choice_is_keyboard_operable_and_cancel_is_atomic() {
     a.track = 0;
     let ctx = egui::Context::default();
     open_key(&mut a, &ctx);
-    assert!(!a.patterns.recording.session.as_ref().unwrap().ready);
-    frame(
-        &mut a,
-        &ctx,
-        vec![
-            key(Key::ArrowDown, true, Modifiers::NONE),
-            key(Key::Enter, true, Modifiers::NONE),
-        ],
-        true,
-    );
+    assert!(session(&a).settings_open);
+    assert_eq!(session(&a).item, setup::Item::Sound);
+    frame(&mut a, &ctx, vec![key(Key::P, true, Modifiers::CTRL)], true);
+    assert!(!a.patterns.recording.preparing());
     assert_eq!(
         a.patterns.recording.session.as_ref().unwrap().sounds
             [a.patterns.recording.session.as_ref().unwrap().selected]
@@ -206,7 +227,8 @@ fn ambiguous_container_choice_is_keyboard_operable_and_cancel_is_atomic() {
         &mut a,
         &ctx,
         vec![
-            key(Key::C, true, Modifiers::NONE),
+            key(Key::Space, true, Modifiers::NONE),
+            key(Key::Z, true, Modifiers::NONE),
             key(Key::Escape, true, Modifiers::NONE),
         ],
         true,
@@ -235,50 +257,4 @@ fn entry_binding_is_shared_and_text_editors_keep_their_input() {
             .iter()
             .any(|c| c.id == "record-pattern"));
     }
-}
-
-#[test]
-fn full_event_list_recording_owns_input_and_can_discard_a_take() {
-    let mut a = app();
-    let c = egui::Context::default();
-    let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
-    crate::view::palette::tests::frame(&mut a, &c, vec![key(Key::R, true, Modifiers::SHIFT)]);
-    assert!(a.patterns.recording.is_open());
-    crate::view::palette::tests::frame(&mut a, &c, vec![]);
-    assert!(a.patterns.recording.is_open());
-    crate::view::palette::tests::frame(&mut a, &c, vec![key(Key::C, true, Modifiers::NONE)]);
-    assert!(a
-        .patterns
-        .recording
-        .session
-        .as_ref()
-        .unwrap()
-        .take
-        .started());
-    crate::view::palette::tests::frame(
-        &mut a,
-        &c,
-        vec![
-            key(Key::Escape, true, Modifiers::SHIFT),
-            key(Key::I, true, Modifiers::NONE),
-        ],
-    );
-    assert!(!a.patterns.recording.is_open());
-    assert!(!a.audition.key_active() && !a.mml_input.open);
-    assert!(!a.undo.available());
-    assert_eq!(
-        cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap(),
-        before
-    );
-    crate::view::palette::tests::frame(&mut a, &c, vec![key(Key::R, true, Modifiers::SHIFT)]);
-    crate::view::palette::tests::frame(&mut a, &c, vec![key(Key::C, true, Modifiers::NONE)]);
-    crate::view::palette::tests::frame(&mut a, &c, vec![key(Key::Escape, true, Modifiers::NONE)]);
-    assert!(!a.patterns.recording.is_open());
-    assert_eq!(
-        Catalog::read(&a.loaded.as_ref().unwrap().music)
-            .unwrap()
-            .patterns
-            .len(),
-        1
-    );
 }

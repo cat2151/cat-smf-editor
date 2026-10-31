@@ -5,26 +5,39 @@ const MOVE: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
 const PLAY: Color32 = Color32::from_rgb(0xa6, 0xe2, 0x2e);
 const SOUND: Color32 = Color32::from_rgb(0xf9, 0x26, 0x72);
 
-pub(super) fn recording(ui: &mut egui::Ui, choosing: bool) {
+/// Pads show their keys and the settings window its shortcuts, so only the rest is listed.
+pub(super) fn recording(ui: &mut egui::Ui) {
     ui.heading("Virtual MIDI keyboard");
     egui::Grid::new("recording-help").show(ui, |ui| {
-        if choosing {
-            super::key_groups(
-                ui,
-                &[
-                    (MOVE, &[("↑ ↓", "Container選択")]),
-                    (EDIT, &[("Esc", "取消")]),
-                ],
-            );
-            return;
-        }
         super::key_groups(
             ui,
             &[
-                (PLAY, &[("c d e f g a b", "C D E F G A B")]),
+                (PLAY, &[("Space", "録音開始"), ("↑ ↓", "Octave")]),
                 (
                     EDIT,
-                    &[("Esc", "録音終了・pattern確定"), ("Shift+Esc", "録音破棄")],
+                    &[
+                        ("Ctrl+,", "設定"),
+                        ("Ctrl+.", "Piano"),
+                        ("Esc", "pattern確定・閉じる"),
+                        ("Shift+Esc", "録音破棄"),
+                    ],
+                ),
+            ],
+        );
+    });
+    ui.heading("設定");
+    egui::Grid::new("recording-settings-help").show(ui, |ui| {
+        super::key_groups(
+            ui,
+            &[
+                (MOVE, &[("↑ ↓", "項目選択")]),
+                (
+                    EDIT,
+                    &[
+                        ("← →", "値変更"),
+                        ("Shift+← →", "大きく変更"),
+                        ("Esc", "閉じる"),
+                    ],
                 ),
             ],
         );

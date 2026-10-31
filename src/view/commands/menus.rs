@@ -83,6 +83,13 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 &[],
                 super::super::patterns::windows::reset,
             ));
+            out.push(Command::plain(
+                s,
+                "keyboard-windows-reset",
+                "Reset virtual MIDI keyboard windows position",
+                &[],
+                super::super::recording::reset_windows,
+            ));
             if a.loaded.is_some() {
                 out.push(Command::plain(
                     s,

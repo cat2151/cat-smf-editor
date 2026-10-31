@@ -6,10 +6,14 @@ pub(crate) type Queue = Arc<Mutex<VecDeque<u32>>>;
 
 impl Audition {
     /// Open the instrument before the first key establishes the recording clock.
-    pub fn start_live(&mut self, track: usize, patch: &Patch) -> Option<Queue> {
-        self.stop_key();
+    pub fn start_live(
+        &mut self,
+        track: usize,
+        patch: &Patch,
+    ) -> Option<(Queue, Arc<super::click::Click>)> {
+        self.stop_live();
         let disabled = self.disabled;
-        let voice = self.key_voice.get_or_insert_with(|| {
+        let voice = self.live_voice.get_or_insert_with(|| {
             Box::new(Self {
                 disabled,
                 ..Self::default()
@@ -22,15 +26,36 @@ impl Audition {
             return None;
         }
         let queue = Queue::default();
+        let click = Arc::new(super::click::Click::new());
         voice.send(vec![(
             track,
             Part {
                 live: Some(queue.clone()),
+                click: Some(click.clone()),
                 ..Part::default()
             },
         )]);
-        self.key_active = true;
-        Some(queue)
+        #[cfg(test)]
+        {
+            self.live_active = true;
+        }
+        Some((queue, click))
+    }
+
+    #[cfg(test)]
+    pub fn live_active(&self) -> bool {
+        self.live_active
+    }
+
+    /// The voice keeps its plugins for the next keyboard.
+    pub fn stop_live(&mut self) {
+        #[cfg(test)]
+        {
+            self.live_active = false;
+        }
+        if let Some(voice) = &mut self.live_voice {
+            voice.stop();
+        }
     }
 }
 

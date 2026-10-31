@@ -5,6 +5,19 @@ pub(crate) fn viewport() -> egui::ViewportId {
     egui::ViewportId::from_hash_of("context-help")
 }
 
+/// Opens help above every other window, leaving the keyboard focus where it is.
+pub(crate) fn summon(a: &mut App) {
+    a.help_open = true;
+    a.help.raise = true;
+}
+
+/// Puts the current native window above every normal window without activating it.
+pub(crate) fn lift(ctx: &egui::Context) {
+    for level in [egui::WindowLevel::AlwaysOnTop, egui::WindowLevel::Normal] {
+        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
+    }
+}
+
 pub(crate) fn restore(a: &mut App) {
     a.help_open = a.config.help_open;
     a.help.geometry = a.config.help_window;
@@ -58,6 +71,9 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         }
         if class == egui::ViewportClass::Embedded {
             return; // This UI requires a native backend; never replace the editor with help.
+        }
+        if std::mem::take(&mut a.help.raise) {
+            lift(ctx);
         }
         ctx.input(|i| {
             if let (Some(outer), Some(inner)) = (i.viewport().outer_rect, i.viewport().inner_rect) {

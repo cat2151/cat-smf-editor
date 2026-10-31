@@ -104,6 +104,16 @@ fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
     );
     key(&mut a, &c, song, Key::A, Modifiers::CTRL);
     text(&mut a, &c, song, "nihongo 日本語");
+    // A text field takes `?` as text.
+    text(&mut a, &c, song, "?");
+    assert!(!a.help_open);
+    assert!(a
+        .patterns
+        .workspace
+        .selection(Pane::Song)
+        .query
+        .ends_with('?'));
+    key(&mut a, &c, song, Key::Backspace, Modifiers::NONE);
     key(&mut a, &c, song, Key::E, Modifiers::NONE);
     key(&mut a, &c, song, Key::ArrowLeft, Modifiers::NONE);
     assert_eq!(bytes(&a), before);
@@ -123,7 +133,8 @@ fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
     frame(&mut a, &c, song, vec![egui::Event::Text("?".into())]);
     assert!(a.help_open);
     key(&mut a, &c, song, Key::F1, Modifiers::NONE);
-    assert!(!a.help_open);
+    // Pressing again keeps help open and lifts it above the other windows.
+    assert!(a.help_open);
     button(&mut a, &c, Pane::Scene, "create");
     let mut raw = egui::RawInput {
         events: vec![egui::Event::Key {

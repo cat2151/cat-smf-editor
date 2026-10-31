@@ -100,8 +100,8 @@ pub(crate) fn view_rows(ui: &mut egui::Ui) {
     );
 }
 
-pub(crate) use context::{input, observe, State};
-pub(crate) use window::{restore, show, viewport};
+pub(crate) use context::{input, observe, observe_recording, State};
+pub(crate) use window::{lift, restore, show, summon, viewport};
 mod context;
 mod overlays;
 mod pages;
@@ -114,7 +114,7 @@ pub(super) fn body(app: &mut App, ui: &mut egui::Ui) {
     match app.help.target {
         Target::Mml => overlays::mml(ui),
         Target::Palette => overlays::palette(ui),
-        Target::Recording => overlays::recording(ui, app.patterns.recording.choosing()),
+        Target::Recording => overlays::recording(ui),
         Target::Mixer => overlays::mixer(ui),
         Target::Singer => overlays::singer(ui),
         Target::Recent => overlays::recent(ui),

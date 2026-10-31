@@ -9,7 +9,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             "parameter-help",
             "ヘルプ",
             &[Key::F1],
-            |a, _| a.help_open = !a.help_open,
+            |a, _| crate::view::help::summon(a),
         ));
         out.push(Command::plain(
             screen,

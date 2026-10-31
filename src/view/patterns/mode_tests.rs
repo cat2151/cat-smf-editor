@@ -94,3 +94,27 @@ fn delayed_source_note_edit_cannot_commit_after_switching_to_song_track() {
     assert!(!a.undo.available());
     assert!(a.note_edit.is_none());
 }
+
+#[test]
+fn opening_a_song_with_patterns_shows_its_song_window() {
+    let root = std::env::temp_dir().join(format!("smf-open-song-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let (patterned, _, _) = edit_tests::fixture();
+    let patterned = patterned.loaded.unwrap().music;
+    let mut plain = patterned.clone();
+    plain.tracks.truncate(1);
+    for (name, music, song) in [("patterned", &patterned, true), ("plain", &plain, false)] {
+        let path = root.join(format!("{name}.mid"));
+        std::fs::write(&path, cat_smf_editor::smf_io::encode(music).unwrap()).unwrap();
+        let mut a = crate::view::tests::app(plain.clone());
+        a.loaded = None;
+        a.note_mode = false;
+        a.saved = crate::store::saved::Document::new(Some(root.join("config")));
+        a.config = crate::store::config::Store::open(root.join("status.json"));
+        a.open_mid(path);
+        assert!(a.load_error.is_none(), "{name}: {:?}", a.load_error);
+        assert_eq!(mode::workspace_open(&a), song, "{name}");
+        assert_eq!(a.patterns.workspace.song_cell.focus, song, "{name}");
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}

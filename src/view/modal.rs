@@ -31,7 +31,7 @@ pub(crate) fn resume(ctx: &egui::Context, input: egui::InputState) {
     }
 }
 pub(crate) fn is_open(a: &App) -> bool {
-    a.palette.is_open() || a.command_input.is_open() || a.patterns.recording.is_open()
+    a.palette.is_open() || a.command_input.is_open()
 }
 pub(crate) fn mark_owned(ctx: &egui::Context) {
     let token = frame_token(ctx);
@@ -50,18 +50,14 @@ pub(crate) fn begin(a: &mut App, ctx: &egui::Context) -> Option<egui::InputState
         clear(ctx);
         return None;
     }
-    if a.patterns.recording.is_open() {
-        super::recording::begin(a, ctx)
-    } else if a.command_input.is_open() {
+    if a.command_input.is_open() {
         super::command_input::begin(a, ctx)
     } else {
         super::palette::begin(a, ctx)
     }
 }
 pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputState>) {
-    if a.patterns.recording.is_open() {
-        super::recording::end(a, ctx, input);
-    } else if a.command_input.is_open() {
+    if a.command_input.is_open() {
         super::command_input::end(a, ctx, input);
     } else {
         super::palette::end(a, ctx, input);

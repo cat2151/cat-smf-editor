@@ -242,7 +242,7 @@ fn extending_a_body_repacks_storage_without_changing_neighbor_events_or_musical_
 }
 
 #[test]
-fn resizing_a_song_pattern_extends_all_placements_and_preserves_trailing_silence() {
+fn resizing_a_song_pattern_extends_all_placements_and_the_song_ends_with_the_last() {
     use crate::score::scene;
     let (mut music, _, id) = fixture();
     place_in_song(&mut music, &[(1, id), (5, id)]);
@@ -252,10 +252,10 @@ fn resizing_a_song_pattern_extends_all_placements_and_preserves_trailing_silence
     let collection = scene::read(&music).unwrap();
     assert_eq!(collection.song_length, 6 * 1920);
     assert_eq!(collection.song, placements);
-    scene::sizing::song(&mut music, 8).unwrap();
     operations::resize(&mut music, id, body::parse_meters("4/4", 480).unwrap()).unwrap();
+    assert_eq!(scene::read(&music).unwrap().song_length, 5 * 1920);
     operations::resize(&mut music, id, meters).unwrap();
-    assert_eq!(scene::read(&music).unwrap().song_length, 8 * 1920);
+    assert_eq!(scene::read(&music).unwrap().song_length, 6 * 1920);
 }
 
 #[test]

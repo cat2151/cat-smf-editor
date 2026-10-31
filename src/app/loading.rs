@@ -149,6 +149,7 @@ impl App {
         self.loaded = Some(loaded);
         if !self.startup.pending {
             crate::view::patterns::track_selected(self);
+            crate::view::patterns::matrix::reveal(self);
         }
         drop(display_span);
         let persist_span = (!self.startup.pending)

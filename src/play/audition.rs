@@ -19,6 +19,8 @@ mod parameters;
 
 pub(super) struct Part {
     live: Option<live::Queue>,
+    /// Metronome mixed after the master chain, so track gains never mute it.
+    click: Option<Arc<click::Click>>,
     timeline: Option<Arc<super::event_timeline::Timeline>>,
     automation: Option<Arc<super::automation::RuntimePlan>>,
     velocities: [u8; 128],
@@ -31,6 +33,7 @@ impl Default for Part {
     fn default() -> Self {
         Self {
             live: None,
+            click: None,
             timeline: None,
             automation: None,
             velocities: [0; 128],
@@ -53,6 +56,11 @@ pub struct Audition {
     /// Independent plugin instances for live keys, leaving sequence playback intact.
     key_voice: Option<Box<Audition>>,
     key_active: bool,
+    /// The Virtual MIDI keyboard's instrument; stopping playback or a key leaves it sounding.
+    live_voice: Option<Box<Audition>>,
+    /// Whether the keyboard's instrument was opened and not stopped since.
+    #[cfg(test)]
+    live_active: bool,
     voice: Option<Voice>,
     error: Option<String>,
     disabled: bool,
@@ -95,7 +103,7 @@ impl Audition {
     }
     /// Applies a bypass-only change of `track` to the running voices.
     pub fn set_effect_bypass(&mut self, track: usize, patch: &Patch) {
-        if let Some(voice) = &mut self.key_voice {
+        for voice in self.side_voices() {
             voice.set_effect_bypass(track, patch);
         }
         let Some(voice) = &mut self.voice else {
@@ -127,12 +135,23 @@ impl Audition {
         self.error
             .as_deref()
             .or_else(|| self.key_voice.as_ref().and_then(|v| v.error()))
+            .or_else(|| self.live_voice.as_ref().and_then(|v| v.error()))
     }
     pub fn sequence_failed(&self) -> bool {
         self.error.is_some()
     }
     pub fn needs_pump(&self) -> bool {
-        self.voice.is_some() || self.key_voice.as_ref().is_some_and(|v| v.needs_pump())
+        self.voice.is_some()
+            || [&self.key_voice, &self.live_voice]
+                .into_iter()
+                .flatten()
+                .any(|v| v.needs_pump())
+    }
+    /// The independent voices beside the sequence voice.
+    fn side_voices(&mut self) -> impl Iterator<Item = &mut Box<Audition>> {
+        [&mut self.key_voice, &mut self.live_voice]
+            .into_iter()
+            .flatten()
     }
     pub fn reset(&mut self) {
         self.key_voice = None;
@@ -311,7 +330,7 @@ impl Audition {
     }
     pub fn set_auto_gain_enabled(&mut self, enabled: bool) {
         self.auto_gain_disabled = !enabled;
-        if let Some(voice) = &mut self.key_voice {
+        for voice in self.side_voices() {
             voice.set_auto_gain_enabled(enabled);
         }
         if let Some(voice) = &self.voice {
@@ -319,7 +338,7 @@ impl Audition {
         }
     }
     pub fn set_gain(&mut self, track: usize, gain: f32) {
-        if let Some(voice) = &mut self.key_voice {
+        for voice in self.side_voices() {
             voice.set_gain(track, gain);
         }
         self.gains.insert(
@@ -336,7 +355,7 @@ impl Audition {
     }
     pub fn clear_gains(&mut self) {
         self.gains.clear();
-        if let Some(voice) = &mut self.key_voice {
+        for voice in self.side_voices() {
             voice.clear_gains();
         }
     }
@@ -374,6 +393,8 @@ pub fn output_rate() -> u32 {
         .map_or(48000, |c| c.sample_rate().0)
 }
 
+#[path = "audition_click.rs"]
+pub(crate) mod click;
 #[path = "audition_key.rs"]
 mod key;
 #[path = "audition_live.rs"]

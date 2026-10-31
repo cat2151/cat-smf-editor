@@ -57,7 +57,7 @@ pub(super) fn context() -> egui::Context {
             id,
             egui::ViewportInfo {
                 parent: Some(egui::ViewportId::ROOT),
-                focused: Some(true),
+                focused: Some(focused(ctx, id)),
                 outer_rect: geometry.map(|[x, y, w, h]| {
                     egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w + 16.0, h + 40.0))
                 }),
@@ -75,6 +75,15 @@ pub(super) fn context() -> egui::Context {
     });
     c
 }
+/// Every window counts as focused unless `focus` picked one.
+fn focused(c: &egui::Context, id: egui::ViewportId) -> bool {
+    c.data(|d| d.get_temp::<egui::ViewportId>(egui::Id::new("workspace-focused-only")))
+        .is_none_or(|only| only == id)
+}
+/// From now on only `id` reports the operating system focus.
+pub(crate) fn focus(c: &egui::Context, id: egui::ViewportId) {
+    c.data_mut(|d| d.insert_temp(egui::Id::new("workspace-focused-only"), id));
+}
 pub(crate) fn frame(
     a: &mut App,
     c: &egui::Context,
@@ -90,6 +99,7 @@ pub(crate) fn frame(
     let out = c.run(
         egui::RawInput {
             events: root,
+            focused: focused(c, egui::ViewportId::ROOT),
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
                 egui::vec2(1500.0, 900.0),
@@ -234,6 +244,25 @@ fn create_scene(a: &mut App, c: &egui::Context, name: &str, length: &str) {
         "{:?}",
         a.patterns.workspace.error
     );
+}
+/// Places `pattern` on the first Song lane so the Song ends after `measures`.
+pub(crate) fn lengthen_song(a: &mut App, pattern: u64, measures: u64) {
+    let music = &mut a.loaded.as_mut().unwrap().music;
+    let lane = scene::read(music).unwrap().song_lanes[0];
+    let length = cat_smf_editor::score::pattern::Catalog::read(music)
+        .unwrap()
+        .patterns[&pattern]
+        .meters
+        .len() as u64;
+    let at = measures + 1 - length;
+    grid::place(
+        music,
+        None,
+        lane,
+        at,
+        Some(PatternOrScene::Pattern(pattern)),
+    )
+    .unwrap();
 }
 pub(crate) fn verification_song() -> (App, egui::Context, u64, u64, u64) {
     let mut a = crate::view::tests::app(cat_smf_editor::edit::tracks::new_song());

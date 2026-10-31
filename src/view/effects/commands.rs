@@ -143,7 +143,7 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             &spec.keys,
             move |a, _| {
                 if matches!(op, Op::Help) {
-                    a.help_open = !a.help_open;
+                    crate::view::help::summon(a);
                     return;
                 }
                 let Some(chain) = effects(a, target) else {

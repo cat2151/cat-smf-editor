@@ -67,6 +67,9 @@ pub struct Status {
     /// Pattern companion windows: outer x/y and inner width/height.
     #[serde(default)]
     pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
+    /// Virtual MIDI keyboard windows: outer x/y.
+    #[serde(default)]
+    pub keyboard_windows: std::collections::BTreeMap<String, [f32; 2]>,
     /// VOICEVOX engine の `run.exe`。
     #[serde(default)]
     pub voicevox_engine: Option<PathBuf>,
@@ -96,6 +99,7 @@ pub struct Store {
     pub help_open: bool,
     pub help_window: Option<[f32; 4]>,
     pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
+    pub keyboard_windows: std::collections::BTreeMap<String, [f32; 2]>,
     pub voicevox_engine: Option<PathBuf>,
     pub mascot_enabled: bool,
     pub error: Option<String>,
@@ -124,6 +128,7 @@ impl Default for Status {
             help_open: false,
             help_window: None,
             pattern_windows: Default::default(),
+            keyboard_windows: Default::default(),
             voicevox_engine: None,
             mascot_enabled: false,
         }
@@ -153,6 +158,7 @@ impl Default for Store {
             help_open: false,
             help_window: None,
             pattern_windows: Default::default(),
+            keyboard_windows: Default::default(),
             voicevox_engine: None,
             mascot_enabled: false,
             error: None,
@@ -212,6 +218,7 @@ impl Store {
                     help_open,
                     help_window,
                     pattern_windows,
+                    keyboard_windows,
                     voicevox_engine,
                     mascot_enabled,
                 }) => {
@@ -238,6 +245,10 @@ impl Store {
                         .filter(|(_, w)| {
                             w.iter().all(|v| v.is_finite()) && w[2] > 0.0 && w[3] > 0.0
                         })
+                        .collect();
+                    store.keyboard_windows = keyboard_windows
+                        .into_iter()
+                        .filter(|(_, at)| at.iter().all(|v| v.is_finite()))
                         .collect();
                     store.voicevox_engine = voicevox_engine;
                     store.mascot_enabled = mascot_enabled;
@@ -393,6 +404,7 @@ impl Store {
                 help_open: self.help_open,
                 help_window: self.help_window,
                 pattern_windows: self.pattern_windows.clone(),
+                keyboard_windows: self.keyboard_windows.clone(),
                 voicevox_engine: self.voicevox_engine.clone(),
                 mascot_enabled: self.mascot_enabled,
             })?;

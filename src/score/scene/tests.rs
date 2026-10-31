@@ -131,7 +131,7 @@ fn multimeasure_overlaps_meter_mismatch_and_length_edits_reject_atomically() {
     assert!(patterns::delete(&mut m, p).is_err());
 }
 #[test]
-fn empty_scene_song_silence_and_invalid_lane_write_preserve_document() {
+fn empty_scene_emptied_song_and_invalid_lane_write_preserve_document() {
     let (mut m, _, _) = fixture();
     let s = grid::create_scene(&mut m, "Empty", 2, 1).unwrap();
     assert_eq!(grid::occurrences(&m, Some(s)).unwrap(), (vec![], 3840));
@@ -139,7 +139,7 @@ fn empty_scene_song_silence_and_invalid_lane_write_preserve_document() {
     grid::place(&mut m, None, lane, 2, Some(PatternOrScene::Scene(s))).unwrap();
     let id = read(&m).unwrap().song[0].id;
     grid::place(&mut m, None, lane, 2, None).unwrap();
-    assert_eq!(grid::occurrences(&m, None).unwrap(), (vec![], 5760));
+    assert_eq!(grid::occurrences(&m, None).unwrap(), (vec![], 0));
     let mut c = read(&m).unwrap();
     c.song.push(arrangement::Placement {
         id,
@@ -156,7 +156,7 @@ fn empty_scene_song_silence_and_invalid_lane_write_preserve_document() {
 }
 
 #[test]
-fn scene_meter_edits_keep_measure_positions_and_song_length_keeps_trailing_silence() {
+fn scene_meter_edits_keep_measure_positions_and_song_length_follows_placements() {
     let (mut m, _, p) = fixture();
     let id = grid::create_scene(&mut m, "Meters", 2, 1).unwrap();
     let lane = read(&m).unwrap().scenes[0].lanes[0];
@@ -202,5 +202,24 @@ fn scene_meter_edits_keep_measure_positions_and_song_length_keeps_trailing_silen
     assert!(sizing::song(&mut m, 1).is_err());
     assert_eq!(crate::smf_io::encode(&m).unwrap(), before);
     grid::place(&mut m, None, song, 2, None).unwrap();
-    assert_eq!(grid::occurrences(&m, None).unwrap(), (vec![], 7680));
+    assert_eq!(grid::occurrences(&m, None).unwrap(), (vec![], 0));
+}
+#[test]
+fn the_song_ends_with_its_last_placement_even_after_it_moves_back() {
+    let (mut m, _, p) = fixture();
+    let end = |m: &Music| grid::occurrences(m, None).unwrap().1;
+    let measures = pattern::Catalog::read(&m).unwrap().patterns[&p]
+        .meters
+        .len() as u64;
+    let measure = 1920;
+    let lane = grid::add_lane(&mut m, None).unwrap();
+    grid::place(&mut m, None, lane, 1, Some(PatternOrScene::Pattern(p))).unwrap();
+    grid::place(&mut m, None, lane, 30, Some(PatternOrScene::Pattern(p))).unwrap();
+    assert_eq!(end(&m), (29 + measures) * measure);
+    grid::place(&mut m, None, lane, 30, None).unwrap();
+    assert_eq!(read(&m).unwrap().song_length, measures * measure);
+    assert_eq!(end(&m), measures * measure);
+    // A longer length saved before placements set it is not performed.
+    sizing::song(&mut m, 31).unwrap();
+    assert_eq!(end(&m), measures * measure);
 }

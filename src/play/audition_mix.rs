@@ -194,6 +194,9 @@ impl Mixer {
         }
         self.auto_gain
             .process(mixed, rate, channels, !command.auto_gain_disabled);
+        if let Some(click) = command.parts.iter().find_map(|p| p.click.as_ref()) {
+            click.render(mixed, channels, rate, std::time::Instant::now());
+        }
         self.elapsed = self.elapsed.saturating_add(frames as u64);
         mixed
     }

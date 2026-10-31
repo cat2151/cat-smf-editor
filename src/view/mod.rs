@@ -114,13 +114,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     patterns::show(app, ctx);
     patterns::workspace::root_dialog(app, ctx);
     track_rename::show(app, ctx);
-    if crate::view::modal::is_open(app) {
+    if crate::view::modal::is_open(app) || app.patterns.recording.is_open() {
         app.audition.pump();
     }
     // Outside show_contents: a viewport skipped for one frame closes.
     analysis::show(app, ctx);
     patterns::presentation::refocus_root(app, ctx);
     patterns::workspace::show(app, ctx);
+    recording::show(app, ctx);
     if !opening::pending(app) {
         app.auto_save(ctx);
     }

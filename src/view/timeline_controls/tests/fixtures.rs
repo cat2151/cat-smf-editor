@@ -53,12 +53,9 @@ impl Fixture {
         // A missing arm after adding a production ID is intentionally a compile error.
         let (mut app, ctx, workspace) = match screen {
             Screen::Song | Screen::Scene => {
-                let (mut a, c, _, _, scene) = view::patterns::workspace_tests::verification_song();
-                cat_smf_editor::score::scene::sizing::song(
-                    &mut a.loaded.as_mut().unwrap().music,
-                    80,
-                )
-                .unwrap();
+                let (mut a, c, _, second, scene) =
+                    view::patterns::workspace_tests::verification_song();
+                view::patterns::workspace_tests::lengthen_song(&mut a, second, 80);
                 let p = if screen == Screen::Song {
                     view::patterns::workspace::Pane::Song
                 } else {

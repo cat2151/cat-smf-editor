@@ -32,6 +32,8 @@ pub(super) enum Target {
 pub struct State {
     pub(super) target: Target,
     pub(super) geometry: Option<[f32; 4]>,
+    /// Lifts the help window above the others at its next frame.
+    pub(crate) raise: bool,
 }
 
 /// Called before modal suspension, including native companion viewports.
@@ -39,24 +41,40 @@ pub(crate) fn input(a: &mut App, ctx: &egui::Context) {
     if ctx.viewport_id() == super::viewport() {
         return;
     }
-    let pressed = ctx.input(|i| {
-        i.events.iter().any(|e| {
-            matches!(e,
-        egui::Event::Key { key: egui::Key::F1, pressed: true, repeat: false, modifiers, .. }
-        if *modifiers == egui::Modifiers::NONE)
-        })
+    // `?` is text while a text field has the focus.
+    let typing = ctx
+        .memory(|m| m.focused())
+        .is_some_and(|id| egui::text_edit::TextEditState::load(ctx, id).is_some());
+    let (f1, question) = ctx.input(|i| {
+        let repeat = i
+            .events
+            .iter()
+            .any(|e| matches!(e, egui::Event::Key { repeat: true, .. }));
+        (
+            i.events.iter().any(|e| {
+                matches!(e,
+            egui::Event::Key { key: egui::Key::F1, pressed: true, repeat: false, modifiers, .. }
+            if *modifiers == egui::Modifiers::NONE)
+            }),
+            !typing
+                && !repeat
+                && i.events
+                    .iter()
+                    .any(|e| matches!(e, egui::Event::Text(t) if t == "?")),
+        )
     });
-    if pressed {
-        a.help_open = !a.help_open;
+    if f1 || question {
+        // A screen's own help command also resets what it was typing, such as a count.
+        if owner(a, ctx) == Screen::Help || !crate::view::commands::help(a, ctx) {
+            super::summon(a);
+        }
         ctx.input_mut(|i| {
-            i.events.retain(|e| {
-                !matches!(
-                    e,
-                    egui::Event::Key {
-                        key: egui::Key::F1,
-                        ..
-                    }
-                )
+            i.events.retain(|e| match e {
+                egui::Event::Key {
+                    key: egui::Key::F1, ..
+                } => false,
+                egui::Event::Text(t) => !(question && t == "?"),
+                _ => true,
             })
         });
         ctx.request_repaint();
@@ -74,8 +92,15 @@ pub(crate) fn observe(a: &mut App, ctx: &egui::Context) {
     }
 }
 
+/// Called in the keyboard windows, which hold the session while they run.
+pub(crate) fn observe_recording(a: &mut App, ctx: &egui::Context) {
+    if ctx.input(|i| i.viewport().focused.unwrap_or(i.focused)) {
+        a.help.target = Target::Recording;
+    }
+}
+
 fn resolve(a: &App, ctx: &egui::Context) -> Target {
-    if a.patterns.recording.is_open() {
+    if a.patterns.recording.owns(ctx.viewport_id()) {
         return Target::Recording;
     }
     if a.palette.is_open() {

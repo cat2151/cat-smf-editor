@@ -90,3 +90,35 @@ fn restoring_original_mixer_gain_clears_the_exit_confirmation() {
     assert!(!f.app.saved.dirty());
     assert!(f.app.config.navigation.departure.is_none());
 }
+
+#[test]
+fn exit_confirmation_answers_while_the_keyboard_window_is_open() {
+    for key in [Key::Y, Key::N, Key::Escape] {
+        let mut f = fixture(&format!("close-while-recording-{key:?}"));
+        let ctx = egui::Context::default();
+        edit(&mut f.app);
+        let shift_r = egui::RawInput {
+            events: vec![egui::Event::Key {
+                key: Key::R,
+                physical_key: Some(Key::R),
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::SHIFT,
+            }],
+            ..Default::default()
+        };
+        let _ = ctx.run(shift_r, |ctx| crate::view::show(&mut f.app, ctx));
+        assert!(f.app.patterns.recording.is_open(), "{:?}", f.app.load_error);
+        close_request(&mut f.app, &ctx);
+        assert!(matches!(
+            f.app.config.navigation.departure,
+            Some(Action::Close)
+        ));
+        press(&mut f.app, &ctx, key);
+        assert!(
+            f.app.config.navigation.departure.is_none(),
+            "{key:?} left the exit confirmation open"
+        );
+        assert_eq!(f.app.config.navigation.close_approved, key != Key::Escape);
+    }
+}

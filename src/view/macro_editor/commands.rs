@@ -76,7 +76,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             if let Some(s) = &mut a.macro_editor.session {
                 s.keyboard.count = None;
             }
-            a.help_open = !a.help_open;
+            crate::view::help::summon(a);
         },
     ));
     out.push(Command::plain(

@@ -195,7 +195,7 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             "help",
             "Help",
             &[Key::F1],
-            move |a, _| a.help_open = !a.help_open,
+            move |a, _| crate::view::help::summon(a),
         ));
         out.push(Command::plain(
             s,

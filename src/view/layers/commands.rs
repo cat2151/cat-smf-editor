@@ -216,7 +216,7 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
 
 fn execute(a: &mut App, op: Op) {
     if matches!(op, Op::Help) {
-        a.help_open = !a.help_open;
+        crate::view::help::summon(a);
         return;
     }
     let Some(mut patch) = a

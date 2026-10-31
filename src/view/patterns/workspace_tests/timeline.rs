@@ -224,9 +224,8 @@ fn song_timeline_keyboard_zoom_and_repeat_commands_preserve_cell_navigation() {
 #[test]
 fn song_minimap_pans_cells_live_and_repeat_tracks_the_scrolled_cells() {
     for outside in [false, true] {
-        let (mut a, c, _, _, _) = verification_song();
-        let music = &mut a.loaded.as_mut().unwrap().music;
-        cat_smf_editor::score::scene::sizing::song(music, 40).unwrap();
+        let (mut a, c, _, second, _) = verification_song();
+        crate::view::patterns::workspace_tests::lengthen_song(&mut a, second, 40);
         let id = Pane::Song.viewport();
         for _ in 0..3 {
             frame(&mut a, &c, id, vec![]);

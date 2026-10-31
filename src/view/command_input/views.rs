@@ -108,7 +108,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, state: &mut State, fresh:
                     continue;
                 }
                 if key == Key::F1 && !repeat {
-                    app.help_open = !app.help_open;
+                    crate::view::help::summon(app);
                     continue;
                 }
 
