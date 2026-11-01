@@ -1,5 +1,6 @@
 //! Performed pattern occurrences. The Song ends with its last placement, commented out or not.
 use super::*;
+use crate::message;
 /// A body occurrence and its global tick offset; no saved note copies.
 pub fn occurrences(m: &Music, scene: Option<u64>) -> Result<(Vec<(u64, u64)>, u64), String> {
     let catalog = Catalog::read(m)?;
@@ -13,7 +14,7 @@ pub fn occurrences_in(
     scene: Option<u64>,
 ) -> Result<(Vec<(u64, u64)>, u64), String> {
     let time = MusicalTime::new(m);
-    let map = time.map(0).ok_or("Missing song meter")?;
+    let map = time.map(0).ok_or("songの拍子が見つかりません")?;
     let mut out = vec![];
     let mut end = if c.song.is_empty() {
         c.song_length
@@ -25,7 +26,7 @@ pub fn occurrences_in(
             .scenes
             .iter()
             .find(|s| s.id == id)
-            .ok_or("Missing scene")?;
+            .ok_or(message::MISSING_SCENE)?;
         end = s.range(s.meters.len() as u128)?.1;
         for p in s.cells.iter().filter(|p| !p.disabled) {
             out.push((p.pattern, s.range(u128::from(p.measure) + 1)?.0));
@@ -43,7 +44,7 @@ pub fn occurrences_in(
                         .scenes
                         .iter()
                         .find(|s| s.id == id)
-                        .ok_or("Missing scene")?;
+                        .ok_or(message::MISSING_SCENE)?;
                     for cell in s.cells.iter().filter(|p| !p.disabled) {
                         out.push((
                             cell.pattern,
@@ -56,7 +57,7 @@ pub fn occurrences_in(
     }
     for &(id, _) in &out {
         if !catalog.patterns.contains_key(&id) {
-            return Err("Missing pattern".into());
+            return Err(message::MISSING_PATTERN.into());
         }
     }
     out.sort_by_key(|&(id, tick)| (tick, id));

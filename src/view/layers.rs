@@ -1,5 +1,6 @@
 //! Track-local layers with a keyboard cursor shared by mouse and keys.
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::score::instrument::{Patch, ResolvedLayer};
 use eframe::egui;
 
@@ -77,7 +78,7 @@ pub(crate) fn add(patch: &mut Patch) -> Result<(), String> {
 fn duplicate(patch: &mut Patch, source: usize) -> Result<(), String> {
     patch.validate()?;
     if patch.layers.len() >= 64 {
-        return Err("Too many instrument layers".into());
+        return Err("instrument layerが多すぎます".into());
     }
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let floor = patch
@@ -92,7 +93,7 @@ fn duplicate(patch: &mut Patch, source: usize) -> Result<(), String> {
             std::sync::atomic::Ordering::Relaxed,
             |n| n.max(floor).checked_add(1),
         )
-        .map_err(|_| "Layer ID exhausted")?;
+        .map_err(|_| "layerのIDを使い切りました")?;
     let mut layer = patch.layers.get(source).cloned().unwrap_or(ResolvedLayer {
         settings: Default::default(),
         instrument: None,
@@ -165,20 +166,16 @@ impl State {
         self.editing = Some(Editing { text, focus: true });
     }
     fn commit(&mut self, patch: &mut Patch) -> Result<(), String> {
-        let text = &self
-            .editing
-            .as_ref()
-            .ok_or("No value is being edited")?
-            .text;
+        let text = &self.editing.as_ref().ok_or("編集中の値がありません")?.text;
         let mut candidate = patch.clone();
         let layer = candidate
             .layers
             .get_mut(self.row(patch))
-            .ok_or("Layer was removed")?;
+            .ok_or(message::LAYER_WAS_REMOVED)?;
         match self.field {
-            1 => layer.settings.octave = text.parse().map_err(|_| "Invalid integer octave")?,
-            2 => layer.settings.volume_db = text.parse().map_err(|_| "Invalid dB")?,
-            _ => return Err("No numeric field selected".into()),
+            1 => layer.settings.octave = text.parse().map_err(|_| "octaveの整数が不正です")?,
+            2 => layer.settings.volume_db = text.parse().map_err(|_| "dBが不正です")?,
+            _ => return Err("数値の欄を選んでいません".into()),
         }
         candidate.validate()?;
         *patch = candidate;

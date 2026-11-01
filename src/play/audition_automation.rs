@@ -13,7 +13,7 @@ impl Audition {
         self.progress = None;
         match Voice::open(&patches, previous, &self.master, self.auto_gain_disabled) {
             Ok(voice) => self.voice = Some(voice),
-            Err(error) => self.error = Some(format!("Audio baseline restoration: {error}")),
+            Err(error) => self.error = Some(format!("音声の基準値の復元: {error}")),
         }
     }
     pub fn sequences_automated(
@@ -52,7 +52,7 @@ impl Audition {
             ) {
                 Ok(voice) => self.voice = Some(voice),
                 Err(error) => {
-                    self.error = Some(format!("Audio automation: {error}"));
+                    self.error = Some(format!("音声のautomation: {error}"));
                     return false;
                 }
             }

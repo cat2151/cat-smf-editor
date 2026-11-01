@@ -1,6 +1,7 @@
 //! Transient picker sweep; never writes a curve or changes the patch baseline.
 use super::*;
 use crate::play::{automation::OwnerPlan, transport};
+use cat_smf_editor::message;
 use std::sync::Arc;
 
 pub(crate) struct Preview {
@@ -60,22 +61,27 @@ fn prepare(app: &mut App) -> Result<Option<Preview>, String> {
     };
     let parameter = &p.parameters[index];
     parameter.checked_current()?;
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     if app.song_id != p.song
         || app.generation != p.generation
         || app.track != p.owner
         || loaded.patches.get(p.owner) != Some(&p.patch)
     {
-        return Err("Parameter target changed; reopen Automation".into());
+        return Err(message::PARAMETER_TARGET_CHANGED.into());
     }
-    let map = loaded.time.map(p.owner).ok_or("Missing measure map")?;
+    let map = loaded
+        .time
+        .map(p.owner)
+        .ok_or(message::MISSING_MEASURE_MAP)?;
     let mut position = map.position(p.tick);
     position.beat = 1;
     position.tick_numerator = 0;
     position.tick_denominator = 1;
-    let a = map.tick_at(&position).ok_or("Missing measure start")?;
+    let a = map
+        .tick_at(&position)
+        .ok_or(message::MISSING_MEASURE_START)?;
     position.measure += 1;
-    let b = map.tick_at(&position).ok_or("Missing measure end")?;
+    let b = map.tick_at(&position).ok_or(message::MISSING_MEASURE_END)?;
     let curve = Curve {
         version: 1,
         target: Target {

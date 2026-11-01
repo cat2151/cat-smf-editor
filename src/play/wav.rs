@@ -1,4 +1,5 @@
 //! Stereo 32-bit float WAV files and their one-shot playback.
+use cat_smf_editor::message;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::{io::Write, path::Path};
 
@@ -6,7 +7,7 @@ const CHANNELS: u16 = 2;
 
 /// Replaces `path` atomically, so a reader never sees a partial file.
 pub fn write(path: &Path, rate: u32, samples: &[f32]) -> Result<(), String> {
-    let directory = path.parent().ok_or("WAV path has no directory")?;
+    let directory = path.parent().ok_or("WAVのpathにフォルダがありません")?;
     std::fs::create_dir_all(directory).map_err(|e| format!("{}: {e}", directory.display()))?;
     let data = (samples.len() * 4) as u32;
     let mut bytes = Vec::with_capacity(44 + data as usize);
@@ -86,14 +87,14 @@ impl Player {
     pub fn play(rate: u32, samples: Vec<f32>) -> Result<Self, String> {
         let device = cpal::default_host()
             .default_output_device()
-            .ok_or("No audio output device")?;
+            .ok_or(message::NO_AUDIO_OUTPUT_DEVICE)?;
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let config = supported.config();
         let stream = match supported.sample_format() {
             cpal::SampleFormat::F32 => build::<f32>(&device, &config, rate, samples),
             cpal::SampleFormat::I16 => build::<i16>(&device, &config, rate, samples),
             cpal::SampleFormat::U16 => build::<u16>(&device, &config, rate, samples),
-            format => return Err(format!("Unsupported audio format: {format:?}")),
+            format => return Err(message::unsupported_audio_format(format)),
         }?;
         stream.play().map_err(|e| e.to_string())?;
         Ok(Self { _stream: stream })

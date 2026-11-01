@@ -1,4 +1,5 @@
 //! Moves one Note Off; its Note On and every other event keep their ticks.
+use crate::message;
 use crate::{
     edit::relocate::{pairs, relocate},
     model::Track,
@@ -9,16 +10,16 @@ use crate::{
 pub fn set_duration(track: &mut Track, on: usize, duration: u64) -> Result<(), String> {
     let events = &track.events;
     if !events.get(on).is_some_and(note_on) {
-        return Err("Not a Note On".into());
+        return Err(message::NOT_A_NOTE_ON.into());
     }
     if duration == 0 {
-        return Err("The duration must be at least 1 tick".into());
+        return Err(message::THE_DURATION_MUST_BE_AT_LEAST_1_TICK.into());
     }
-    let off = pairs(events.iter())[on].ok_or("This note has no Note Off")?;
+    let off = pairs(events.iter())[on].ok_or(message::THIS_NOTE_HAS_NO_NOTE_OFF)?;
     let tick = events[on]
         .tick
         .checked_add(duration)
-        .ok_or("The duration is too large")?;
+        .ok_or("長さが大きすぎます")?;
     relocate(track, off, tick)
 }
 

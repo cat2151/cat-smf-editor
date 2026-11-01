@@ -1,4 +1,5 @@
 //! File-owned opt-in metadata and the automatic save's UI boundary.
+use cat_smf_editor::message;
 use cat_smf_editor::{
     app_meta::AUTO_SAVE as PREFIX,
     model::{Event, Music},
@@ -28,7 +29,7 @@ pub(crate) fn enabled(music: &Music) -> bool {
 
 fn write(music: &mut Music, enabled: bool) -> Result<(), String> {
     if music.tracks.is_empty() {
-        return Err("No SMF track is loaded".into());
+        return Err("SMF trackが開かれていません".into());
     }
     for track in &mut music.tracks {
         track.events.retain(|e| !owned(e));
@@ -66,7 +67,7 @@ impl crate::app::App {
     }
 
     pub(crate) fn enable_auto_save(&mut self) -> Result<(), String> {
-        let loaded = self.loaded.as_ref().ok_or("No SMF is loaded")?;
+        let loaded = self.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
         let before = loaded.music.clone();
         let mut music = before.clone();
         write(&mut music, true)?;

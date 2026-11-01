@@ -220,7 +220,7 @@ pub(super) fn poll(app: &mut App) {
         Err(_) => {
             app.voicevox.catalog.preview.failed.insert(voice);
             if active(app) {
-                app.voicevox.catalog.error = Some("VOICEVOX: sample thread panicked".into());
+                app.voicevox.catalog.error = Some("VOICEVOX: 試聴の処理が異常終了しました".into());
             }
         }
     }

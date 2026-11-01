@@ -1,6 +1,7 @@
 //! A tempo curve: quadratic Bézier segments through tempo points, stored as a Sequencer
 //! Specific meta in the conductor track and rendered into tempo events at every Note On
 //! and Note Off of any track.
+use crate::message;
 use crate::{
     edit::{insert, refresh_deltas},
     model::{Event, Music},
@@ -54,20 +55,20 @@ pub(super) fn microseconds(bpm: f64) -> u32 {
 impl Curve {
     pub fn validate(&self) -> Result<(), String> {
         if self.version != 1 {
-            return Err("Unsupported tempo curve schema".into());
+            return Err("対応していないtempo curveの形式です".into());
         }
         if self.points.is_empty() {
-            return Err("A tempo curve needs at least one tempo point".into());
+            return Err("tempo curveにはtempoの点が1つ以上必要です".into());
         }
         if self.controls.len() != self.points.len() - 1 {
-            return Err("A tempo curve needs one control point per segment".into());
+            return Err("tempo curveには区間ごとにcontrol pointが1つ必要です".into());
         }
         if self.points.windows(2).any(|w| w[0].tick >= w[1].tick) {
-            return Err("Tempo points must be in increasing tick order".into());
+            return Err("tempoの点はtickの昇順に並べます".into());
         }
         let mut segments = self.points.windows(2).zip(&self.controls);
         if segments.any(|(w, c)| !(w[0].tick..=w[1].tick).contains(&c.tick)) {
-            return Err("A control point must stay inside its segment".into());
+            return Err("control pointは区間の中に置きます".into());
         }
         if self
             .points
@@ -75,7 +76,7 @@ impl Curve {
             .chain(&self.controls)
             .any(|p| !bpm_range().contains(&p.bpm))
         {
-            return Err("A tempo curve BPM is out of the SMF range".into());
+            return Err("tempo curveのBPMがSMFで表せる範囲の外です".into());
         }
         Ok(())
     }
@@ -101,8 +102,7 @@ pub fn read(music: &Music) -> Result<Option<Curve>, String> {
         for e in t.events.iter().filter(|e| owned(e)) {
             if music.format != 1 || track != 0 || e.tick != 0 || found.is_some() {
                 return Err(
-                    "A tempo curve requires one tick-zero metadata event in format 1 track 0"
-                        .into(),
+                    "tempo curveにはformat 1のtrack 0のtick 0にmetadata eventが1つ必要です".into(),
                 );
             }
             let curve: Curve =
@@ -117,7 +117,7 @@ pub fn read(music: &Music) -> Result<Option<Curve>, String> {
 /// Stores `curve` as the conductor's metadata, or removes it for `None`; tempo events stay.
 pub fn write(music: &mut Music, curve: Option<&Curve>) -> Result<(), String> {
     if music.format != 1 || music.tracks.is_empty() {
-        return Err("A tempo curve requires SMF format 1".into());
+        return Err(message::A_TEMPO_CURVE_REQUIRES_SMF_FORMAT_1.into());
     }
     read(music)?;
     let data = match curve {
@@ -174,7 +174,7 @@ pub fn tempos(music: &Music, curve: &Curve) -> Vec<(u64, u32)> {
 /// Replaces every conductor tempo event with [`tempos`].
 pub fn regenerate(music: &mut Music, curve: &Curve) -> Result<(), String> {
     if music.format != 1 || music.tracks.is_empty() {
-        return Err("A tempo curve requires SMF format 1".into());
+        return Err(message::A_TEMPO_CURVE_REQUIRES_SMF_FORMAT_1.into());
     }
     curve.validate()?;
     let tempos = tempos(music, curve);

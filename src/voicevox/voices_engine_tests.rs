@@ -48,6 +48,6 @@ fn voicevox_every_humming_style_synthesizes_its_own_cached_audio() {
         .client
         .sing_as(&one_note(60, 30).json(), 48000, &missing)
         .unwrap_err()
-        .contains("unavailable"));
+        .contains("声を使えません"));
     println!("Verified {} humming styles", voices.len());
 }

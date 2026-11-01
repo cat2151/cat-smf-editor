@@ -3,6 +3,7 @@ use crate::{
     app::App,
     play::{audio_sequence::Sequence, transport},
 };
+use cat_smf_editor::message;
 use cat_smf_editor::{
     edit::parameter_curve::{Curve, Point, Target, ValueSpace},
     host::parameters::domain::{Domain, Position},
@@ -95,11 +96,11 @@ impl State {
 const UNSUPPORTED: &str = "Select Surge XT, Vaporizer2, Six Sines or Floe";
 
 fn begin(app: &mut App, layer: u64) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     if super::parameter_editor::is_track(app)
         || cat_smf_editor::voicevox::is_singer(&loaded.music.tracks[app.track])
     {
-        return Err("Select an instrument track".into());
+        return Err("instrument trackを選んでください".into());
     }
     let patch = loaded.patches[app.track].clone();
     let slot = patch
@@ -107,25 +108,30 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
         .iter()
         .find(|l| l.settings.id == layer)
         .and_then(|l| l.instrument.as_ref())
-        .ok_or("No routed macros")?;
+        .ok_or("routeされたmacroがありません")?;
     let instrument =
         cat_smf_editor::instrument_macros::Instrument::of(&slot.plugin.format, &slot.plugin.id)
             .ok_or(UNSUPPORTED)?;
     let macros = instrument
         .routed(&slot.plugin.format, &slot.state)
-        .ok_or_else(|| format!("Cannot inspect {} macro routing", instrument.name()))?;
+        .ok_or_else(|| message::cannot_inspect_macro_routing(instrument.name()))?;
     if macros.is_empty() {
-        return Err("This patch has no routed macros".into());
+        return Err(message::THIS_PATCH_HAS_NO_ROUTED_MACROS.into());
     }
     let key = slot.plugin.clone();
-    let map = loaded.time.map(app.track).ok_or("Missing measure map")?;
+    let map = loaded
+        .time
+        .map(app.track)
+        .ok_or(message::MISSING_MEASURE_MAP)?;
     let mut position = map.position(crate::play::playback::location(app).0);
     position.beat = 1;
     position.tick_numerator = 0;
     position.tick_denominator = 1;
-    let a = map.tick_at(&position).ok_or("Missing measure start")?;
+    let a = map
+        .tick_at(&position)
+        .ok_or(message::MISSING_MEASURE_START)?;
     position.measure += 1;
-    let b = map.tick_at(&position).ok_or("Missing measure end")?;
+    let b = map.tick_at(&position).ok_or(message::MISSING_MEASURE_END)?;
     let saved = macro_values::read(&loaded.music.tracks[app.track])?;
     let title = format!(
         "{} / {} / Macros",
@@ -145,9 +151,9 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
         });
         let parameter = matching
             .next()
-            .ok_or_else(|| format!("Missing Macro {n} parameter"))?;
+            .ok_or_else(|| format!("Macro {n}のparameterが見つかりません"))?;
         if matching.next().is_some() {
-            return Err(format!("Ambiguous Macro {n}"));
+            return Err(format!("Macro {n}が1つに決まりません"));
         }
         let target = Target {
             group: 1,
@@ -184,7 +190,7 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
             controls: vec![],
         };
         let value = initial(&curve, stored, m.position)
-            .ok_or_else(|| format!("Missing Macro {n} saved position"))?;
+            .ok_or_else(|| format!("Macro {n}の保存位置が見つかりません"))?;
         curve.points[0].value = value;
         curve.validate()?;
         rows.push(Row {
@@ -199,7 +205,7 @@ fn begin(app: &mut App, layer: u64) -> Result<(), String> {
         });
     }
     if rows.is_empty() {
-        return Err("This patch has no routed macros".into());
+        return Err(message::THIS_PATCH_HAS_NO_ROUTED_MACROS.into());
     }
     let (variations, variation) = variations::restore(&saved, layer, &rows);
     app.macro_editor = State {
@@ -241,7 +247,7 @@ fn finish(app: &mut App, confirm: bool) {
     let prepared = if confirm {
         (|| {
             if !valid(app, s) {
-                return Err("Macro target changed; reopen Macro edit".into());
+                return Err("macroの対象が変わりました。Macro editを開き直してください".into());
             }
             let mut values = macro_values::read(&app.loaded.as_ref().unwrap().music.tracks[owner])?;
             values.parameters.retain(|c| c.target.layer != s.layer);

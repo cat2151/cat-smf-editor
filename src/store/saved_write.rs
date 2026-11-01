@@ -38,7 +38,7 @@ fn replace_after(
         drop(file);
         if std::fs::read(path)? != expected {
             return Err(io::Error::other(
-                "MIDI file changed since it was loaded; refusing to overwrite",
+                "MIDIファイルが読み込んだ後に変わったので、上書きしません",
             ));
         }
         before_replace()?;

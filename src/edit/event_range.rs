@@ -1,10 +1,11 @@
 //! Event-list edits preserve the absolute ticks of surviving events.
+use crate::message;
 use crate::model::{Event, Music, Track};
 
 pub fn delete(track: &mut Track, selected: &[usize], notes: bool) -> Result<(), String> {
     let mut remove = vec![false; track.events.len()];
     for &i in selected {
-        *remove.get_mut(i).ok_or("Invalid event selection")? = true;
+        *remove.get_mut(i).ok_or("eventの選択が不正です")? = true;
     }
     if notes {
         for (on, off) in super::relocate::pairs(track.events.iter())
@@ -30,7 +31,7 @@ pub fn delete(track: &mut Track, selected: &[usize], notes: bool) -> Result<(), 
 /// Reset to the whole-event intersection of all other tracks' initial events.
 pub fn initialize(music: &mut Music, target: usize) -> Result<(), String> {
     if target >= music.tracks.len() {
-        return Err("Invalid track".into());
+        return Err(message::INVALID_TRACK.into());
     }
     let events = super::tracks::common_initial(
         music

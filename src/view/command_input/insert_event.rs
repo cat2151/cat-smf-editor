@@ -1,6 +1,7 @@
 //! Meta-event arguments and their shared insertion operation.
 use crate::app::App;
 use cat_smf_editor::edit::meta_input::Kind;
+use cat_smf_editor::message;
 use eframe::egui::{self, Key, Modifiers};
 
 #[derive(Default)]
@@ -20,18 +21,26 @@ pub(super) struct State {
 pub(super) fn apply(app: &mut App, kind: Kind, text: &str) -> Result<(), String> {
     if kind == Kind::Chord
         && cat_smf_editor::score::chord_guide::track(
-            &app.loaded.as_ref().ok_or("No SMF is loaded")?.music,
+            &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music,
         ) != Some(app.track)
     {
-        return Err("Select the chord guide track".into());
+        return Err(message::SELECT_THE_CHORD_GUIDE_TRACK.into());
     }
     apply_at(app, kind, text, crate::play::playback::location(app).0)
 }
 
 fn apply_at(app: &mut App, kind: Kind, text: &str, tick: u64) -> Result<(), String> {
-    let before = app.loaded.as_ref().ok_or("No SMF is loaded")?.music.clone();
+    let before = app
+        .loaded
+        .as_ref()
+        .ok_or(message::NO_SMF_LOADED)?
+        .music
+        .clone();
     let mut music = before.clone();
-    let track = music.tracks.get_mut(app.track).ok_or("Invalid track")?;
+    let track = music
+        .tracks
+        .get_mut(app.track)
+        .ok_or(message::INVALID_TRACK)?;
     let source = if app.track_view.cursor_tick.is_some() || app.cursor_position.is_some() {
         None
     } else if app.note_mode {

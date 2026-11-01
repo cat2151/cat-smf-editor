@@ -1,5 +1,6 @@
 //! In-memory SMF snapshots; playback caches are rebuilt when undoing.
 use super::App;
+use cat_smf_editor::message;
 use cat_smf_editor::model::Music;
 use std::collections::VecDeque;
 
@@ -44,12 +45,15 @@ impl History {
 impl App {
     pub fn undo_music(&mut self) -> Result<(), String> {
         let editor = crate::view::patterns::navigation::snapshot(self);
-        let Some(music) = self.undo.entries.back().cloned() else {
+        let Some(mut music) = self.undo.entries.back().cloned() else {
             return Ok(());
         };
         // Prepare everything before changing the document, audio or history cursor.
+        let loaded = self.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
+        // Capture appends are no undo step, so the played phrases outlive the undo.
+        cat_smf_editor::score::pattern::recording::capture::carry(&loaded.music, &mut music)?;
         let sound = self.resolve_sound(&music)?;
-        let loaded = self.loaded.as_ref().ok_or("No SMF is loaded")?;
+        let loaded = self.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
         self.saved.remember(&loaded.original, &music)?;
         self.audition.reset();
         self.playback.active = None;
@@ -82,7 +86,7 @@ impl App {
     }
 
     fn commit_music(&mut self, music: Music, restart: bool) -> Result<(), String> {
-        let loaded = self.loaded.as_ref().ok_or("No SMF is loaded")?;
+        let loaded = self.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
         self.saved.remember(&loaded.original, &music)?;
         self.install_music(music, restart);
         Ok(())

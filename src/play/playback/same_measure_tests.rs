@@ -93,7 +93,11 @@ fn same_measure_invalid_meta_reports_error_without_partial_playback() {
         .push(same_measure::event(3840, 2));
     playback::start(&mut a, Mode::AllTracks);
     assert!(a.playback.pending.is_none());
-    assert!(a.load_error.as_ref().unwrap().contains("Chained"));
+    assert!(a
+        .load_error
+        .as_ref()
+        .unwrap()
+        .contains("さらに参照しています"));
 }
 
 #[test]

@@ -1,4 +1,5 @@
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::score::same_measure;
 use eframe::egui::{self, Key, Modifiers};
 
@@ -12,19 +13,19 @@ pub(super) struct State {
 }
 impl State {
     pub(super) fn new(app: &App, batch: bool) -> Result<Self, String> {
-        let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+        let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
         let map = loaded
             .time
             .map(app.track)
-            .ok_or("Same measure requires PPQN timing")?;
+            .ok_or(message::SAME_MEASURE_REQUIRES_PPQN_TIMING)?;
         Ok(Self {
             track: app.track,
             destination: u64::try_from(
                 map.position(crate::play::playback::location(app).0).measure,
             )
-            .map_err(|_| "Measure overflow")?,
+            .map_err(|_| message::MEASURE_OVERFLOW)?,
             range: if batch {
-                Some(crate::view::event_selection::measures(app).ok_or("No measure selection")?)
+                Some(crate::view::event_selection::measures(app).ok_or("小節を選んでいません")?)
             } else {
                 None
             },
@@ -43,7 +44,7 @@ impl State {
             .parse::<u64>()
             .ok()
             .filter(|&n| n > 0)
-            .ok_or("Enter a positive measure number")?;
+            .ok_or("正の小節番号を入力してください")?;
         let (first, last, destination) = self
             .range
             .map_or((number, number, self.destination), |(a, b)| (a, b, number));

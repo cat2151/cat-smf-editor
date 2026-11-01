@@ -62,7 +62,8 @@ fn audition(app: &mut App, chord: bool) {
     let Some(loaded) = &app.loaded else {
         return;
     };
-    if !app.can_edit_notes(app.track) {
+    if !app.can_edit_notes(app.track) && !crate::view::patterns::mode::capture_shown(app, app.track)
+    {
         return;
     }
     let events = &loaded.visible().tracks[app.track].events;

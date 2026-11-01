@@ -1,6 +1,7 @@
 //! Lyrics of one range of ticks, typed again: one mora per note tick in the range, from its start.
 //! Moras without notes get notes on note number 60.
 use super::lyric;
+use crate::message;
 use crate::{
     model::{Event, Music, Track},
     score::note_view::{note_on, NoteView},
@@ -44,7 +45,7 @@ pub fn replace(
     text: &str,
 ) -> Result<(), String> {
     let division = u64::from(music.division);
-    let target = music.tracks.get_mut(track).ok_or("No such track")?;
+    let target = music.tracks.get_mut(track).ok_or(message::NO_SUCH_TRACK)?;
     let inside = |tick: u64| range.0 <= tick && tick < range.1;
     let mut ticks: Vec<u64> = target
         .events
@@ -86,7 +87,7 @@ pub fn replace(
             .events
             .iter()
             .position(|e| e.tick == tick && note_on(e))
-            .ok_or("Not a Note On")?;
+            .ok_or(message::NOT_A_NOTE_ON)?;
         super::set(target, on, mora)?;
     }
     super::super::refresh_deltas(target)

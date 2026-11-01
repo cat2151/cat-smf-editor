@@ -1,5 +1,6 @@
 use super::App;
 use cat_smf_editor::edit::tracks;
+use cat_smf_editor::message;
 
 impl App {
     pub(crate) fn new_smf(&mut self, ctx: &eframe::egui::Context) {
@@ -41,7 +42,7 @@ impl App {
         let before = self
             .loaded
             .as_ref()
-            .ok_or("No SMF is loaded")?
+            .ok_or(message::NO_SMF_LOADED)?
             .music
             .clone();
         let mut music = before.clone();
@@ -71,11 +72,21 @@ impl App {
         &mut self,
         edit: impl FnOnce(&mut cat_smf_editor::model::Music) -> Result<(), String>,
     ) -> Result<(), String> {
+        let before = self.replace_tracks(edit)?;
+        self.undo.push(before);
+        Ok(())
+    }
+
+    /// `edit_tracks` without an undo step; returns the music before the edit.
+    pub(crate) fn replace_tracks(
+        &mut self,
+        edit: impl FnOnce(&mut cat_smf_editor::model::Music) -> Result<(), String>,
+    ) -> Result<cat_smf_editor::model::Music, String> {
         let editor = crate::view::patterns::navigation::snapshot(self);
         let before = self
             .loaded
             .as_ref()
-            .ok_or("No SMF is loaded")?
+            .ok_or(message::NO_SMF_LOADED)?
             .music
             .clone();
         let mut music = before.clone();
@@ -115,8 +126,7 @@ impl App {
             .min(self.loaded.as_ref().unwrap().music.tracks.len() - 1);
         self.song_id = self.song_id.wrapping_add(1);
         crate::view::patterns::navigation::restore(self, editor);
-        self.undo.push(before);
-        Ok(())
+        Ok(before)
     }
 
     pub(crate) fn sync_saved_path(&mut self) {

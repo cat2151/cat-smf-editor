@@ -4,6 +4,7 @@ use crate::{
     play::{playback, transport},
     store,
 };
+use cat_smf_editor::message;
 use eframe::egui;
 use std::{
     path::PathBuf,
@@ -44,7 +45,7 @@ impl App {
             Ok(store::startup::Status::default())
         } else {
             let _span = cat_smf_editor::startup_trace::span("minimal_status_read");
-            root.ok_or("LOCALAPPDATA is unavailable".into())
+            root.ok_or("LOCALAPPDATAを使えません".into())
                 .and_then(|root| store::startup::read(&root.join("status.json")))
         };
         match status {
@@ -93,7 +94,7 @@ impl App {
                     app.audition.stop();
                     app.playback.active = None;
                     app.playback.pending = None;
-                    app.load_error = Some("Audio device did not start playback".into());
+                    app.load_error = Some(message::AUDIO_DEVICE_DID_NOT_START_PLAYBACK.into());
                 }
                 // The first audio block can request a metadata rescan. Consume it
                 // and refresh bindings before GUI creation can occupy this thread.
@@ -153,7 +154,7 @@ impl App {
             transport::stop(self);
         }
         if timed_out {
-            self.load_error = Some("Audio device did not start playback".into());
+            self.load_error = Some(message::AUDIO_DEVICE_DID_NOT_START_PLAYBACK.into());
         }
         false
     }
@@ -233,6 +234,7 @@ impl App {
         install_fonts(ctx);
         drop(font_span);
         crate::view::analysis::restore(self);
+        crate::view::recording::resume(self);
         cat_smf_editor::startup_trace::restored();
     }
 }

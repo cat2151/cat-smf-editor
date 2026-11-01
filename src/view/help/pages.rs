@@ -86,9 +86,9 @@ pub(super) fn arrangement(ui: &mut egui::Ui, p: Pane) {
         );
         ui.end_row();
         let windows: &[(&str, &str)] = if p == Pane::Song {
-            &[("S", "Scene window"), ("Esc", "終了")]
+            &[("S", "Scene window"), ("Esc", "閉じる")]
         } else {
-            &[("Esc", "終了")]
+            &[("Esc", "閉じる")]
         };
         super::key_groups(ui, &[(Color32::from_rgb(0xae, 0x81, 0xff), windows)]);
     });

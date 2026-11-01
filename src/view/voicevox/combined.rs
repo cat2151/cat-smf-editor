@@ -1,4 +1,5 @@
 //! Detect the MML half without letting the permissive MML parser consume lyric text.
+use cat_smf_editor::message;
 use cat_smf_editor::{edit::mml, model::Music};
 use std::sync::LazyLock;
 
@@ -57,7 +58,7 @@ pub(super) fn replace<'a>(
     text: &'a str,
 ) -> Result<&'a str, String> {
     let (input, lyrics) = split(text)?;
-    let channel = mml::channel(music.tracks.get(track).ok_or("Invalid track")?, None);
+    let channel = mml::channel(music.tracks.get(track).ok_or(message::INVALID_TRACK)?, None);
     mml::replace_measure(music, track, range, channel, input)?;
     // Old lyrics on surviving ticks must not leak into a shorter replacement.
     music.tracks[track].events.retain(|e| {

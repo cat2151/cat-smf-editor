@@ -155,7 +155,7 @@ pub(crate) fn collect(app: &App, s: Screen, out: &mut Vec<Command>) {
         }
         return;
     }
-    if !matches!(s, Screen::Main | Screen::Scene | Screen::Song) || app.loaded.is_none() {
+    if s != Screen::Global || app.loaded.is_none() {
         return;
     }
     out.push(Command::operation(

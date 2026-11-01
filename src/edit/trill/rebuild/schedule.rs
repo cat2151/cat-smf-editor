@@ -2,6 +2,7 @@
 //! Generated On/Off positions themselves become curve sampling positions.
 use super::*;
 use crate::edit::tempo_curve::microseconds;
+use crate::message;
 
 const MAX_NOTES: usize = 1_000_000;
 
@@ -16,18 +17,16 @@ pub(super) fn run(music: &Music, curve: Option<&Curve>, plans: &mut [Plan]) -> R
             if e.status == 0xff && e.meta_type == 0x51 {
                 if curve.is_some() {
                     if ti != 0 {
-                        return Err(
-                            "Trill tempo curve requires tempos only in the conductor".into()
-                        );
+                        return Err("trillのtempo curveではtempoをconductorだけに置きます".into());
                     }
                     continue;
                 }
                 let [a, b, c] = e.data.as_slice() else {
-                    return Err("Invalid trill tempo event".into());
+                    return Err("trillのtempo eventが不正です".into());
                 };
                 let value = u32::from_be_bytes([0, *a, *b, *c]);
                 if value == 0 {
-                    return Err("Invalid zero trill tempo".into());
+                    return Err("trillのtempoが0で不正です".into());
                 }
                 tempos.insert(e.tick, value);
                 fixed.insert(e.tick);
@@ -69,18 +68,14 @@ pub(super) fn run(music: &Music, curve: Option<&Curve>, plans: &mut [Plan]) -> R
                 // Another voice's boundary may make this tick the nearest
                 // representable position under its new tempo.
                 if plan.onsets.last() == Some(&tick) {
-                    return Err(
-                        "Trill interval is shorter than the available tick resolution".into(),
-                    );
+                    return Err(message::TRILL_INTERVAL_BELOW_TICK_RESOLUTION.into());
                 }
                 plan.onsets.push(tick);
                 count += 1;
                 target = plan.start_seconds + plan.region.metadata.onset_seconds(plan.onsets.len());
                 distance = (target - seconds) / slope;
                 if distance.round() < 1.0 {
-                    return Err(
-                        "Trill interval is shorter than the available tick resolution".into(),
-                    );
+                    return Err(message::TRILL_INTERVAL_BELOW_TICK_RESOLUTION.into());
                 }
             }
             // Beyond this region there is no next onset. Avoid float->u64 overflow.
@@ -106,7 +101,7 @@ pub(super) fn run(music: &Music, curve: Option<&Curve>, plans: &mut [Plan]) -> R
             }
         }
         if count > MAX_NOTES {
-            return Err("Trill regeneration exceeds one million notes".into());
+            return Err("trillの再生成が100万noteを超えました".into());
         }
     }
     Ok(())

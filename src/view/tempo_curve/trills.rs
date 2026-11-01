@@ -1,5 +1,6 @@
 //! Metadata prepared for display; opening the overlay never edits the document.
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::{
     edit::{initial_meta, reference_tempo, trill},
     model::Music,
@@ -26,7 +27,12 @@ pub(super) fn prepare(app: &mut App) -> Result<Arc<Music>, String> {
         .is_none_or(|c| c.key != key)
     {
         let result = (|| {
-            let mut music = app.loaded.as_ref().ok_or("No SMF is loaded")?.music.clone();
+            let mut music = app
+                .loaded
+                .as_ref()
+                .ok_or(message::NO_SMF_LOADED)?
+                .music
+                .clone();
             initial_meta::initialize(&mut music)?;
             reference_tempo::initialize(&mut music)?;
             trill::initialize(&mut music)?;

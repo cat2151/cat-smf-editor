@@ -69,7 +69,7 @@ fn workspace_form_invalid_ime_click_cancel_and_stale_target_are_atomic() {
         .error
         .as_ref()
         .unwrap()
-        .contains("target changed"));
+        .contains(cat_smf_editor::message::ARRANGEMENT_INPUT_TARGET_CHANGED));
 }
 #[test]
 fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
@@ -175,7 +175,7 @@ fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
         .error
         .as_ref()
         .unwrap()
-        .contains("in use"));
+        .contains("使用中です"));
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn palette_pattern_arguments_start_from_the_focused_song_filter() {
     let candidates = crate::view::palette::tests::listed(&mut a);
     let index = candidates
         .iter()
-        .position(|label| label.ends_with(": Pattern measures / meter"))
+        .position(|label| label == "Pattern measures / meter")
         .expect("Pattern command candidate");
     for _ in 0..index {
         key(&mut a, &c, song, Key::ArrowDown, Modifiers::NONE);

@@ -3,7 +3,7 @@ use super::*;
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct Places {
-    settings: Option<egui::Pos2>,
+    pub(super) settings: Option<egui::Pos2>,
     piano: Option<egui::Pos2>,
 }
 
@@ -43,10 +43,10 @@ pub(crate) fn piano_viewport() -> egui::ViewportId {
     egui::ViewportId::from_hash_of("virtual-midi-keyboard-piano")
 }
 
-const SETTINGS_SIZE: egui::Vec2 = egui::vec2(420.0, 330.0);
+pub(super) const SETTINGS_SIZE: egui::Vec2 = egui::vec2(420.0, 330.0);
 
 /// Beside the keyboard and the other companion, overlapping the pattern windows least.
-fn place(
+pub(super) fn place(
     a: &App,
     ctx: &egui::Context,
     keyboard: egui::Pos2,

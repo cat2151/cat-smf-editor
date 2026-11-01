@@ -18,8 +18,8 @@ fn basic_english_finds_help_play_and_quit_without_bypassing_confirmation() {
     };
     assert!(matching("HELP").contains(&"help".into()));
     assert!(matching("play").contains(&"play-last".into()));
-    assert_eq!(matching("quit"), vec!["quit"]);
-    assert_eq!(matching("EXIT"), vec!["quit"]);
+    assert_eq!(matching("quit"), vec!["quit", "voicevox-kill-quit"]);
+    assert_eq!(matching("EXIT"), vec!["quit", "voicevox-kill-quit"]);
     let help = a.palette.commands.iter().find(|c| c.id == "help").unwrap();
     assert!(help.key_label().contains("F1"));
     query(&mut a, &c, "help");

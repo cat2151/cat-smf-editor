@@ -1,5 +1,6 @@
 //! Track-local native parameter selection and scalar curve editing.
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::{
     edit::parameter_curve::{self, Curve, Point, Target, ValueSpace},
     host::{parameters::Parameter, PluginKey},
@@ -112,7 +113,7 @@ fn plugin(patch: &Patch, layer: u64) -> Result<PluginKey, String> {
         .layers
         .iter()
         .find(|l| l.settings.id == layer)
-        .ok_or("Missing layer")?;
+        .ok_or("layerが見つかりません")?;
     l.instrument
         .as_ref()
         .map(|p| Ok(p.plugin.clone()))
@@ -147,12 +148,12 @@ pub fn choose(app: &mut App, layer: u64) {
     }
 }
 fn make_picker(app: &mut App, layer: u64) -> Result<Picker, String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     if loaded.music.format != 1 {
-        return Err("Parameter automation requires SMF format 1".into());
+        return Err("parameterのautomationにはSMF format 1が必要です".into());
     }
     if is_track(app) || cat_smf_editor::voicevox::is_singer(&loaded.music.tracks[app.track]) {
-        return Err("Select an instrument owner track".into());
+        return Err("instrumentを持つtrackを選んでください".into());
     }
     let patch = loaded.patches[app.track].clone();
     let plugin = plugin(&patch, layer)?;
@@ -167,7 +168,7 @@ fn make_picker(app: &mut App, layer: u64) -> Result<Picker, String> {
         .filter(|p| p.eligible)
         .collect::<Vec<_>>();
     if parameters.is_empty() {
-        return Err("No continuous automatable parameters".into());
+        return Err("連続的にautomationできるparameterがありません".into());
     }
     let history = history::load(app);
     Ok(Picker {
@@ -214,12 +215,12 @@ fn create(app: &mut App) -> Result<(), String> {
         .parameter_editor
         .picker
         .as_mut()
-        .ok_or("No parameter selection")?;
+        .ok_or("parameterを選んでいません")?;
     let indices = filtered(p);
     let parameter = p
         .parameters
-        .get(*indices.get(p.selected).ok_or("No matching parameter")?)
-        .ok_or("Parameter disappeared")?
+        .get(*indices.get(p.selected).ok_or("合うparameterがありません")?)
+        .ok_or(message::PARAMETER_DISAPPEARED)?
         .clone();
     let (owner, layer, patch, key, song, generation) = (
         p.owner,
@@ -235,7 +236,7 @@ fn create(app: &mut App) -> Result<(), String> {
         || app.loaded.as_ref().and_then(|l| l.patches.get(owner)) != Some(&patch)
         || plugin(&patch, layer)? != key
     {
-        return Err("Parameter target changed; reopen Automation".into());
+        return Err(message::PARAMETER_TARGET_CHANGED.into());
     }
     let pattern = app.patterns.editing.as_ref().is_some_and(|c| c.standalone);
     if pattern {
@@ -245,19 +246,19 @@ fn create(app: &mut App) -> Result<(), String> {
     let current = catalog(app, owner, &patch, layer)?
         .into_iter()
         .find(|v| v.stable_id == parameter.stable_id && v.eligible)
-        .ok_or("Parameter disappeared")?;
+        .ok_or(message::PARAMETER_DISAPPEARED)?;
     if current.minimum != parameter.minimum
         || current.maximum != parameter.maximum
         || current.normalized != parameter.normalized
     {
-        return Err("Parameter instance changed; reopen Automation".into());
+        return Err(message::PARAMETER_INSTANCE_CHANGED.into());
     }
     let p = app.parameter_editor.picker.as_ref().unwrap();
     if !pattern
         && !p.previewed
         && current.binding.with_value(0.0) != parameter.binding.with_value(0.0)
     {
-        return Err("Parameter instance changed; reopen Automation".into());
+        return Err(message::PARAMETER_INSTANCE_CHANGED.into());
     }
     parameter.checked_current()?;
     current.checked_current()?;
@@ -305,7 +306,7 @@ fn create(app: &mut App) -> Result<(), String> {
         let definition = catalog
             .patterns
             .get(&edit.pattern)
-            .ok_or("Missing pattern")?;
+            .ok_or(message::MISSING_PATTERN)?;
         curve.target.group = definition.container;
         let target = curve.target.clone();
         let existing = cat_smf_editor::score::pattern::automation::curves(

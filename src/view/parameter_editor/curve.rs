@@ -11,12 +11,12 @@ pub(super) fn resolve(app: &mut App) -> Result<(), String> {
     let patch = loaded.patches[owner].clone();
     let key = plugin(&patch, c.target.layer)?;
     if key.format != c.target.plugin_format || key.id != c.target.plugin_id {
-        return Err("Automation instrument changed".into());
+        return Err("automationのinstrumentが変わりました".into());
     }
     let p = catalog(app, owner, &patch, c.target.layer)?
         .into_iter()
         .find(|p| p.stable_id == c.target.parameter_id)
-        .ok_or("Automation parameter is unavailable")?;
+        .ok_or("automationのparameterを使えません")?;
     validate_parameter(
         &c,
         ParameterSpec {
@@ -312,10 +312,10 @@ pub(super) fn commit_input(app: &mut App) {
             .parameter_editor
             .input
             .as_ref()
-            .ok_or("No value input")?;
-        let tick = i.tick.parse::<u64>().map_err(|_| "Invalid integer tick")?;
+            .ok_or("値の入力がありません")?;
+        let tick = i.tick.parse::<u64>().map_err(|_| "tickの整数が不正です")?;
         let value = i.value;
-        let (kind, index) = app.parameter_editor.selected.ok_or("No selected point")?;
+        let (kind, index) = app.parameter_editor.selected.ok_or("点を選んでいません")?;
         let mut c = app
             .parameter_editor
             .draft

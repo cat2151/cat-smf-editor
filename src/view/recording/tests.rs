@@ -1,9 +1,11 @@
 use super::*;
 use cat_smf_editor::{edit, score::pattern::body};
 use std::time::Duration;
+mod capture;
 mod loop_takes;
 mod mouse;
 mod native;
+mod phrase_loop;
 mod play;
 mod preparing;
 mod transport;
@@ -112,7 +114,8 @@ fn keyboard_recording_commit_round_trip_and_single_undo() {
     assert!(!a.audition.live_active());
     let music = &a.loaded.as_ref().unwrap().music;
     let c = Catalog::read(music).unwrap();
-    assert_eq!(c.patterns.len(), 1);
+    // A take, and the Capture of the keys.
+    assert_eq!(c.patterns.len(), 2);
     let id = a.patterns.selected.unwrap();
     let p = &c.patterns[&id];
     let b = body::extract(&music.tracks[p.track].events, p.range().unwrap()).unwrap();
@@ -145,9 +148,11 @@ fn keyboard_recording_commit_round_trip_and_single_undo() {
     assert_eq!(restarted.patterns.selected, Some(id));
     assert!(!restarted.patterns.recording.is_open());
     a.undo_music().unwrap();
+    // Undoing the take keeps the Capture of its keys, which is no undo step.
+    let c = Catalog::read(&a.loaded.as_ref().unwrap().music).unwrap();
     assert_eq!(
-        original,
-        cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap()
+        c.patterns.values().map(|p| p.kind).collect::<Vec<_>>(),
+        vec![cat_smf_editor::score::pattern::Kind::Capture]
     );
     assert!(!a.undo.available());
 }

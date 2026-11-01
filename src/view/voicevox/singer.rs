@@ -3,6 +3,7 @@ use crate::{
     app::App,
     view::commands::{Command, Screen},
 };
+use cat_smf_editor::message;
 use cat_smf_editor::voicevox::{
     engine::{self, Engine, Failure},
     Voice,
@@ -87,7 +88,8 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
                 match result {
                     Ok(voices) => {
                         if voices.is_empty() {
-                            app.voicevox.catalog.error = Some("VOICEVOX: no humming voices".into());
+                            app.voicevox.catalog.error =
+                                Some("VOICEVOX: hummingの声がありません".into());
                         }
                         if let Some(picker) = &mut app.voicevox.singer {
                             picker.reveal = true;
@@ -96,7 +98,8 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
                         app.voicevox.catalog.voices = voices;
                     }
                     Err(Failure::NoExecutable) => {
-                        app.voicevox.catalog.error = Some("VOICEVOX engine is not set".into());
+                        app.voicevox.catalog.error =
+                            Some(message::VOICEVOX_ENGINE_IS_NOT_SET.into());
                         if app.voicevox.singer.is_some() {
                             super::open(app);
                         }
@@ -104,7 +107,10 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
                     Err(Failure::Failed(error)) => app.voicevox.catalog.error = Some(error),
                 }
             }
-            Err(_) => app.voicevox.catalog.error = Some("VOICEVOX: catalog thread panicked".into()),
+            Err(_) => {
+                app.voicevox.catalog.error =
+                    Some("VOICEVOX: catalogの処理が異常終了しました".into())
+            }
         }
     }
     let catalog = &app.voicevox.catalog;
@@ -200,7 +206,7 @@ fn apply(app: &mut App, voice: Option<Voice>) {
     }
     match app.edit_music(|m| {
         Voice::write(
-            m.tracks.get_mut(track).ok_or("No such track")?,
+            m.tracks.get_mut(track).ok_or(message::NO_SUCH_TRACK)?,
             voice.as_ref(),
         )
     }) {

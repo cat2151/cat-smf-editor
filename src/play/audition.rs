@@ -1,5 +1,6 @@
 //! Track-local plugin instances, synchronized through one output stream.
 use crate::play::audio_sequence::Sequence;
+use cat_smf_editor::message;
 use cat_smf_editor::score::instrument::Patch;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -21,6 +22,8 @@ pub(super) struct Part {
     live: Option<live::Queue>,
     /// Metronome mixed after the master chain, so track gains never mute it.
     click: Option<Arc<click::Click>>,
+    /// Phrase loop words sent before the live keys of each block.
+    phrase: Option<Arc<phrase::Phrase>>,
     timeline: Option<Arc<super::event_timeline::Timeline>>,
     automation: Option<Arc<super::automation::RuntimePlan>>,
     velocities: [u8; 128],
@@ -34,6 +37,7 @@ impl Default for Part {
         Self {
             live: None,
             click: None,
+            phrase: None,
             timeline: None,
             automation: None,
             velocities: [0; 128],
@@ -61,6 +65,9 @@ pub struct Audition {
     /// Whether the keyboard's instrument was opened and not stopped since.
     #[cfg(test)]
     live_active: bool,
+    /// The patch the keyboard's instrument last opened with.
+    #[cfg(test)]
+    pub live_patch: Option<Patch>,
     voice: Option<Voice>,
     error: Option<String>,
     disabled: bool,
@@ -116,7 +123,7 @@ impl Audition {
             Ok(()) => voice.patches[index].1 = patch.clone(),
             Err(error) => {
                 self.reset();
-                self.error = Some(format!("Audio: {error}"));
+                self.error = Some(message::audio(error));
             }
         }
     }
@@ -197,7 +204,7 @@ impl Audition {
                 true
             }
             Err(error) => {
-                self.error = Some(format!("Audio: {error}"));
+                self.error = Some(message::audio(error));
                 false
             }
         }
@@ -399,6 +406,8 @@ pub(crate) mod click;
 mod key;
 #[path = "audition_live.rs"]
 pub(crate) mod live;
+#[path = "audition_phrase.rs"]
+pub(crate) mod phrase;
 
 #[cfg(test)]
 #[path = "audition_cache_tests.rs"]

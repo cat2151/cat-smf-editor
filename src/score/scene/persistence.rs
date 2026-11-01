@@ -6,24 +6,24 @@ pub fn read(m: &Music) -> Result<Collection, String> {
     for (track, t) in m.tracks.iter().enumerate() {
         for e in t.events.iter().filter(|e| super::owned(e)) {
             if track != 0 || e.tick != 0 || found.is_some() {
-                return Err("Duplicate or misplaced scene metadata".into());
+                return Err("sceneのmetadataが重複しているか置き場所が違います".into());
             }
             found = Some(
                 serde_json::from_slice::<Collection>(&e.data[PREFIX.len()..])
-                    .map_err(|e| format!("Invalid scene metadata: {e}"))?,
+                    .map_err(|e| format!("sceneのmetadataが不正です: {e}"))?,
             );
         }
     }
     let mut c = found.unwrap_or_default();
     if c.version != VERSION {
-        return Err("Invalid scene version".into());
+        return Err("sceneのversionが不正です".into());
     }
     for t in &m.tracks {
         for e in &t.events {
-            if let Some(crate::score::pattern::Record::Definition { id, meters, .. }) =
+            if let Some(crate::score::pattern::Record::Pattern(r)) =
                 crate::score::pattern::record(e)?
             {
-                c.pattern_lengths.insert(id, meters.len() as u64);
+                c.pattern_lengths.insert(r.id, r.meters.len() as u64);
             }
         }
     }
@@ -37,26 +37,26 @@ pub fn read(m: &Music) -> Result<Collection, String> {
         .chain(c.song.iter().map(|p| p.id))
     {
         if id == 0 || !ids.insert(id) {
-            return Err("Duplicate or zero arrangement identity".into());
+            return Err("配置の識別子が重複しているか0です".into());
         }
     }
     for l in &c.lanes {
         let owners = c.scenes.iter().filter(|s| s.lanes.contains(&l.id)).count()
             + usize::from(c.song_lanes.contains(&l.id));
         if owners != 1 {
-            return Err("Lane requires exactly one owner".into());
+            return Err("laneには持ち主がちょうど1つ必要です".into());
         }
     }
     for s in &c.scenes {
         if s.cells.iter().any(|p| !s.lanes.contains(&p.lane)) {
-            return Err("Scene placement outside its lanes".into());
+            return Err("sceneの配置がlaneの外です".into());
         }
     }
     if c.song
         .iter()
         .any(|p| !c.song_lanes.contains(&p.lane) || p.measure == 0)
     {
-        return Err("Invalid Song placement".into());
+        return Err("Songの配置が不正です".into());
     }
     // Presentation order does not depend on edit history.
     c.lanes.sort_by_key(|l| l.id);
@@ -69,7 +69,7 @@ pub fn read(m: &Music) -> Result<Collection, String> {
 pub fn write(m: &mut Music, c: &Collection) -> Result<(), String> {
     let mut next = m.clone();
     if next.tracks.is_empty() {
-        return Err("Missing conductor track".into());
+        return Err("conductor trackが見つかりません".into());
     }
     next.tracks[0].events.retain(|e| !super::owned(e));
     let data = [

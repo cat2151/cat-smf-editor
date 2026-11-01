@@ -1,5 +1,6 @@
 //! Query-specific and recent choices, stored separately from document state.
 use crate::app::App;
+use cat_smf_editor::message;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -19,7 +20,7 @@ impl History {
             Ok(bytes) => match serde_json::from_slice(&bytes) {
                 Ok(history) => history,
                 Err(error) => {
-                    app.config.error = Some(format!("Cannot read {}: {error}", path.display()));
+                    app.config.error = Some(message::cannot_read(path.display(), error));
                     Self {
                         unreadable: true,
                         ..Self::default()
@@ -28,7 +29,7 @@ impl History {
             },
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Self::default(),
             Err(error) => {
-                app.config.error = Some(format!("Cannot read {}: {error}", path.display()));
+                app.config.error = Some(message::cannot_read(path.display(), error));
                 Self {
                     unreadable: true,
                     ..Self::default()
@@ -78,7 +79,7 @@ impl History {
         };
         write().map_err(|e| {
             let _ = std::fs::remove_file(&temporary);
-            format!("Cannot save {}: {e}", path.display())
+            message::cannot_save(path.display(), e)
         })
     }
 }

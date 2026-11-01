@@ -27,10 +27,10 @@ fn owned(e: &Event) -> bool {
 impl Values {
     pub fn validate(&self) -> Result<(), String> {
         if self.version != 1 || self.parameters.len() > 512 {
-            return Err("Invalid macro values".into());
+            return Err("macroの値が不正です".into());
         }
         if self.variations.len() > 64 {
-            return Err("Too many macro variation sets".into());
+            return Err("macro variationの組が多すぎます".into());
         }
         let mut layers = std::collections::HashSet::new();
         for set in &self.variations {
@@ -39,7 +39,7 @@ impl Values {
                 || set.snapshots.len() > 128
                 || set.selected >= set.snapshots.len()
             {
-                return Err("Invalid macro variations".into());
+                return Err("macro variationが不正です".into());
             }
             let active: Vec<_> = self
                 .parameters
@@ -48,7 +48,7 @@ impl Values {
                 .cloned()
                 .collect();
             if active != set.snapshots[set.selected] {
-                return Err("Macro variation differs from active values".into());
+                return Err("macro variationが今の値と違います".into());
             }
             for snapshot in &set.snapshots {
                 if snapshot.is_empty()
@@ -58,7 +58,7 @@ impl Values {
                         .zip(&active)
                         .any(|(a, b)| a.target != b.target || a.value_space != b.value_space)
                 {
-                    return Err("Macro variation targets differ".into());
+                    return Err("macro variationの対象が違います".into());
                 }
                 validate_parameters(snapshot)?;
             }
@@ -79,7 +79,7 @@ fn validate_parameters(parameters: &[Curve]) -> Result<(), String> {
             || c.points[0].tick != 0
             || !targets.insert(c.target.clone())
         {
-            return Err("Invalid or duplicate fixed macro target".into());
+            return Err("固定macroの対象が不正か重複しています".into());
         }
     }
     Ok(())
@@ -94,7 +94,7 @@ pub fn read(track: &Track) -> Result<Values, String> {
         });
     };
     if e.tick != 0 || e.data.len() > 1024 * 1024 || events.next().is_some() {
-        return Err("Misplaced or duplicate macro values".into());
+        return Err("macroの値の置き場所が違うか重複しています".into());
     }
     let values: Values =
         serde_json::from_slice(&e.data[PREFIX.len()..]).map_err(|e| e.to_string())?;
@@ -110,7 +110,7 @@ pub fn write(track: &mut Track, values: &Values) -> Result<(), String> {
         let mut data = PREFIX.to_vec();
         data.extend(serde_json::to_vec(values).map_err(|e| e.to_string())?);
         if data.len() > 1024 * 1024 {
-            return Err("Macro values are too large".into());
+            return Err("macroの値が大きすぎます".into());
         }
         next.events.insert(
             0,

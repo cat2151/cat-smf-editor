@@ -69,6 +69,7 @@ impl Command {
         match self.id.as_str() {
             "help" => "help",
             "quit" => "quit exit",
+            "voicevox-kill-quit" => "kill quit exit",
             "open" => "open file",
             "new" => "new file",
             "add-track" => "add insert track",
@@ -143,5 +144,27 @@ mod tests {
         let mut query = SearchQuery::default();
         query.update("ずんだもん");
         assert!(!command.matches_query(&query));
+    }
+
+    #[test]
+    fn kill_finds_killing_the_voicevox_engine() {
+        let command = Command::plain(
+            Screen::Global,
+            "voicevox-kill-quit",
+            "VOICEVOX engine を終了してアプリ終了",
+            &[],
+            |_, _| {},
+        );
+        for text in [
+            "kill",
+            "kill quit",
+            "kill exit",
+            "kill voicevox",
+            "shuuryou",
+        ] {
+            let mut query = SearchQuery::default();
+            query.update(text);
+            assert!(command.matches_query(&query), "{text}");
+        }
     }
 }

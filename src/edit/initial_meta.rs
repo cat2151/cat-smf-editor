@@ -11,7 +11,7 @@ pub const C_MAJOR: [u8; 2] = [0, 0];
 /// Adds each of 4/4 and C major only when no track has a readable one at tick 0.
 pub fn initialize(music: &mut Music) -> Result<(), String> {
     if music.format != 1 || music.tracks.is_empty() {
-        return Err("Initial meta events require format 1 track 0".into());
+        return Err("初期meta eventにはformat 1のtrack 0が必要です".into());
     }
     let at_zero = || {
         music

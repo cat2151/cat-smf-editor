@@ -12,12 +12,21 @@ pub(super) fn recording(ui: &mut egui::Ui) {
         super::key_groups(
             ui,
             &[
-                (PLAY, &[("Space", "録音開始"), ("↑ ↓", "Octave")]),
+                (
+                    PLAY,
+                    &[
+                        ("Space", "録音開始"),
+                        ("↑ ↓", "Octave"),
+                        ("Ctrl+E", "Phrase loop"),
+                    ],
+                ),
+                (SOUND, &[("Ctrl+T", "音色選択")]),
                 (
                     EDIT,
                     &[
                         ("Ctrl+,", "設定"),
                         ("Ctrl+.", "Piano"),
+                        ("Ctrl+J", "Capture"),
                         ("Esc", "pattern確定・閉じる"),
                         ("Shift+Esc", "録音破棄"),
                     ],
@@ -39,6 +48,17 @@ pub(super) fn recording(ui: &mut egui::Ui) {
                         ("Esc", "閉じる"),
                     ],
                 ),
+            ],
+        );
+    });
+    ui.heading("Capture");
+    egui::Grid::new("recording-capture-help").show(ui, |ui| {
+        super::key_groups(
+            ui,
+            &[
+                (MOVE, &[("↑ ↓", "phrase選択")]),
+                (PLAY, &[("Space", "試聴")]),
+                (EDIT, &[("Enter", "pattern化"), ("Esc", "閉じる")]),
             ],
         );
     });

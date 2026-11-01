@@ -189,7 +189,7 @@ impl MeterMap {
                 }
                 if !valid_time_signature(&event.data) {
                     warnings.push(format!(
-                        "Invalid time signature: track {}, event {} (tick {})",
+                        "拍子が不正です: track {}・event {} (tick {})",
                         t + 1,
                         i + 1,
                         event.tick
@@ -226,7 +226,7 @@ impl MeterMap {
             let meter = changes[index - 1].3;
             if changes[start..index].iter().any(|c| c.3 != meter) {
                 warnings.push(format!(
-                    "Conflicting time signatures at tick {tick}; last track/event wins"
+                    "tick {tick}で拍子が食い違っています。最後のtrack/eventを使います"
                 ));
             }
             let previous = segments.last().unwrap();

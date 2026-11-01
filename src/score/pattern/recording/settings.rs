@@ -1,7 +1,8 @@
-//! What a recording session plays and how long a take lasts; never saved to SMF.
+//! What a recording session plays and how long a take lasts; kept in the app status, never in SMF.
 use crate::score::key_signature::KeySignature;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Range {
     Free,
     /// Each lap of `measures` 4/4 bars becomes its own take.
@@ -10,7 +11,7 @@ pub enum Range {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Start {
     /// Pads only sound until the Rec button.
     Button,
@@ -18,7 +19,7 @@ pub enum Start {
     Key,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Layout {
     /// Four keyboard rows `z`, `a`, `q`, `1`.
     Rows,
@@ -26,7 +27,7 @@ pub enum Layout {
     Letters,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mode {
     Note,
     /// Every row plays root position, each row one octave above the previous.
@@ -67,7 +68,7 @@ impl Mode {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Scale {
     MajorPentatonic,
     MinorPentatonic,
@@ -90,7 +91,7 @@ impl Scale {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Key {
     /// Pitch class 0..12.
     pub tonic: u8,
@@ -117,7 +118,7 @@ impl Key {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub range: Range,
     pub start: Start,

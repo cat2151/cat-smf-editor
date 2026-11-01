@@ -1,5 +1,6 @@
 //! The arrangement windows share a lifetime, but never a selected cell.
 use super::*;
+use cat_smf_editor::message;
 use cat_smf_editor::score::{
     pattern::Catalog,
     scene::{
@@ -124,12 +125,17 @@ pub fn scene_id(a: &App, p: Pane) -> Option<u64> {
         None
     }
 }
+/// The keyboard's Capture is not offered; it reaches a song only as a pattern made from it.
 pub fn choices(a: &App, p: Pane) -> Vec<(PatternOrScene, String)> {
     let Some(l) = &a.loaded else { return vec![] };
     let Ok(c) = Catalog::read(&l.music) else {
         return vec![];
     };
-    let mut patterns = c.patterns.values().collect::<Vec<_>>();
+    let mut patterns = c
+        .patterns
+        .values()
+        .filter(|p| p.kind != cat_smf_editor::score::pattern::Kind::Capture)
+        .collect::<Vec<_>>();
     patterns.sort_by_key(|p| (p.track, p.tick));
     let mut out = patterns
         .into_iter()
@@ -175,9 +181,9 @@ pub fn reset_windows(a: &mut App) {
     }
 }
 pub fn open_scene(a: &mut App, id: u64) -> Result<(), String> {
-    let c = scene::read(&a.loaded.as_ref().ok_or("No SMF is loaded")?.music)?;
+    let c = scene::read(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
     if !c.scenes.iter().any(|s| s.id == id) {
-        return Err("Missing scene".into());
+        return Err(message::MISSING_SCENE.into());
     }
     a.patterns.workspace.scene = Some(id);
     a.patterns.workspace.scene_cell.row = 0;
@@ -190,7 +196,7 @@ pub fn open_scene(a: &mut App, id: u64) -> Result<(), String> {
 pub fn place(a: &mut App, p: Pane, part: Option<PatternOrScene>) -> Result<(), String> {
     let id = scene_id(a, p);
     if p == Pane::Scene && id.is_none() {
-        return Err("Create a scene first".into());
+        return Err("先にsceneを作ってください".into());
     }
     let s = a.patterns.workspace.selection(p);
     let (row, measure) = (s.row, s.measure);
@@ -198,7 +204,7 @@ pub fn place(a: &mut App, p: Pane, part: Option<PatternOrScene>) -> Result<(), S
         let Some(lane) = lane(a, p) else {
             return Ok(());
         };
-        let collection = scene::read(&a.loaded.as_ref().ok_or("No SMF is loaded")?.music)?;
+        let collection = scene::read(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
         let measure =
             model::covering(&collection, id, lane, measure).map_or(measure, |(_, start)| start);
         return mutate(a, |m| model::place(m, id, lane, measure, None));
@@ -235,7 +241,7 @@ pub fn mutate(
 pub fn place_selected(a: &mut App, p: Pane) {
     let part = a.patterns.workspace.selection(p).choice;
     let r = part
-        .ok_or("Select a pattern or scene".into())
+        .ok_or(message::SELECT_A_PATTERN_OR_SCENE.into())
         .and_then(|part| place(a, p, Some(part)));
     result(a, r);
 }
@@ -292,7 +298,7 @@ pub fn edit_choice(a: &mut App, ctx: &egui::Context, p: Pane) {
             result(a, r);
             focus(a, ctx, Pane::Scene);
         }
-        None => result(a, Err("Select a pattern or scene".into())),
+        None => result(a, Err(message::SELECT_A_PATTERN_OR_SCENE.into())),
     }
 }
 /// Open the body editor, bound to the placement under the selected cell.

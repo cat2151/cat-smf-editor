@@ -78,7 +78,10 @@ fn metadata_rescan_refreshes_running_voice_and_rejects_missing_target() {
     drop(command);
     audition.pump();
     assert!(audition.voice.is_none());
-    assert!(audition.error().unwrap().contains("Missing parameter"));
+    assert!(audition
+        .error()
+        .unwrap()
+        .contains("parameterが見つかりません"));
 }
 
 #[test]

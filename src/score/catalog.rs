@@ -1,3 +1,4 @@
+use crate::message;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -8,13 +9,12 @@ pub struct Entry {
 
 pub fn discover(root: &Path) -> Result<Vec<Entry>, String> {
     if !root.is_dir() {
-        return Err(format!("SMF directory is missing: {}", root.display()));
+        return Err(format!("SMFのフォルダがありません: {}", root.display()));
     }
     fn visit(root: &Path, dir: &Path, output: &mut Vec<Entry>) -> Result<(), String> {
-        let entries =
-            std::fs::read_dir(dir).map_err(|e| format!("Cannot scan {}: {e}", dir.display()))?;
+        let entries = std::fs::read_dir(dir).map_err(|e| message::cannot_scan(dir.display(), e))?;
         for entry in entries {
-            let entry = entry.map_err(|e| format!("Cannot scan {}: {e}", dir.display()))?;
+            let entry = entry.map_err(|e| message::cannot_scan(dir.display(), e))?;
             let kind = entry
                 .file_type()
                 .map_err(|e| format!("{}: {e}", entry.path().display()))?;

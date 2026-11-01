@@ -217,7 +217,7 @@ fn pattern_song_without_patterns_starts_the_first_pattern_in_mml_input() {
     let c = egui::Context::default();
     palette::open(&mut a, &c);
     palette::query(&mut a, &c, "pattern");
-    assert_eq!(palette::listed(&mut a)[0], "Event list: Pattern / Song");
+    assert_eq!(palette::listed(&mut a)[0], "Pattern / Song");
     press(&mut a, &c, Key::Enter);
     assert!(a.patterns.confirming_creation());
     press(&mut a, &c, Key::Enter);
@@ -237,4 +237,28 @@ fn pattern_song_without_patterns_starts_the_first_pattern_in_mml_input() {
     assert!(!a.mml_input.open);
     assert!(crate::view::patterns::mode::workspace_open(&a));
     assert_eq!(bytes(&a), before);
+}
+#[test]
+fn the_pattern_library_picker_still_lists_the_keyboard_capture() {
+    use crate::view::patterns::workspace_tests::verification_song;
+    let (mut a, _, first, _, _) = verification_song();
+    let source = Catalog::read(&a.loaded.as_ref().unwrap().music)
+        .unwrap()
+        .patterns[&first]
+        .track;
+    let mut capture = None;
+    a.edit_tracks(|m| {
+        capture = Some(pattern::operations::create_capture(m, source)?);
+        Ok(())
+    })
+    .unwrap();
+    let listed = State::new(&a, Action::Preview)
+        .unwrap()
+        .choices(&a)
+        .unwrap()
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect::<Vec<_>>();
+    assert!(listed.contains(&capture));
+    assert!(listed.contains(&Some(first)));
 }

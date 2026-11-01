@@ -8,7 +8,7 @@ use std::time::Duration;
 
 const RECORDING: egui::Color32 = egui::Color32::from_rgb(0xf9, 0x26, 0x72);
 const REC_IDLE: egui::Color32 = egui::Color32::from_rgb(0xa0, 0x18, 0x48);
-const BUTTON: f32 = 26.0;
+pub(super) const BUTTON: f32 = 26.0;
 const TONIC: egui::Color32 = egui::Color32::from_rgb(0xe6, 0xdb, 0x74);
 const PAD: f32 = 46.0;
 /// Horizontal stagger of the `z`, `a`, `q` and `1` rows, in pads.
@@ -164,6 +164,12 @@ pub(super) enum Button {
     Stop,
     /// The container at this index of the session's sounds.
     Sound(usize),
+    /// The phrase loop switch.
+    Phrase,
+    /// The patch browser, or the layer editor of a layered container.
+    Browse,
+    /// The Capture window's menu item.
+    Capture,
 }
 
 /// Rec lights while counting in or recording; Stop is dim until then.
@@ -222,6 +228,14 @@ fn menu(ui: &mut egui::Ui, s: &mut Session) {
                 ui.close_menu();
             }
         }
+        let key = egui::RichText::new("Ctrl+J").color(ui.visuals().text_color());
+        let button = egui::Button::new("Capture")
+            .shortcut_text(key)
+            .selected(s.capture.is_some());
+        if ui.add(button).clicked() {
+            s.clicked = Some(Button::Capture);
+            ui.close_menu();
+        }
     });
 }
 
@@ -247,13 +261,18 @@ fn container(ui: &mut egui::Ui, s: &mut Session) {
 }
 
 fn playing(ui: &mut egui::Ui, s: &mut Session) {
-    ui.horizontal(|ui| {
-        transport(ui, s);
-        container(ui, s);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            menu(ui, s)
-        });
-    });
+    let row = ui
+        .horizontal(|ui| {
+            transport(ui, s);
+            super::panel::switch(ui, s);
+            container(ui, s);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                menu(ui, s)
+            });
+        })
+        .response
+        .rect;
+    super::panel::led(ui, row, s);
     lap(ui, s);
     ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
     let mut keys = vec![];

@@ -1,4 +1,5 @@
 //! Editor-specific projection of generated SMF onto one track/channel (ADR 0010).
+use crate::message;
 use crate::{
     model::{Event, Music, Track},
     score::note_view::note_on,
@@ -40,7 +41,7 @@ pub fn replace(
     let source = source(input)?;
     let end = phrase_tick(music, tick, &source)?;
     let mut next = music.clone();
-    let destination = next.tracks.get_mut(track).ok_or("Invalid track")?;
+    let destination = next.tracks.get_mut(track).ok_or(message::INVALID_TRACK)?;
     clear(destination, tick, end)?;
     if source.tracks.iter().flat_map(|t| &t.events).any(note_on) {
         insert_smf(&mut next, track, tick, channel, &source)?;
@@ -65,7 +66,7 @@ pub fn replace_measure(
     }
     let mut next = music.clone();
     clear(
-        next.tracks.get_mut(track).ok_or("Invalid track")?,
+        next.tracks.get_mut(track).ok_or(message::INVALID_TRACK)?,
         range.0,
         range.1,
     )?;
@@ -128,7 +129,7 @@ fn phrase_tick(music: &Music, tick: u64, source: &Music) -> Result<u64, String> 
         || music.division & 0x8000 != 0
         || source.division & 0x8000 != 0
     {
-        return Err("MML insertion requires ticks per quarter note".into());
+        return Err("MMLの挿入には四分音符あたりのtick数が必要です".into());
     }
     let source_end = source
         .tracks
@@ -140,8 +141,8 @@ fn phrase_tick(music: &Music, tick: u64, source: &Music) -> Result<u64, String> 
     let offset = (u128::from(source_end) * u128::from(music.division)
         + u128::from(source.division) / 2)
         / u128::from(source.division);
-    tick.checked_add(u64::try_from(offset).map_err(|_| "Tick overflow")?)
-        .ok_or_else(|| "Tick overflow".into())
+    tick.checked_add(u64::try_from(offset).map_err(|_| message::TICK_OVERFLOW)?)
+        .ok_or_else(|| message::TICK_OVERFLOW.into())
 }
 
 fn phrase_end(input: &str) -> u64 {
@@ -178,10 +179,14 @@ pub fn insert_smf(
     source: &Music,
 ) -> Result<u64, String> {
     if channel > 15 {
-        return Err("Invalid MIDI channel".into());
+        return Err("MIDI channelが不正です".into());
     }
     let end = phrase_tick(music, tick, source)?;
-    let mut destination = music.tracks.get(track).ok_or("Invalid track")?.clone();
+    let mut destination = music
+        .tracks
+        .get(track)
+        .ok_or(message::INVALID_TRACK)?
+        .clone();
     let mut notes = Vec::new();
     for event in source.tracks.iter().flat_map(|t| &t.events) {
         if !matches!(event.status & 0xf0, 0x80 | 0x90) || event.data.len() != 2 {
@@ -191,8 +196,8 @@ pub fn insert_smf(
             + u128::from(source.division) / 2)
             / u128::from(source.division);
         let at = tick
-            .checked_add(u64::try_from(offset).map_err(|_| "Tick overflow")?)
-            .ok_or("Tick overflow")?;
+            .checked_add(u64::try_from(offset).map_err(|_| message::TICK_OVERFLOW)?)
+            .ok_or(message::TICK_OVERFLOW)?;
         let mut note = event.clone();
         note.tick = at;
         note.delta = 0;

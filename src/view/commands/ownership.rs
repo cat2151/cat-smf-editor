@@ -2,6 +2,8 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Screen {
+    /// どの画面にも属さず、どの画面のパレットからも実行できる。
+    Global,
     Main,
     EditStyle,
     TrackRename,
@@ -49,6 +51,7 @@ pub enum Screen {
 impl Screen {
     pub fn label(self) -> &'static str {
         match self {
+            Self::Global => "",
             Self::Main => "Event list",
             Self::EditStyle => "Edit style",
             Self::TrackRename => "Track name",
@@ -131,6 +134,14 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
             };
         }
         return Screen::Analysis;
+    }
+    root_owner(a)
+}
+
+/// The screen owning the root window, whichever window has focus.
+fn root_owner(a: &App) -> Screen {
+    if a.patterns.workspace.input_open() {
+        return Screen::ArrangementInput;
     }
     if a.player_selection.setup.is_active()
         || super::super::busy::pending(a)
@@ -245,23 +256,163 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     Screen::Main
 }
 
-pub fn reachable(a: &App, screen: Screen) -> bool {
-    match screen {
-        Screen::Settings | Screen::Program | Screen::Recent => true,
-        Screen::Edit
-        | Screen::Go
-        | Screen::Tracks
-        | Screen::Split
-        | Screen::Play
-        | Screen::Mixer
-        | Screen::Layers
-        | Screen::Effects
-        | Screen::Timeline => a.loaded.is_some(),
-        _ => false,
+impl Screen {
+    /// Input windows and dialogs: leaving them would strand the input, so their palette shows only them.
+    pub fn transient(self) -> bool {
+        matches!(
+            self,
+            Self::EditStyle
+                | Self::TrackRename
+                | Self::LayerInput
+                | Self::DrumInput
+                | Self::DrumCreate
+                | Self::Selection
+                | Self::SelectionMenu
+                | Self::Mml
+                | Self::Note
+                | Self::Lyrics
+                | Self::Trill
+                | Self::Confirm
+                | Self::Backup
+                | Self::Invalid
+                | Self::Missing
+                | Self::Waiting
+                | Self::Browser
+                | Self::Voicevox
+                | Self::Singer
+                | Self::MacroEditor
+                | Self::ParameterPicker
+                | Self::ParameterInput
+                | Self::Patterns
+                | Self::ArrangementInput
+        )
+    }
+    /// App-wide dialogs, where even screen-independent commands are withheld.
+    pub fn app_dialog(self) -> bool {
+        matches!(
+            self,
+            Self::Waiting
+                | Self::Missing
+                | Self::Invalid
+                | Self::Confirm
+                | Self::Backup
+                | Self::EditStyle
+        )
+    }
+    fn pane(self) -> Option<crate::view::patterns::workspace::Pane> {
+        use crate::view::patterns::workspace::Pane;
+        match self {
+            Self::Scene => Some(Pane::Scene),
+            Self::Song => Some(Pane::Song),
+            _ => None,
+        }
+    }
+    /// The command leaving this root screen towards the Event list.
+    pub(super) fn close(self) -> Option<&'static str> {
+        Some(match self {
+            Self::Settings => "settings-close",
+            Self::Program => "program-close",
+            Self::Edit => "edit-close",
+            Self::Go => "go-close",
+            Self::Tracks => "tracks-close",
+            Self::Split => "split-close",
+            Self::Play => "play-close",
+            Self::Mixer => "mixer-unfocus",
+            Self::Layers => "layers-close",
+            Self::Effects => "effects-close",
+            Self::Recent => "recent-close",
+            Self::Timeline => "timeline-close",
+            Self::Overview => "overview-close",
+            Self::Drums => "drum-cancel",
+            _ => return None,
+        })
     }
 }
 
-pub fn enter(a: &mut App, ctx: &egui::Context, screen: Screen) {
+/// Screens whose commands every non-transient palette offers.
+pub fn destinations(a: &App) -> Vec<Screen> {
+    let mut out = vec![Screen::Settings, Screen::Program, Screen::Recent];
+    if a.loaded.is_some() {
+        out.extend([
+            Screen::Main,
+            Screen::Edit,
+            Screen::Go,
+            Screen::Tracks,
+            Screen::Split,
+            Screen::Play,
+            Screen::Mixer,
+            Screen::Layers,
+            Screen::Effects,
+            Screen::Timeline,
+            Screen::Overview,
+            Screen::Drums,
+        ]);
+        if crate::view::patterns::mode::workspace_open(a) {
+            out.push(Screen::Song);
+            if a.patterns.workspace.scene_window {
+                out.push(Screen::Scene);
+            }
+        }
+    }
+    out
+}
+
+/// Screens that open over `current` instead of first returning to the Event list.
+fn overlays(current: Screen) -> &'static [Screen] {
+    match current {
+        Screen::Timeline | Screen::Overview => &[Screen::Settings, Screen::Program, Screen::Play],
+        Screen::Mixer => &[Screen::Effects],
+        Screen::Scene | Screen::Song => &[Screen::Settings, Screen::Play],
+        Screen::Settings => &[Screen::Program],
+        Screen::Go => &[Screen::Tracks],
+        _ => &[],
+    }
+}
+
+/// Moves to `home` so its command can run; `false` leaves the user where navigation stopped.
+pub fn navigate(a: &mut App, ctx: &egui::Context, current: Screen, home: Screen) -> bool {
+    if current == home || home == Screen::Global {
+        return true;
+    }
+    if let Some(p) = home.pane() {
+        crate::view::patterns::workspace::focus(a, ctx, p);
+        return true;
+    }
+    if overlays(current).contains(&home) {
+        enter(a, ctx, home);
+        return true;
+    }
+    if !leave_to_main(a, ctx) {
+        a.load_error = Some("入力中の編集を確定または取消してから実行してください".into());
+        return false;
+    }
+    if ctx.viewport_id() != egui::ViewportId::ROOT {
+        crate::view::patterns::presentation::focus_root(a, ctx);
+    }
+    enter(a, ctx, home);
+    root_owner(a) == home
+}
+
+fn leave_to_main(a: &mut App, ctx: &egui::Context) -> bool {
+    loop {
+        let screen = root_owner(a);
+        if screen == Screen::Main {
+            return true;
+        }
+        let Some(close) = screen
+            .close()
+            .and_then(|id| definitions(a, screen).into_iter().find(|c| c.id == id))
+        else {
+            return false;
+        };
+        (close.run)(a, ctx);
+        if root_owner(a) == screen {
+            return false;
+        }
+    }
+}
+
+fn enter(a: &mut App, ctx: &egui::Context, screen: Screen) {
     match screen {
         Screen::Settings | Screen::Program => {
             super::super::comma_menu::open(a);
@@ -285,6 +436,8 @@ pub fn enter(a: &mut App, ctx: &egui::Context, screen: Screen) {
         Screen::Effects => crate::play::mixer::open_effects(a, false),
         Screen::Recent => super::super::recent::commands::open(a),
         Screen::Timeline => super::super::piano_roll::open(a),
+        Screen::Overview => super::super::track_overview::open(a),
+        Screen::Drums => super::super::drums::open(a),
         _ => {}
     }
     let _ = ctx;

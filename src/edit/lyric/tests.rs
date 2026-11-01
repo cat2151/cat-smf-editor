@@ -80,6 +80,12 @@ fn only_a_note_on_takes_a_lyric_and_empty_lyrics_are_skipped_when_read() {
         event(0, 0x80, 0, &[60, 0]),
     ]);
     assert_eq!(text_at(&t.events, 0).as_deref(), Some("ど"));
-    assert_eq!(set(&mut t, 2, "ら"), Err("Not a Note On".into()));
-    assert_eq!(set(&mut t, 9, "ら"), Err("Not a Note On".into()));
+    assert_eq!(
+        set(&mut t, 2, "ら"),
+        Err(crate::message::NOT_A_NOTE_ON.into())
+    );
+    assert_eq!(
+        set(&mut t, 9, "ら"),
+        Err(crate::message::NOT_A_NOTE_ON.into())
+    );
 }

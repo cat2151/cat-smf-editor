@@ -1,17 +1,18 @@
 //! Pattern-library operations own their arguments and searchable picker.
 use super::*;
 use crate::view::patterns::{self, Action};
+use cat_smf_editor::message;
 use cat_smf_editor::score::pattern::{operations, Catalog};
 fn midi_baseline(query: &str) -> Result<(u8, Option<u8>, u16), String> {
     let fields = query.split_whitespace().collect::<Vec<_>>();
     if fields.len() != 3 {
-        return Err("Expected channel, CC number or bend, value".into());
+        return Err("channel・CC番号かbend・値を入力してください".into());
     }
     let channel = fields[0]
         .parse::<u8>()
         .ok()
         .filter(|c| (1..=16).contains(c))
-        .ok_or("Channel must be 1–16")?
+        .ok_or("channelは1–16で指定します")?
         - 1;
     let controller = if fields[1].eq_ignore_ascii_case("bend") {
         None
@@ -21,14 +22,14 @@ fn midi_baseline(query: &str) -> Result<(u8, Option<u8>, u16), String> {
                 .parse::<u8>()
                 .ok()
                 .filter(|&cc| cat_smf_editor::score::pattern::automation::supported_cc(cc))
-                .ok_or("Unsupported CC baseline")?,
+                .ok_or("対応していないCCの基準値です")?,
         )
     };
     let value = fields[2]
         .parse::<u16>()
         .ok()
         .filter(|&v| v <= if controller.is_some() { 127 } else { 16383 })
-        .ok_or("Invalid MIDI baseline value")?;
+        .ok_or("MIDIの基準値が不正です")?;
     Ok((channel, controller, value))
 }
 pub(super) struct State {
@@ -49,7 +50,7 @@ pub(super) struct State {
 }
 impl State {
     pub(super) fn new(a: &App, action: Action) -> Result<Self, String> {
-        Catalog::read(&a.loaded.as_ref().ok_or("No SMF is loaded")?.music)?;
+        Catalog::read(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
         Ok(Self {
             action,
             pending_value: None,
@@ -72,7 +73,7 @@ impl State {
         })
     }
     fn choices(&self, a: &App) -> Result<Vec<(Option<u64>, String)>, String> {
-        let m = &a.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+        let m = &a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
         let c = Catalog::read(m)?;
         if self.sound {
             let out = c
@@ -108,10 +109,10 @@ impl State {
                 Action::Structure | Action::MidiBaseline | Action::AuditionTempo
             )
         {
-            return Err("This pattern action has no value input".into());
+            return Err("このpattern操作には値の入力がありません".into());
         }
         if container.is_some() && self.action != Action::MoveContainer {
-            return Err("This pattern action has no container input".into());
+            return Err("このpattern操作にはcontainerの入力がありません".into());
         }
         self.pending_value = value;
         self.pending_container = container;
@@ -128,27 +129,35 @@ impl State {
     }
     pub(super) fn apply(&mut self, a: &mut App, choice: Option<u64>) -> Result<bool, String> {
         if self.song != a.song_id {
-            return Err("Pattern input target changed".into());
+            return Err("patternの入力先が変わりました".into());
         }
         if self.tempo {
             let bpm = self
                 .query
                 .trim()
                 .parse::<f64>()
-                .map_err(|_| "Invalid audition tempo")?;
+                .map_err(|_| "試聴tempoが不正です")?;
             cat_smf_editor::score::audition_timing::TempoMap::constant(
-                a.loaded.as_ref().ok_or("No SMF is loaded")?.music.division,
+                a.loaded
+                    .as_ref()
+                    .ok_or(message::NO_SMF_LOADED)?
+                    .music
+                    .division,
                 bpm,
             )?;
             a.patterns.tempo.0 = bpm;
             return Ok(true);
         }
         if self.midi {
-            let id = self.pattern.ok_or("Missing pattern")?;
+            let id = self.pattern.ok_or(message::MISSING_PATTERN)?;
             let (channel, controller, value) = midi_baseline(&self.query)?;
             patterns::workspace::mutate(a, |m| {
                 let c = Catalog::read(m)?;
-                let owner = c.patterns.get(&id).ok_or("Missing pattern")?.container;
+                let owner = c
+                    .patterns
+                    .get(&id)
+                    .ok_or(message::MISSING_PATTERN)?
+                    .container;
                 cat_smf_editor::score::pattern::automation::set_midi_baseline(
                     m, owner, channel, controller, value,
                 )
@@ -156,8 +165,13 @@ impl State {
             return Ok(true);
         }
         if self.structure {
-            let id = self.pattern.ok_or("Missing pattern")?;
-            let division = a.loaded.as_ref().ok_or("No SMF is loaded")?.music.division;
+            let id = self.pattern.ok_or(message::MISSING_PATTERN)?;
+            let division = a
+                .loaded
+                .as_ref()
+                .ok_or(message::NO_SMF_LOADED)?
+                .music
+                .division;
             let meters = cat_smf_editor::score::pattern::body::parse_meters(&self.query, division)?;
             patterns::workspace::mutate(a, |m| operations::resize(m, id, meters))?;
             return Ok(true);
@@ -165,26 +179,26 @@ impl State {
         if self.sound {
             patterns::membership::move_to(
                 a,
-                self.pattern.ok_or("Missing pattern")?,
-                choice.ok_or("Select a container")?,
+                self.pattern.ok_or(message::MISSING_PATTERN)?,
+                choice.ok_or(message::SELECT_A_CONTAINER)?,
             )?;
             a.patterns.selected = self.pattern;
             return Ok(true);
         }
-        let id = choice.ok_or("Select a pattern")?;
+        let id = choice.ok_or("patternを選んでください")?;
         match self.action {
-            Action::Create | Action::AuditionTempo => return Err("Invalid create input".into()),
+            Action::Create | Action::AuditionTempo => return Err("作成の入力が不正です".into()),
             Action::Duplicate => patterns::library::create(a, Some(id))?,
             Action::Preview => {
                 patterns::preview::start(a, id)?;
                 a.patterns.selected = Some(id);
             }
             Action::Structure => {
-                let c = Catalog::read(&a.loaded.as_ref().ok_or("No SMF is loaded")?.music)?;
+                let c = Catalog::read(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
                 self.query = c
                     .patterns
                     .get(&id)
-                    .ok_or("Missing pattern")?
+                    .ok_or(message::MISSING_PATTERN)?
                     .meters
                     .iter()
                     .map(|m| format!("{}/{}", m.numerator, 1u64 << m.exponent))

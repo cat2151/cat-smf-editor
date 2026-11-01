@@ -1,6 +1,7 @@
 //! Reference-only plugin automation. Runtime indices and patch states never persist.
 mod metadata;
 use super::scalar_curve::{self, ScalarPoint};
+use crate::message;
 pub use metadata::{
     create, group_event, owned, read, write, Collection, Group, GROUP_PREFIX, PREFIX,
 };
@@ -58,19 +59,19 @@ impl Curve {
             || self.target.plugin_id.is_empty()
             || self.target.parameter_id.is_empty()
         {
-            return Err("Invalid parameter curve version or target identity".into());
+            return Err("parameter curveのversionか対象の識別子が不正です".into());
         }
         match (&*self.target.plugin_format, self.value_space) {
             ("CLAP", ValueSpace::Plain) => (),
             ("VST3", ValueSpace::Normalized) if self.minimum == 0.0 && self.maximum == 1.0 => (),
-            _ => return Err("Parameter format/value space mismatch".into()),
+            _ => return Err("parameterの形式と値域が合いません".into()),
         }
         self.domain()?;
         if self.controls.len() != self.points.len().saturating_sub(1) {
-            return Err("A parameter curve needs one control per segment".into());
+            return Err("parameter curveには区間ごとにcontrolが1つ必要です".into());
         }
         if self.points.windows(2).any(|p| p[0].tick >= p[1].tick) {
-            return Err("Parameter points must have unique increasing ticks".into());
+            return Err("parameterの点は重複の無い昇順のtickに置きます".into());
         }
         if self
             .points
@@ -78,17 +79,17 @@ impl Curve {
             .zip(&self.controls)
             .any(|(p, c)| !(p[0].tick..=p[1].tick).contains(&c.tick))
         {
-            return Err("A parameter control must stay inside its segment".into());
+            return Err("parameterのcontrolは区間の中に置きます".into());
         }
         if self
             .points
             .iter()
             .any(|p| !p.value.is_finite() || !(self.minimum..=self.maximum).contains(&p.value))
         {
-            return Err("Parameter value is outside its native range".into());
+            return Err(message::PARAMETER_VALUE_IS_OUTSIDE_ITS_NATIVE_RANGE.into());
         }
         if self.controls.iter().any(|p| !p.value.is_finite()) {
-            return Err("Parameter control must be finite".into());
+            return Err(message::PARAMETER_CONTROL_MUST_BE_FINITE.into());
         }
         Ok(())
     }
@@ -118,13 +119,13 @@ impl Curve {
 
     pub fn move_control(&mut self, index: usize, tick: u64, value: f64) -> Result<(), String> {
         if !value.is_finite() {
-            return Err("Parameter control must be finite".into());
+            return Err(message::PARAMETER_CONTROL_MUST_BE_FINITE.into());
         }
         let Some(pair) = self.points.get(index..index.saturating_add(2)) else {
-            return Err("No such parameter segment".into());
+            return Err("そのparameterの区間はありません".into());
         };
         if pair.len() != 2 || index >= self.controls.len() {
-            return Err("No such parameter control".into());
+            return Err("そのparameter controlはありません".into());
         }
         self.controls[index] = Point {
             tick: tick.clamp(pair[0].tick, pair[1].tick),
@@ -137,7 +138,7 @@ impl Curve {
         if value.is_finite() && (self.minimum..=self.maximum).contains(&value) {
             Ok(())
         } else {
-            Err("Parameter value is outside its native range".into())
+            Err(message::PARAMETER_VALUE_IS_OUTSIDE_ITS_NATIVE_RANGE.into())
         }
     }
 }

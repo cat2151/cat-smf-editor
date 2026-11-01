@@ -2,13 +2,17 @@ use crate::{
     app::App,
     play::{playback::Mode, transport::Prepared},
 };
+use cat_smf_editor::message;
 use cat_smf_editor::score::{audition_timing::TempoMap, instrument::Patch, pattern::Catalog};
 
 /// Single-pattern audition shares the arrangement expansion and container voice plan.
 pub fn prepare(a: &App, id: u64) -> Result<Prepared, String> {
-    let loaded = a.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let c = Catalog::read(&loaded.music)?;
-    let p = c.patterns.get(&id).ok_or("Missing preview pattern")?;
+    let p = c
+        .patterns
+        .get(&id)
+        .ok_or("試聴するpatternが見つかりません")?;
     let tempo = TempoMap::constant(loaded.music.division, a.patterns.tempo.0)?;
     crate::play::arrangement::prepare_occurrences(
         a,
@@ -35,15 +39,15 @@ pub fn remaining(a: &App, id: u64, start: f64, duration: f64) -> Option<Prepared
     Some(p)
 }
 pub fn sound(a: &App, id: u64) -> Result<(usize, Patch), String> {
-    let loaded = a.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let music = &loaded.music;
     let c = Catalog::read(music)?;
-    let p = c.patterns.get(&id).ok_or("Missing pattern")?;
+    let p = c.patterns.get(&id).ok_or(message::MISSING_PATTERN)?;
     let track = p.track;
     let patch = loaded
         .patches
         .get(track)
-        .ok_or("Missing container sound")?
+        .ok_or(message::MISSING_CONTAINER_SOUND)?
         .clone();
     Ok((track, patch))
 }

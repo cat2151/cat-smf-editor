@@ -2,6 +2,7 @@ use crate::{
     app::App,
     play::playback::{self, Mode},
 };
+use cat_smf_editor::message;
 use cat_smf_editor::{score::audition_timing::TempoMap, score::display_rows::DisplayRow};
 use eframe::egui;
 
@@ -191,7 +192,7 @@ pub fn advance(app: &mut App) {
             app.audition.stop();
             app.playback.active = None;
             app.playback.repeat = None;
-            app.load_error = Some(format!("Automation: {error}"));
+            app.load_error = Some(message::automation(error));
             return;
         }
         match crate::play::sung::prerender::takes(app, &prepared) {

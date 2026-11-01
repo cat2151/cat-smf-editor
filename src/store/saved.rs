@@ -1,4 +1,5 @@
 //! One MIDI document, saved by confirmation or persisted automatic-save opt-in.
+use cat_smf_editor::message;
 use cat_smf_editor::{model::Music, smf_io};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -124,7 +125,7 @@ impl Document {
             let directory = self
                 .directory
                 .as_ref()
-                .ok_or("Backup directory is unavailable")?;
+                .ok_or(message::BACKUP_DIRECTORY_IS_UNAVAILABLE)?;
             super::saved_write::replace_with_backup(
                 path,
                 &self.bytes,
@@ -157,7 +158,7 @@ impl Document {
 
     pub fn remember(&mut self, path: &Path, music: &Music) -> Result<(), String> {
         if self.key.as_deref().is_some_and(|key| key != path) {
-            return Err("The MIDI document changed".into());
+            return Err("MIDIが変わりました".into());
         }
         self.bytes = smf_io::encode(music)?;
         self.auto_save = super::auto_save::enabled(music);
@@ -188,7 +189,7 @@ impl Document {
     }
 
     pub fn save(&mut self) -> Result<(), String> {
-        let path = self.key.as_ref().ok_or("No MIDI document is loaded")?;
+        let path = self.key.as_ref().ok_or("MIDIが開かれていません")?;
         if !self.dirty() {
             self.auto_save_stopped = false;
             self.error = None;
@@ -197,14 +198,14 @@ impl Document {
         let directory = self
             .directory
             .as_ref()
-            .ok_or("Backup directory is unavailable")?;
+            .ok_or(message::BACKUP_DIRECTORY_IS_UNAVAILABLE)?;
         super::saved_write::replace_with_backup(
             path,
             &self.bytes,
             &self.expected,
             &directory.join("backup"),
         )
-        .map_err(|e| format!("Cannot save {}: {e}", path.display()))?;
+        .map_err(|e| message::cannot_save(path.display(), e))?;
         self.expected = self.bytes.clone();
         self.baseline = self.bytes.clone();
         self.saved_auto_save = self.auto_save;

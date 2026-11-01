@@ -1,18 +1,23 @@
 //! Volume edits update the SMF first; live gains are a projection of that value.
 use crate::app::App;
+use cat_smf_editor::message;
 
 pub(crate) fn set(app: &mut App, track: usize, gain: f32) -> Result<(), String> {
     change(app, track, gain, false)
 }
 
 pub(crate) fn change(app: &mut App, track: usize, gain: f32, dragging: bool) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
-    let source = loaded.music.tracks.get(track).ok_or("Track was removed")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
+    let source = loaded
+        .music
+        .tracks
+        .get(track)
+        .ok_or(message::TRACK_WAS_REMOVED)?;
     if !gain.is_finite()
         || !(0.0..=crate::play::track_volume::db_to_gain(crate::play::track_volume::MAX_DB))
             .contains(&gain)
     {
-        return Err("Invalid track volume".into());
+        return Err(message::INVALID_TRACK_VOLUME.into());
     }
     if crate::play::track_volume::read(source)? == gain {
         return Ok(());

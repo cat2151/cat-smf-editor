@@ -34,6 +34,8 @@ pub struct State {
     pub(super) geometry: Option<[f32; 4]>,
     /// Lifts the help window above the others at its next frame.
     pub(crate) raise: bool,
+    /// When the frame started blinking, so that the summoned help is noticed.
+    pub(super) flash: Option<std::time::Instant>,
 }
 
 /// Called before modal suspension, including native companion viewports.

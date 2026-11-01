@@ -72,7 +72,7 @@ fn stamp(path: &Path, output: &mut Vec<u8>) -> Result<(), String> {
                 .file_type()
                 .is_symlink()
             {
-                return Err("Symlinked plugin bundles cannot be cached safely".into());
+                return Err("symlinkのplugin bundleは安全にcacheできません".into());
             }
             stamp(&child, output)?;
         }
@@ -142,15 +142,12 @@ impl Cache {
             } else {
                 let state = generate(reference)?;
                 if current.is_some() && fingerprint(reference).ok() != current {
-                    return Err("Patch or plugin changed during state generation".into());
+                    return Err("state生成中にpatchかpluginが変わりました".into());
                 }
                 self.remember(reference, state)?;
             }
         }
-        let entry = self
-            .used
-            .get(&id)
-            .ok_or("Generated state was not retained")?;
+        let entry = self.used.get(&id).ok_or("生成したstateが残っていません")?;
         Ok(PluginState {
             reference: Some(reference.clone()),
             plugin: reference.plugin.clone(),
@@ -163,7 +160,7 @@ impl Cache {
     pub fn remember(&mut self, reference: &PatchReference, state: Vec<u8>) -> Result<(), String> {
         let id = key(reference)?;
         if state.is_empty() || state.len() > MAX_STATE {
-            return Err("Invalid generated state size".into());
+            return Err("生成したstateの大きさが不正です".into());
         }
         let fingerprint = fingerprint(reference).unwrap_or_default();
         self.used.insert(
@@ -215,7 +212,7 @@ impl Cache {
                 if created {
                     let _ = std::fs::remove_file(&temp);
                 }
-                return Err(format!("State cache {}: {e}", path.display()));
+                return Err(format!("stateのcache {}: {e}", path.display()));
             }
         }
         Ok(())

@@ -6,6 +6,7 @@ mod parameter_automation;
 pub(crate) mod sound;
 mod startup;
 pub(crate) mod undo;
+use cat_smf_editor::message;
 use cat_smf_editor::{model::Music, score::musical_time::MusicalTime, score::note_view::NoteView};
 use eframe::egui;
 
@@ -159,10 +160,10 @@ impl App {
         &mut self,
         edit: impl FnOnce(&mut Music) -> Result<(), String>,
     ) -> Result<(), String> {
-        let loaded = self.loaded.as_ref().ok_or("No SMF is loaded")?;
+        let loaded = self.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
         let before = loaded.music.clone();
         if !self.can_edit_notes(self.track) {
-            return Err("Edit the pattern from its destination track".into());
+            return Err(message::EDIT_PATTERN_FROM_DESTINATION_TRACK.into());
         }
         let view = loaded.visible().clone();
         let mut music = view.clone();
@@ -231,9 +232,9 @@ impl App {
 
 impl App {
     pub(crate) fn apply_note_music(&mut self, music: Music, view: &Music) -> Result<(), String> {
-        let loaded = self.loaded.as_ref().ok_or("No SMF is loaded")?;
+        let loaded = self.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
         if !self.can_edit_notes(self.track) {
-            return Err("Edit the pattern from its destination track".into());
+            return Err(message::EDIT_PATTERN_FROM_DESTINATION_TRACK.into());
         }
         let mut music =
             if let Some(context) = crate::view::patterns::mode::editing(self, self.track) {

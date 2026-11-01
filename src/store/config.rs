@@ -1,6 +1,9 @@
-use cat_smf_editor::patch_identity::PatchIdentity;
+use cat_smf_editor::message;
+use cat_smf_editor::{patch_identity::PatchIdentity, score::pattern::recording};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+mod status;
+pub(crate) use status::Status;
 
 pub fn directory() -> Option<PathBuf> {
     cat_smf_editor::storage_paths::directory()
@@ -32,51 +35,6 @@ pub enum ProgramTarget {
     Current,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Status {
-    #[serde(default)]
-    pub navigation: super::navigation::Navigation,
-    pub session: Option<Session>,
-    #[serde(default)]
-    pub program_target: ProgramTarget,
-    #[serde(default = "enabled")]
-    pub tempo_curve_maximized: bool,
-    #[serde(default = "enabled")]
-    pub parameter_curve_maximized: bool,
-    #[serde(default = "enabled")]
-    pub macro_variation_curve_maximized: bool,
-    #[serde(default = "enabled")]
-    pub piano_roll_maximized: bool,
-    #[serde(default = "enabled")]
-    pub meta_text_visible: bool,
-    #[serde(default)]
-    pub browser_panes: std::collections::BTreeMap<String, [String; 2]>,
-    #[serde(default)]
-    pub browser_queries: std::collections::BTreeMap<String, String>,
-    #[serde(default)]
-    pub patch_cursors: std::collections::BTreeMap<String, PatchIdentity>,
-    /// Spectrum window: outer x, y and inner width, height in logical pixels.
-    #[serde(default)]
-    pub analysis_window: Option<[f32; 4]>,
-    #[serde(default)]
-    pub analysis_open: bool,
-    #[serde(default)]
-    pub help_open: bool,
-    #[serde(default)]
-    pub help_window: Option<[f32; 4]>,
-    /// Pattern companion windows: outer x/y and inner width/height.
-    #[serde(default)]
-    pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
-    /// Virtual MIDI keyboard windows: outer x/y.
-    #[serde(default)]
-    pub keyboard_windows: std::collections::BTreeMap<String, [f32; 2]>,
-    /// VOICEVOX engine の `run.exe`。
-    #[serde(default)]
-    pub voicevox_engine: Option<PathBuf>,
-    #[serde(default)]
-    pub mascot_enabled: bool,
-}
-
 pub struct Store {
     pub(crate) persisted_mid: Option<PathBuf>,
     /// Document belonging to the deferred UI snapshot, independent of startup.json.
@@ -100,39 +58,11 @@ pub struct Store {
     pub help_window: Option<[f32; 4]>,
     pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
     pub keyboard_windows: std::collections::BTreeMap<String, [f32; 2]>,
+    pub phrase_loop: bool,
+    pub keyboard_settings: Option<(recording::Settings, u16)>,
     pub voicevox_engine: Option<PathBuf>,
     pub mascot_enabled: bool,
     pub error: Option<String>,
-}
-
-fn enabled() -> bool {
-    true
-}
-
-impl Default for Status {
-    fn default() -> Self {
-        Self {
-            navigation: Default::default(),
-            session: None,
-            program_target: ProgramTarget::default(),
-            tempo_curve_maximized: true,
-            parameter_curve_maximized: true,
-            macro_variation_curve_maximized: true,
-            piano_roll_maximized: true,
-            meta_text_visible: true,
-            browser_panes: Default::default(),
-            browser_queries: Default::default(),
-            patch_cursors: Default::default(),
-            analysis_window: None,
-            analysis_open: false,
-            help_open: false,
-            help_window: None,
-            pattern_windows: Default::default(),
-            keyboard_windows: Default::default(),
-            voicevox_engine: None,
-            mascot_enabled: false,
-        }
-    }
 }
 
 impl Default for Store {
@@ -159,6 +89,8 @@ impl Default for Store {
             help_window: None,
             pattern_windows: Default::default(),
             keyboard_windows: Default::default(),
+            phrase_loop: false,
+            keyboard_settings: None,
             voicevox_engine: None,
             mascot_enabled: false,
             error: None,
@@ -171,7 +103,7 @@ impl Store {
         match directory() {
             Some(root) => Self::open_directory(root),
             None => Self {
-                error: Some("Cannot save session: LOCALAPPDATA is unavailable".into()),
+                error: Some("sessionを保存できません: LOCALAPPDATAを使えません".into()),
                 ..Self::default()
             },
         }
@@ -188,7 +120,7 @@ impl Store {
         })();
         let mut store = Self::open(path);
         if let Err(error) = migration {
-            store.error = Some(format!("Cannot rename config.json to status.json: {error}"));
+            store.error = Some(format!("config.jsonをstatus.jsonへ改名できません: {error}"));
         }
         store
     }
@@ -219,6 +151,8 @@ impl Store {
                     help_window,
                     pattern_windows,
                     keyboard_windows,
+                    phrase_loop,
+                    keyboard_settings,
                     voicevox_engine,
                     mascot_enabled,
                 }) => {
@@ -250,15 +184,15 @@ impl Store {
                         .into_iter()
                         .filter(|(_, at)| at.iter().all(|v| v.is_finite()))
                         .collect();
+                    store.phrase_loop = phrase_loop;
+                    store.keyboard_settings = keyboard_settings;
                     store.voicevox_engine = voicevox_engine;
                     store.mascot_enabled = mascot_enabled;
                 }
-                Err(error) => {
-                    store.error = Some(format!("Cannot read {}: {error}", path.display()))
-                }
+                Err(error) => store.error = Some(message::cannot_read(path.display(), error)),
             },
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => store.error = Some(format!("Cannot read {}: {error}", path.display())),
+            Err(error) => store.error = Some(message::cannot_read(path.display(), error)),
         }
         store.session_document = store.navigation.last_mid.clone();
         match super::startup::read(path) {
@@ -359,6 +293,20 @@ impl Store {
         }
     }
 
+    pub fn select_phrase_loop(&mut self, on: bool) {
+        if self.phrase_loop != on {
+            self.phrase_loop = on;
+            self.persist();
+        }
+    }
+
+    pub fn select_keyboard_settings(&mut self, kept: (recording::Settings, u16)) {
+        if self.keyboard_settings != Some(kept) {
+            self.keyboard_settings = Some(kept);
+            self.persist();
+        }
+    }
+
     pub fn select_mascot_enabled(&mut self, enabled: bool) {
         if self.mascot_enabled != enabled {
             self.mascot_enabled = enabled;
@@ -405,6 +353,8 @@ impl Store {
                 help_window: self.help_window,
                 pattern_windows: self.pattern_windows.clone(),
                 keyboard_windows: self.keyboard_windows.clone(),
+                phrase_loop: self.phrase_loop,
+                keyboard_settings: self.keyboard_settings,
                 voicevox_engine: self.voicevox_engine.clone(),
                 mascot_enabled: self.mascot_enabled,
             })?;
@@ -424,7 +374,7 @@ impl Store {
         }
         self.error = result
             .err()
-            .map(|error| format!("Cannot save {}: {error}", path.display()));
+            .map(|error| message::cannot_save(path.display(), error));
     }
 }
 

@@ -1,5 +1,6 @@
 //! Pattern expression windows stay discontinuous; gaps use the container's baseline.
 use super::*;
+use cat_smf_editor::message;
 use cat_smf_editor::score::pattern::render::ParameterInterval;
 pub(super) fn audition_notes(
     app: &mut App,
@@ -71,7 +72,7 @@ pub(crate) fn prepare(
     events: &BTreeMap<usize, Vec<cat_smf_editor::model::Event>>,
     tempo: &TempoMap,
 ) -> Result<Automation, String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let mut owners = vec![];
     for (owner, patch, sequence) in parts {
         let mut curves: Vec<Arc<Curve>> = vec![];
@@ -99,22 +100,22 @@ pub(crate) fn prepare(
                 .layers
                 .iter()
                 .find(|l| l.settings.id == c.target.layer)
-                .ok_or("Missing container macro layer")?;
+                .ok_or("containerのmacro layerが見つかりません")?;
             let key = layer
                 .instrument
                 .as_ref()
                 .map(|s| Ok(s.plugin.clone()))
                 .unwrap_or_else(cat_smf_editor::chain::default_instrument)?;
             if key.id != c.target.plugin_id || key.format != c.target.plugin_format {
-                return Err("Container macro instrument changed".into());
+                return Err("containerのmacroのinstrumentが変わりました".into());
             }
             if let Some(curve) = curves.iter().find(|curve| same(&curve.target, &c.target)) {
-                let value = c.value_at(0.0).ok_or("Missing fixed macro baseline")?;
+                let value = c.value_at(0.0).ok_or("固定macroの基準値が見つかりません")?;
                 if c.value_space != curve.value_space
                     || c.minimum != curve.minimum
                     || c.maximum != curve.maximum
                 {
-                    return Err("Container macro baseline domain changed".into());
+                    return Err("containerのmacro基準値の値域が変わりました".into());
                 }
                 for w in windows.get_mut(&curve.target).into_iter().flatten() {
                     w.baseline = value;
@@ -148,7 +149,7 @@ pub(crate) fn prepare(
                     ticks.push(
                         w.start
                             .checked_add(p.tick)
-                            .ok_or("Pattern curve time overflow")?,
+                            .ok_or("pattern curveの時間が上限を超えました")?,
                     );
                 }
             }

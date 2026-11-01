@@ -1,4 +1,5 @@
 //! One optional guide on the ordinary Format 1 PPQN timeline.
+use crate::message;
 use crate::model::{Event, Music, Track};
 
 pub const ROLE: &[u8] = b"\x7dcat-smf-editor\0chord-guide\0";
@@ -34,7 +35,7 @@ pub fn chord_text(data: &[u8]) -> Option<&str> {
 
 pub fn event(tick: u64, text: &str) -> Result<Event, String> {
     if text.trim().is_empty() || text.contains(['\r', '\n', '\t']) {
-        return Err("Expected a single-line chord".into());
+        return Err("chordは1行で入力してください".into());
     }
     Ok(meta(tick, [CHORD, &[1], text.as_bytes()].concat()))
 }
@@ -51,13 +52,13 @@ fn meta(tick: u64, data: Vec<u8>) -> Event {
 
 pub fn add(music: &mut Music) -> Result<(), String> {
     if !supported(music) {
-        return Err("Chord guide requires Format 1 PPQN".into());
+        return Err("chord guideにはFormat 1のPPQNが必要です".into());
     }
     if track(music).is_some() {
-        return Err("Chord guide already exists".into());
+        return Err("chord guideは既にあります".into());
     }
     if music.tracks.len() >= 32767 {
-        return Err("Too many SMF tracks".into());
+        return Err(message::TOO_MANY_SMF_TRACKS.into());
     }
     let mut guide = Track {
         events: vec![meta(0, [ROLE, &[1]].concat())],

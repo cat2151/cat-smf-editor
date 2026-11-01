@@ -1,4 +1,5 @@
 use crate::app::App;
+use cat_smf_editor::message;
 use std::{io::Write, path::Path};
 pub(crate) fn dialog(app: &mut App) {
     let bytes = match bytes(app) {
@@ -26,7 +27,7 @@ pub(crate) fn dialog(app: &mut App) {
     }
 }
 fn bytes(app: &App) -> Result<Vec<u8>, String> {
-    let m = &app.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+    let m = &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
     cat_smf_editor::smf_io::encode(&cat_smf_editor::score::performance::song(m)?)
 }
 fn write(app: &App, path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -36,7 +37,7 @@ fn write(app: &App, path: &Path, bytes: &[u8]) -> Result<(), String> {
         .path()
         .is_some_and(|source| canonical(source) == canonical(path))
     {
-        return Err("Performance export must use a different file from the editable MID".into());
+        return Err("演奏用の出力先には編集用のMIDと別のファイルを指定します".into());
     }
     if path.exists() {
         let expected = std::fs::read(path).map_err(|e| e.to_string())?;
@@ -44,7 +45,7 @@ fn write(app: &App, path: &Path, bytes: &[u8]) -> Result<(), String> {
             .saved
             .directory
             .as_ref()
-            .ok_or("Backup directory is unavailable")?
+            .ok_or(message::BACKUP_DIRECTORY_IS_UNAVAILABLE)?
             .join("backup");
         crate::store::replace_with_backup(path, bytes, &expected, &backup)
             .map_err(|e| e.to_string())

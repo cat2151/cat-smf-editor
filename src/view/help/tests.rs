@@ -55,7 +55,7 @@ fn help_shortcuts_and_warnings_tooltip_preserve_view_state() {
     let hovered = render(&mut app, hover);
     assert!(texts(&hovered)
         .iter()
-        .any(|(t, _)| t.contains("Invalid time signature")));
+        .any(|(t, _)| t.contains("拍子が不正です")));
     assert!(!app.help_open, "warnings are read without opening help");
     render(
         &mut app,

@@ -2,6 +2,7 @@ use super::Command;
 use crate::play::audition_native::Native;
 use crate::play::instance_cache::Cache;
 use crate::play::layer_render::Render;
+use cat_smf_editor::message;
 use cat_smf_editor::score::instrument::Patch;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{
@@ -32,7 +33,7 @@ impl Builder {
         let _span = cat_smf_editor::startup_trace::span("audio_device_config");
         let device = cpal::default_host()
             .default_output_device()
-            .ok_or("No audio output device")?;
+            .ok_or(message::NO_AUDIO_OUTPUT_DEVICE)?;
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let (reusable, master) = match previous {
             Some(voice) if voice.rate == supported.sample_rate().0 => voice.into_reusable(),
@@ -58,7 +59,7 @@ impl Builder {
             patch,
             self.supported.sample_rate().0,
         )
-        .map_err(|e| format!("Track {}: {e}", track + 1))?;
+        .map_err(|e| message::track_error(track + 1, e))?;
         self.natives.push(native);
         self.renders.push(render);
         self.patches.push((track, patch.clone()));
@@ -74,7 +75,7 @@ impl Builder {
         } else if self.master.is_none() {
             self.master = Some(
                 cat_smf_editor::chain::Chain::open_master(self.supported.sample_rate().0, settings)
-                    .map_err(|e| format!("Master: {e}"))?,
+                    .map_err(message::master)?,
             );
         }
         Ok(())
@@ -102,7 +103,7 @@ impl Builder {
                 .patches
                 .iter()
                 .position(|(track, _)| *track == plan.owner)
-                .ok_or("Automation owner was not opened")?;
+                .ok_or("automationの持ち主が開かれていません")?;
             let bindings = self.natives[index].prepare_automation(plan)?;
             self.renders[index].set_automation(bindings);
             names.extend(plan.curves.iter().map(|c| {
@@ -223,7 +224,7 @@ impl Voice {
                 failed.clone(),
                 diagnostics.clone(),
             ),
-            format => return Err(format!("Unsupported audio format: {format:?}")),
+            format => return Err(message::unsupported_audio_format(format)),
         }?;
         stream.play().map_err(|e| e.to_string())?;
         Ok(Self {

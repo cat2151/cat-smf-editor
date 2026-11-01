@@ -15,17 +15,14 @@ pub(crate) fn validate(
     for curve in curves {
         let key = plugin(patch, curve.target.layer)?;
         if key.id != curve.target.plugin_id || key.format != curve.target.plugin_format {
-            return Err(format!(
-                "Container instrument is incompatible with {}",
-                curve.name
-            ));
+            return Err(format!("containerのinstrumentが{}に合いません", curve.name));
         }
         if native {
             let parameters = catalog(app, owner, patch, curve.target.layer)?;
             let p = parameters
                 .iter()
                 .find(|p| p.stable_id == curve.target.parameter_id)
-                .ok_or("Destination parameter is unavailable")?;
+                .ok_or("移動先のparameterを使えません")?;
             validate_parameter(
                 curve,
                 ParameterSpec {
@@ -75,7 +72,9 @@ pub(crate) fn changes(
         }
     }
     for &owner in &new.sources {
-        let patch = patches.get(owner).ok_or("Missing container patch")?;
+        let patch = patches
+            .get(owner)
+            .ok_or("containerのpatchが見つかりません")?;
         let container = *new.tracks.iter().find(|(_, t)| **t == owner).unwrap().0;
         let old_patch = old
             .tracks

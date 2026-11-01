@@ -1,4 +1,5 @@
 use crate::app::App;
+use cat_smf_editor::message;
 use eframe::egui::{self, Event, ImeEvent};
 
 pub struct Editing {
@@ -108,7 +109,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             let track = music
                 .tracks
                 .get_mut(editing.track)
-                .ok_or("Track was removed")?;
+                .ok_or(message::TRACK_WAS_REMOVED)?;
             if track.name().unwrap_or_default() == editing.text {
                 return Ok(());
             }

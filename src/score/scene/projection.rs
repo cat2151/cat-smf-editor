@@ -1,5 +1,6 @@
 //! Scene coordinates are transient; original song notes and meter events stay saved.
 use super::*;
+use crate::message;
 use crate::score::note_view::{note_off, note_on};
 pub fn music(base: &Music, scene: &Scene, c: &Catalog) -> Result<Music, String> {
     let mut next = base.clone();
@@ -20,7 +21,7 @@ pub fn music(base: &Music, scene: &Scene, c: &Catalog) -> Result<Music, String> 
         let p = c
             .patterns
             .get(&cell.pattern)
-            .ok_or("Missing scene pattern")?;
+            .ok_or(message::MISSING_SCENE_PATTERN)?;
         let track = p.track;
         let source = p.range()?;
         let dest = scene.range(u128::from(cell.measure) + 1)?;

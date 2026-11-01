@@ -1,5 +1,6 @@
 //! The editor's own sequencer-specific payloads, named by what they restore.
 use super::Part;
+use crate::message;
 use crate::{
     app_meta, chain_settings,
     edit::tempo_curve::{self, Curve},
@@ -14,7 +15,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
             if value == [1] {
                 "Chord guide"
             } else {
-                "invalid"
+                message::INVALID
             }
             .into(),
         )
@@ -22,7 +23,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
         (
             "Chord",
             crate::score::chord_guide::chord_text(data)
-                .unwrap_or("invalid")
+                .unwrap_or(message::INVALID)
                 .to_owned(),
         )
     } else if data.starts_with(crate::score::performance::PREFIX) {
@@ -36,7 +37,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
             if data.strip_prefix(crate::score::performance::OWNER) == Some(&[1][..]) {
                 "Container".into()
             } else {
-                "invalid".into()
+                message::INVALID.into()
             },
         )
     } else if data.starts_with(crate::score::pattern::automation::PREFIX) {
@@ -46,11 +47,13 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
         )
     } else if data.starts_with(crate::score::pattern::automation::BASELINES) {
         (
-            "Container baselines",
+            "Pattern container baselines",
             crate::score::pattern::automation::describe_baselines(data),
         )
     } else if data.starts_with(crate::score::scene::PREFIX) {
         ("Scenes", crate::score::scene::describe(data))
+    } else if data.starts_with(crate::score::pattern::CONTAINER_PREFIX) {
+        ("Pattern container", crate::score::pattern::describe(data))
     } else if data.starts_with(crate::score::pattern::PREFIX) {
         ("Pattern", crate::score::pattern::describe(data))
     } else if data.starts_with(crate::score::same_measure::PREFIX) {
@@ -65,7 +68,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
             "Same measure",
             crate::score::same_measure::reference(&event)
                 .map(|m| m.unwrap().to_string())
-                .unwrap_or_else(|e| format!("invalid ({e})")),
+                .unwrap_or_else(crate::message::invalid_value),
         )
     } else if let Some(value) = data.strip_prefix(app_meta::TRACK_VOLUME) {
         ("Track volume", volume(value))
@@ -73,7 +76,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
         let state = if value == b"\x01\x01" {
             "On"
         } else {
-            "invalid"
+            message::INVALID
         };
         ("Auto save", state.into())
     } else if let Some(json) = data.strip_prefix(crate::voicevox::voice::PREFIX) {
@@ -81,7 +84,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
             "VOICEVOX voice",
             serde_json::from_slice::<crate::voicevox::Voice>(json)
                 .map(|v| v.label())
-                .unwrap_or_else(|_| "invalid".into()),
+                .unwrap_or_else(|_| message::INVALID.into()),
         )
     } else if let Some(json) = data.strip_prefix(crate::score::macro_values::PREFIX) {
         (
@@ -121,7 +124,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
                     }
                     parts.join(" · ")
                 })
-                .unwrap_or_else(|_| "invalid".into()),
+                .unwrap_or_else(|_| message::INVALID.into()),
         )
     } else if let Some(json) = data.strip_prefix(crate::score::macro_curve::PREFIX) {
         (
@@ -154,7 +157,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
                         .collect::<Vec<_>>()
                         .join(" · ")
                 })
-                .unwrap_or_else(|_| "invalid".into()),
+                .unwrap_or_else(|_| message::INVALID.into()),
         )
     } else if let Some(json) = data.strip_prefix(instrument_layers::PREFIX) {
         ("Instrument layers", references(json, true))
@@ -180,7 +183,7 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
 fn group(json: &[u8]) -> String {
     match serde_json::from_slice::<crate::edit::parameter_curve::Group>(json) {
         Ok(group) if group.version == 1 && group.id != 0 => format!("{}", group.id),
-        _ => "invalid".into(),
+        _ => message::INVALID.into(),
     }
 }
 
@@ -218,7 +221,7 @@ fn parameter(json: &[u8]) -> String {
                 .collect::<Vec<_>>()
                 .join(" → ")
         ),
-        Err(error) => format!("invalid ({error})"),
+        Err(error) => message::invalid_value(error),
     }
 }
 
@@ -229,7 +232,7 @@ fn volume(value: &[u8]) -> String {
             let gain = f32::from_le_bytes(gain.try_into().unwrap());
             format!("{:+.1} dB", 20.0 * gain.log10())
         }
-        _ => "invalid".into(),
+        _ => message::INVALID.into(),
     }
 }
 
@@ -247,7 +250,7 @@ fn tempo(json: &[u8]) -> String {
                 .join(" → ")
                 + " BPM"
         }
-        Err(error) => format!("invalid ({error})"),
+        Err(error) => message::invalid_value(error),
     }
 }
 
@@ -257,7 +260,7 @@ fn references(json: &[u8], layers: bool) -> String {
         .and_then(|s| s.validate_portable().map(|()| s))
     {
         Ok(settings) => settings,
-        Err(error) => return format!("invalid ({error})"),
+        Err(error) => return message::invalid_value(error),
     };
     let mut items = Vec::new();
     if layers {

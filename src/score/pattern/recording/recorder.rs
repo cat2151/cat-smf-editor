@@ -1,5 +1,6 @@
 //! Pads pressed during a session, split into one take per loop lap.
 use super::{note, operations, pitches, ticks, write, Pad, Range, Settings, Start};
+use crate::message;
 use crate::model::Music;
 use std::time::Duration;
 
@@ -38,13 +39,13 @@ impl Lap {
 impl Recorder {
     pub fn new(division: u16, settings: Settings) -> Result<Self, String> {
         if division == 0 || division & 0x8000 != 0 {
-            return Err("Recording requires PPQN timing".into());
+            return Err(message::RECORDING_REQUIRES_PPQN_TIMING.into());
         }
         if settings.tempo == 0 {
-            return Err("Recording requires a positive tempo".into());
+            return Err(message::RECORDING_REQUIRES_A_POSITIVE_TEMPO.into());
         }
         if matches!(settings.range, Range::Loop { measures: 0 }) {
-            return Err("Loop recording requires at least one measure".into());
+            return Err("Loop録音には1小節以上が必要です".into());
         }
         Ok(Self {
             division,
@@ -166,7 +167,11 @@ impl Recorder {
             lap.on[p] = Some(tick);
             lap.events.push(note(tick, true, pitch));
         } else if let Some(start) = lap.on[p].take() {
-            let tick = local.max(start.checked_add(1).ok_or("Recording time overflow")?);
+            let tick = local.max(
+                start
+                    .checked_add(1)
+                    .ok_or(message::RECORDING_TIME_OVERFLOW)?,
+            );
             lap.released[p] = tick;
             lap.end = lap.end.max(tick);
             lap.events.push(note(tick, false, pitch));
@@ -196,14 +201,14 @@ impl Recorder {
     /// One pattern per lap that holds notes, created in lap order; the caller supplies a clone.
     pub fn commit(&self, music: &mut Music, source: Option<usize>) -> Result<Vec<u64>, String> {
         if !self.held.is_empty() || self.laps.iter().any(|l| l.on.iter().any(Option::is_some)) {
-            return Err("Recording has held notes".into());
+            return Err("録音中に押さえたままのnoteがあります".into());
         }
         if music.division != self.division {
-            return Err("Recording division changed".into());
+            return Err("録音の分割が変わりました".into());
         }
         let laps = self.laps.iter().filter(|l| !l.events.is_empty());
         if laps.clone().next().is_none() {
-            return Err("Recording is empty".into());
+            return Err(message::RECORDING_IS_EMPTY.into());
         }
         let source = match source {
             Some(track) => track,

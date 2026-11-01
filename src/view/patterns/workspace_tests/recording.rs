@@ -15,16 +15,23 @@ fn pad(a: &mut App, c: &egui::Context, id: egui::ViewportId, k: Key) {
         .collect();
     frame(a, c, id, events);
 }
+/// Patterns other than the keyboard's Capture.
+fn normal(a: &App) -> Vec<u64> {
+    Catalog::read(&a.loaded.as_ref().unwrap().music)
+        .unwrap()
+        .patterns
+        .values()
+        .filter(|p| p.kind == cat_smf_editor::score::pattern::Kind::Normal)
+        .map(|p| p.id)
+        .collect()
+}
 
 #[test]
 fn song_and_scene_record_into_new_unplaced_patterns_and_keep_the_origin_window() {
     let (mut a, c, first, _, _) = verification_song();
     let original_body = body(&a, first);
     for pane in [Pane::Song, Pane::Scene] {
-        let before = Catalog::read(&a.loaded.as_ref().unwrap().music)
-            .unwrap()
-            .patterns
-            .len();
+        let before = normal(&a).len();
         let arrangement = scene::read(&a.loaded.as_ref().unwrap().music).unwrap();
         let song_cells = arrangement.song.len();
         let scene_cells = arrangement
@@ -50,13 +57,7 @@ fn song_and_scene_record_into_new_unplaced_patterns_and_keep_the_origin_window()
             a.patterns.workspace.selection(pane).choice,
             Some(PatternOrScene::Pattern(id))
         );
-        assert_eq!(
-            Catalog::read(&a.loaded.as_ref().unwrap().music)
-                .unwrap()
-                .patterns
-                .len(),
-            before + 1
-        );
+        assert_eq!(normal(&a).len(), before + 1);
         assert_eq!(body(&a, id), vec![60, 64]);
         assert_eq!(body(&a, first), original_body);
         let arrangement = scene::read(&a.loaded.as_ref().unwrap().music).unwrap();
@@ -78,11 +79,7 @@ fn song_loop_laps_become_candidates_and_the_last_take_is_chosen() {
     let (mut a, c, _, _, _) = verification_song();
     let id = crate::view::recording::window::viewport();
     let before = choices(&a, Pane::Song).len();
-    let existing = Catalog::read(&a.loaded.as_ref().unwrap().music)
-        .unwrap()
-        .patterns
-        .into_keys()
-        .collect::<Vec<_>>();
+    let existing = normal(&a);
     key(&mut a, &c, Pane::Song.viewport(), Key::R, Modifiers::SHIFT);
     assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
     assert!(!a.patterns.recording.preparing());
@@ -111,6 +108,7 @@ fn song_loop_laps_become_candidates_and_the_last_take_is_chosen() {
     key(&mut a, &c, id, Key::Escape, Modifiers::NONE);
     assert!(!a.patterns.recording.is_open(), "{:?}", a.load_error);
     let after = choices(&a, Pane::Song);
+    // Two laps; the Capture of their keys is not a candidate.
     assert_eq!(after.len(), before + 2);
     let last = a.patterns.selected.unwrap();
     assert_eq!(
@@ -118,24 +116,72 @@ fn song_loop_laps_become_candidates_and_the_last_take_is_chosen() {
         Some(PatternOrScene::Pattern(last))
     );
     assert_eq!(body(&a, last), vec![64]);
-    let c = Catalog::read(&a.loaded.as_ref().unwrap().music).unwrap();
-    let created = c
-        .patterns
-        .keys()
-        .copied()
+    let created = normal(&a)
+        .into_iter()
         .filter(|p| !existing.contains(p))
         .collect::<Vec<_>>();
     assert_eq!(created.len(), 2);
     let first = created.into_iter().find(|&p| p != last).unwrap();
     assert_eq!(body(&a, first), vec![60]);
+    let catalog = Catalog::read(&a.loaded.as_ref().unwrap().music).unwrap();
     assert!([first, last]
         .iter()
-        .all(|p| c.patterns[p].meters.len() == 1));
+        .all(|p| catalog.patterns[p].meters.len() == 1));
     assert!(
         (a.patterns.tempo.0 - 90.0).abs() < 1e-3,
         "{}",
         a.patterns.tempo.0
     );
+}
+
+#[test]
+fn keys_played_into_the_capture_leave_it_out_of_the_song_and_scene_candidates() {
+    let (mut a, c, _, _, _) = verification_song();
+    let keyboard = crate::view::recording::window::viewport();
+    key(&mut a, &c, Pane::Song.viewport(), Key::R, Modifiers::SHIFT);
+    assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
+    pad(&mut a, &c, keyboard, Key::Z);
+    pad(&mut a, &c, keyboard, Key::C);
+    key(&mut a, &c, keyboard, Key::Escape, Modifiers::NONE);
+    assert!(!a.patterns.recording.is_open());
+    let music = &a.loaded.as_ref().unwrap().music;
+    let catalog = Catalog::read(music).unwrap();
+    let capture = catalog
+        .patterns
+        .values()
+        .filter(|p| p.kind == cat_smf_editor::score::pattern::Kind::Capture)
+        .map(|p| PatternOrScene::Pattern(p.id))
+        .collect::<Vec<_>>();
+    assert_eq!(capture.len(), 1);
+    let mut patterns = normal(&a);
+    patterns.sort();
+    let scenes = scene::read(music)
+        .unwrap()
+        .scenes
+        .iter()
+        .map(|s| PatternOrScene::Scene(s.id))
+        .collect::<Vec<_>>();
+    assert!(!scenes.is_empty());
+    for (pane, offered_scenes) in [(Pane::Song, scenes.clone()), (Pane::Scene, vec![])] {
+        let offered = choices(&a, pane)
+            .into_iter()
+            .map(|(part, _)| part)
+            .collect::<Vec<_>>();
+        assert!(!offered.contains(&capture[0]), "{pane:?}");
+        let (offered_patterns, rest): (Vec<_>, Vec<_>) = offered
+            .into_iter()
+            .partition(|p| matches!(p, PatternOrScene::Pattern(_)));
+        let mut offered_patterns = offered_patterns
+            .into_iter()
+            .filter_map(|p| match p {
+                PatternOrScene::Pattern(id) => Some(id),
+                PatternOrScene::Scene(_) => None,
+            })
+            .collect::<Vec<_>>();
+        offered_patterns.sort();
+        assert_eq!(offered_patterns, patterns, "{pane:?}");
+        assert_eq!(rest, offered_scenes, "{pane:?}");
+    }
 }
 
 #[test]
@@ -270,7 +316,7 @@ fn the_editor_windows_stay_usable_while_the_keyboard_is_open() {
     let (mut a, c, _, _, _) = verification_song();
     let song = Pane::Song.viewport();
     let keyboard = crate::view::recording::window::viewport();
-    let before = bytes(&a);
+    let before = normal(&a);
     focus(&c, song);
     key(&mut a, &c, song, Key::R, Modifiers::SHIFT);
     assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
@@ -313,11 +359,94 @@ fn the_editor_windows_stay_usable_while_the_keyboard_is_open() {
         Key::Escape,
         Modifiers::NONE,
     );
-    // A discarded take leaves the song as it was.
+    // A discarded take adds no pattern beside the Capture of its keys.
     focus(&c, keyboard);
     pad(&mut a, &c, keyboard, Key::Space);
     pad(&mut a, &c, keyboard, Key::Z);
     key(&mut a, &c, keyboard, Key::Escape, Modifiers::SHIFT);
     assert!(!a.patterns.recording.is_open());
-    assert_eq!(bytes(&a), before);
+    assert_eq!(normal(&a), before);
+}
+
+#[test]
+fn a_resumed_phrase_loop_opens_the_keyboard_once_the_song_window_has_its_place() {
+    let (mut a, c, _, _, _) = verification_song();
+    a.config.phrase_loop = true;
+    crate::view::recording::resume(&mut a);
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert!(!a.patterns.recording.is_open());
+    let song = [460.0, 520.0, 760.0, 520.0];
+    c.data_mut(|d| {
+        d.insert_temp(
+            egui::Id::new(("window-geometry", Pane::Song.viewport())),
+            song,
+        )
+    });
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    let keyboard = crate::view::recording::window::viewport();
+    let b = c
+        .data(|d| d.get_temp::<egui::ViewportBuilder>(egui::Id::new(("window-builder", keyboard))))
+        .unwrap();
+    let opened = egui::Rect::from_min_size(
+        b.position.unwrap(),
+        b.inner_size.unwrap() + egui::vec2(16.0, 40.0),
+    );
+    let [x, y, w, h] = song;
+    let song = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w + 16.0, h + 40.0));
+    assert!(!opened.intersects(song), "{opened:?} {song:?}");
+    // Closing returns the focus to the Song window, as Shift+R there does.
+    key(&mut a, &c, keyboard, Key::Escape, Modifiers::NONE);
+    assert!(!a.patterns.recording.is_open());
+    assert!(c.data(|d| d
+        .get_temp::<bool>(egui::Id::new(("workspace-focus", Pane::Song.viewport())))
+        .unwrap_or(false)));
+}
+
+#[test]
+fn clicking_a_capture_note_only_auditions_it() {
+    let (mut a, c, _, _, _) = verification_song();
+    let keyboard = crate::view::recording::window::viewport();
+    key(&mut a, &c, Pane::Song.viewport(), Key::R, Modifiers::SHIFT);
+    pad(&mut a, &c, keyboard, Key::Z);
+    key(&mut a, &c, keyboard, Key::Escape, Modifiers::NONE);
+    let capture = Catalog::read(&a.loaded.as_ref().unwrap().music)
+        .unwrap()
+        .patterns
+        .values()
+        .find(|p| p.kind == cat_smf_editor::score::pattern::Kind::Capture)
+        .map(|p| p.id)
+        .unwrap();
+    crate::view::patterns::library::edit(&mut a, capture).unwrap();
+    let track = a.track;
+    let (row, event) = {
+        let l = a.loaded.as_ref().unwrap();
+        let event = l.visible().tracks[track]
+            .events
+            .iter()
+            .position(cat_smf_editor::score::note_view::note_on)
+            .unwrap();
+        let rows = &l.display_rows[track];
+        let row = (0..rows.len())
+            .find(|&r| {
+                matches!(rows.get(r), cat_smf_editor::score::display_rows::DisplayRow::Event(i) if i == event)
+            })
+            .unwrap();
+        (row, event)
+    };
+    // The event list's click: an edit request on the cell, then the selection.
+    crate::view::note_edit::begin(
+        &mut a,
+        crate::view::note_edit::Field::Pitch,
+        track,
+        event,
+        egui::Rect::from_min_size(egui::pos2(400.0, 200.0), egui::vec2(80.0, 25.0)),
+        "C4",
+    );
+    crate::cursor::moves::select(&mut a, row);
+    assert_eq!(a.load_error, None);
+    assert!(a.note_edit.is_none());
+    assert_eq!(a.audition.auditioned, vec![60]);
 }

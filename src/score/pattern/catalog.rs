@@ -15,9 +15,9 @@ impl Catalog {
         for (track, t) in music.tracks.iter().enumerate() {
             let mut has_id = false;
             for e in &t.events {
-                if let Some(Record::Track { id, .. }) = record(e)? {
+                if let Some(Record::Container(ContainerRecord { id, .. })) = record(e)? {
                     if has_id || e.tick != 0 || !c.identities.insert(id) {
-                        return Err("Duplicate or misplaced track identity".into());
+                        return Err("trackの識別子が重複しているか置き場所が違います".into());
                     }
                     c.tracks.insert(id, track);
                     has_id = true;
@@ -27,20 +27,25 @@ impl Catalog {
         }
         for (track, t) in music.tracks.iter().enumerate() {
             for e in &t.events {
-                if let Some(Record::Definition {
-                    id, name, meters, ..
-                }) = record(e)?
+                if let Some(Record::Pattern(PatternRecord {
+                    id,
+                    kind,
+                    name,
+                    meters,
+                    ..
+                })) = record(e)?
                 {
                     if !c.sources.contains(&track)
                         || name.trim().is_empty()
                         || !c.identities.insert(id)
                     {
-                        return Err("Invalid pattern identity or container".into());
+                        return Err("patternの識別子かcontainerが不正です".into());
                     }
                     body::meter_music(&meters, music.division)?;
                     let container = *c.tracks.iter().find(|(_, t)| **t == track).unwrap().0;
                     let p = Definition {
                         id,
+                        kind,
                         name,
                         container,
                         track,
@@ -51,14 +56,14 @@ impl Catalog {
                     let curves = super::automation::curves(music, &p)?;
                     let baselines = super::automation::baselines(music, track)?;
                     for curve in &curves {
-                        if !baselines.iter().any(|b|matches!(b,super::automation::Baseline::Parameter {target,value_space,minimum,maximum,..} if target==&curve.target && value_space==&curve.value_space && *minimum==curve.minimum && *maximum==curve.maximum)) {return Err("Missing or incompatible container parameter baseline".into());}
+                        if !baselines.iter().any(|b|matches!(b,super::automation::Baseline::Parameter {target,value_space,minimum,maximum,..} if target==&curve.target && value_space==&curve.value_space && *minimum==curve.minimum && *maximum==curve.maximum)) {return Err("containerのparameter基準値が見つからないか合いません".into());}
                     }
                     body::extract(&t.events, range)?;
                     if t.events
                         .iter()
                         .any(|e| same_measure::owned(e) && (range.0..=range.1).contains(&e.tick))
                     {
-                        return Err("Pattern contains same measure reference".into());
+                        return Err("patternにsame measureの参照があります".into());
                     }
                     if c.patterns.values().any(|other| {
                         other.track == track
@@ -66,7 +71,9 @@ impl Catalog {
                                 .range()
                                 .is_ok_and(|r| range.0 <= r.1 && range.1 >= r.0)
                     }) {
-                        return Err("Pattern storage ranges overlap or have no boundary gap".into());
+                        return Err(
+                            "patternの保存範囲が重なっているか境界の隙間がありません".into()
+                        );
                     }
                     c.patterns.insert(id, p);
                 }
@@ -87,7 +94,7 @@ impl Catalog {
             .chain(scenes.lanes.iter().map(|l| l.id))
         {
             if !c.identities.insert(id) {
-                return Err("Duplicate identity across document roles".into());
+                return Err("役割の違うdataで識別子が重複しています".into());
             }
         }
         super::super::scene::validate(music, &c)?;

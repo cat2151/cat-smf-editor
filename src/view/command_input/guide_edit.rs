@@ -1,5 +1,6 @@
 //! Minimal value and absolute-tick editing through the independent command input owner.
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::{
     edit::meta_input::Kind,
     score::{chord_guide, key_signature::KeySignature},
@@ -56,15 +57,15 @@ pub(super) fn apply(
     moving: bool,
 ) -> Result<(), String> {
     if !on_guide(a) {
-        return Err("Select the chord guide track".into());
+        return Err(message::SELECT_THE_CHORD_GUIDE_TRACK.into());
     }
     let before = a.loaded.as_ref().unwrap().music.clone();
     let mut music = before.clone();
     let track = &mut music.tracks[a.track];
-    let old = track.events.get(index).ok_or("Invalid event")?;
+    let old = track.events.get(index).ok_or(message::INVALID_EVENT)?;
     let event = if moving {
         let mut event = old.clone();
-        event.tick = text.trim().parse().map_err(|_| "Invalid tick")?;
+        event.tick = text.trim().parse().map_err(|_| "tickが不正です")?;
         event
     } else {
         kind.event(old.tick, text)?
@@ -94,15 +95,15 @@ pub(super) fn apply(
 
 pub(crate) fn delete(a: &mut App) -> Result<(), String> {
     if !on_guide(a) {
-        return Err("Select the chord guide track".into());
+        return Err(message::SELECT_THE_CHORD_GUIDE_TRACK.into());
     }
-    let index = selected(a).ok_or("Select a guide event")?;
+    let index = selected(a).ok_or("guide eventを選んでください")?;
     let before = a.loaded.as_ref().unwrap().music.clone();
     let mut music = before.clone();
     let track = &mut music.tracks[a.track];
-    let event = track.events.get(index).ok_or("Invalid event")?;
+    let event = track.events.get(index).ok_or(message::INVALID_EVENT)?;
     if chord_guide::chord(event).is_none() && KeySignature::from_event(event).is_none() {
-        return Err("Select a key or chord".into());
+        return Err("keyかchordを選んでください".into());
     }
     track.events.remove(index);
     cat_smf_editor::edit::refresh_deltas(track)?;

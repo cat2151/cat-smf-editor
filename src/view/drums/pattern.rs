@@ -1,5 +1,6 @@
 //! Open the grid against a body, never the container's packed storage timeline.
 use crate::{app::App, view::patterns};
+use cat_smf_editor::message;
 use cat_smf_editor::score::pattern::Catalog;
 
 pub(crate) fn input(a: &mut App, ctx: &eframe::egui::Context) {
@@ -21,16 +22,16 @@ pub(super) fn edit(a: &mut App) -> Result<(), String> {
     if patterns::mode::editing(a, a.track).is_some() {
         return Ok(());
     }
-    let l = a.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let l = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     if l.patches[a.track].drums.is_none() {
-        return Err("Select a drum sound container".into());
+        return Err("drum sound containerを選んでください".into());
     }
     let c = Catalog::read(&l.music)?;
     let owner = c
         .tracks
         .iter()
         .find_map(|(&id, &t)| (t == a.track).then_some(id))
-        .ok_or("Missing drum container")?;
+        .ok_or("drum containerが見つかりません")?;
     a.patterns.container = Some(owner);
     let selected = a
         .patterns

@@ -14,11 +14,14 @@ pub(super) fn start(a: &mut App, s: &mut Session) -> bool {
             return false;
         }
     };
-    (s.queue, s.click) = a.audition.start_live(sound.track, &sound.patch).unzip();
+    (s.queue, s.click, s.phrase) = match a.audition.start_live(sound.track, &sound.patch) {
+        Some(live) => (Some(live.queue), Some(live.click), Some(live.phrase)),
+        None => (None, None, None),
+    };
     s.error = s.queue.is_none().then(|| {
         a.audition
             .error()
-            .unwrap_or("Cannot open recording instrument")
+            .unwrap_or(message::CANNOT_OPEN_RECORDING_INSTRUMENT)
             .to_owned()
     });
     if s.queue.is_some() {
@@ -32,16 +35,21 @@ pub(super) fn stop(a: &mut App, s: &mut Session) {
     if let Some(r) = s.recorder.take() {
         s.settings = *r.settings();
     }
+    super::phrase::restart(s);
     a.audition.stop_live();
     s.queue = None;
     s.click = None;
+    s.phrase = None;
 }
 
-fn send(s: &mut Session, result: Result<Vec<u8>, String>, on: bool) {
+fn send(s: &mut Session, result: Result<Vec<u8>, String>, on: bool, at: std::time::Duration) {
     match result {
         Ok(pitches) => {
+            // Before the keys, so a replaced phrase's Note Off cannot cut a key of its pitch.
+            super::phrase::heard(s, &pitches, on, at);
+            super::capture::record(s, &pitches, on, at);
             if let Some(q) = &s.queue {
-                for pitch in pitches {
+                for &pitch in &pitches {
                     live::push(q, pitch, on);
                 }
             }
@@ -79,6 +87,14 @@ pub(super) fn button(a: &mut App, s: &mut Session, button: window::Button) -> bo
         window::Button::Stop if armed(s) => close(a, s, at),
         window::Button::Sound(i) if !armed(s) => {
             setup::select(a, s, i);
+            false
+        }
+        window::Button::Phrase => {
+            super::phrase::toggle(a, s);
+            false
+        }
+        window::Button::Capture => {
+            super::capture::toggle(a, s);
             false
         }
         _ => false,
@@ -130,7 +146,7 @@ fn sound(s: &mut Session, pad: Pad, pressed: bool, at: std::time::Duration) {
     } else {
         r.release(pad, at)
     };
-    send(s, result, pressed);
+    send(s, result, pressed, at);
 }
 
 /// Moves the mouse of one window onto `target`, releasing the pad it left.
@@ -155,7 +171,11 @@ pub(super) fn close(a: &mut App, s: &mut Session, at: std::time::Duration) -> bo
     };
     let released = r.release_all(at);
     let recorded = r.recorded();
-    send(s, released, false);
+    send(s, released, false, at);
+    // Before the take, so undoing the take keeps the keys.
+    if let Err(error) = super::capture::flush(a, s, true) {
+        a.load_error = Some(error);
+    }
     if !recorded {
         return true;
     }
@@ -175,6 +195,9 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
         Key::F1 | Key::Questionmark => super::super::help::summon(a),
         Key::Comma if ctrl => s.settings_open = !s.settings_open,
         Key::Period if ctrl => s.piano_open = !s.piano_open,
+        Key::E if ctrl => super::phrase::toggle(a, s),
+        Key::T if ctrl => s.clicked = Some(window::Button::Browse),
+        Key::J if ctrl => super::capture::toggle(a, s),
         _ => return setup::shortcut(a, s, key, modifiers),
     }
     true
@@ -183,6 +206,8 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
 /// `true` closes the window.
 pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool {
     follow_click(s);
+    super::phrase::follow(s);
+    super::phrase::follow_patch(a, s);
     let at = s.clock.elapsed();
     let focused = ctx.input(|i| {
         i.focused

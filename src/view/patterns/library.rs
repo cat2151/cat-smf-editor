@@ -1,5 +1,6 @@
 //! Independent pattern editing uses the ordinary note tools without a song placement.
 use super::*;
+use cat_smf_editor::message;
 use cat_smf_editor::score::pattern::{operations, Catalog};
 
 /// With several containers the target is chosen each time, starting from the current one.
@@ -27,7 +28,7 @@ pub(crate) fn input(a: &mut App, ctx: &eframe::egui::Context) {
 }
 
 pub fn create(a: &mut App, duplicate: Option<u64>) -> Result<(), String> {
-    let catalog = Catalog::read(&a.loaded.as_ref().ok_or("No SMF is loaded")?.music)?;
+    let catalog = Catalog::read(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
     let source = duplicate
         .and_then(|id| catalog.patterns.get(&id).map(|p| p.track))
         .or_else(|| {
@@ -43,13 +44,13 @@ pub fn create(a: &mut App, duplicate: Option<u64>) -> Result<(), String> {
     create_at(a, source, duplicate)
 }
 pub(crate) fn create_for_container(a: &mut App, id: u64) -> Result<(), String> {
-    let catalog = Catalog::read(&a.loaded.as_ref().ok_or("No SMF is loaded")?.music)?;
+    let catalog = Catalog::read(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
     let source = catalog
         .tracks
         .get(&id)
         .copied()
         .filter(|t| catalog.sources.contains(t))
-        .ok_or("Missing sound container")?;
+        .ok_or(message::MISSING_SOUND_CONTAINER)?;
     create_at(a, source, None)?;
     a.patterns.container = Some(id);
     Ok(())
@@ -60,7 +61,7 @@ fn create_at(a: &mut App, source: usize, duplicate: Option<u64>) -> Result<(), S
         created = Some(operations::create(music, source, duplicate)?);
         Ok(())
     })?;
-    edit(a, created.ok_or("Missing created pattern")?)
+    edit(a, created.ok_or("作ったpatternが見つかりません")?)
 }
 /// Prepare both initial sounds once, only after the creation choice was confirmed.
 pub(super) fn initialize(a: &mut App, drums: bool) -> Result<(), String> {
@@ -72,7 +73,12 @@ pub(super) fn initialize_with(
     drums: bool,
     patch: cat_smf_editor::score::instrument::Patch,
 ) -> Result<(), String> {
-    let mut music = a.loaded.as_ref().ok_or("No SMF is loaded")?.music.clone();
+    let mut music = a
+        .loaded
+        .as_ref()
+        .ok_or(message::NO_SMF_LOADED)?
+        .music
+        .clone();
     let saw = source(a, &mut music, None)?;
     let drum = source(a, &mut music, Some(&patch))?;
     commit(a, music, if drums { drum } else { saw })
@@ -90,7 +96,12 @@ pub(super) fn add_container_with(
     a: &mut App,
     drums: Option<cat_smf_editor::score::instrument::Patch>,
 ) -> Result<(), String> {
-    let mut music = a.loaded.as_ref().ok_or("No SMF is loaded")?.music.clone();
+    let mut music = a
+        .loaded
+        .as_ref()
+        .ok_or(message::NO_SMF_LOADED)?
+        .music
+        .clone();
     let track = source(a, &mut music, drums.as_ref())?;
     commit(a, music, track)
 }

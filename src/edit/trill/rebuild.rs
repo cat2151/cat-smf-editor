@@ -29,7 +29,7 @@ fn extract(music: &mut Music, regions: Vec<Region>) -> Result<Vec<Plan>, String>
                     .iter()
                     .any(|n| b.metadata.notes.contains(n))
         }) {
-            return Err("Trill regions overlap on the same channel and pitch".into());
+            return Err("同じchannelと音高でtrillの範囲が重なっています".into());
         }
     }
     let mut plans = Vec::new();
@@ -65,7 +65,7 @@ fn extract(music: &mut Music, regions: Vec<Region>) -> Result<Vec<Plan>, String>
                     && e.tick <= region.end
                     && !matched_offs.contains(&i)
             }) {
-                return Err("An unmatched Note Off lies inside a trill region".into());
+                return Err("対応の無いNote Offがtrillの範囲の中にあります".into());
             }
             let mut first = None;
             let mut velocities = [0; 2];
@@ -78,15 +78,15 @@ fn extract(music: &mut Music, regions: Vec<Region>) -> Result<Vec<Plan>, String>
             }) {
                 let end = pairs[i].map(|off| track.events[off].tick);
                 if e.tick < region.start && end.is_none_or(|end| end > region.start) {
-                    return Err("A note crosses into a trill region".into());
+                    return Err("noteがtrillの範囲に入り込んでいます".into());
                 }
                 if !(region.start..region.end).contains(&e.tick) {
                     continue;
                 }
-                let off = pairs[i].ok_or("A trill note has no Note Off")?;
+                let off = pairs[i].ok_or("trillのnoteにNote Offがありません")?;
                 let end = end.unwrap();
                 if end <= e.tick || end > region.end || e.tick < last_end {
-                    return Err("Trill notes overlap or cross their region boundary".into());
+                    return Err("trillのnoteが重なっているか範囲の境界をまたいでいます".into());
                 }
                 last_end = end;
                 first.get_or_insert(e.data[0]);
@@ -103,7 +103,7 @@ fn extract(music: &mut Music, regions: Vec<Region>) -> Result<Vec<Plan>, String>
                 Some(pattern) => pattern.clone(),
                 None => {
                     if velocities.contains(&0) {
-                        return Err("A new trill region needs both source pitches".into());
+                        return Err("新しいtrillの範囲には元の音高が2つとも必要です".into());
                     }
                     Pattern {
                         first_note: first.unwrap(),

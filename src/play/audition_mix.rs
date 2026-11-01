@@ -132,17 +132,21 @@ impl Mixer {
                 .get(i)
                 .and_then(|part| part.timeline.as_deref());
             let rendered =
-                if let Some(live) = command.parts.get(i).and_then(|part| part.live.as_ref()) {
+                if let Some(part) = command.parts.get(i).filter(|part| part.live.is_some()) {
                     // Release the queue lock before calling any plugin code. Batches
                     // preserve fast release/retrigger pairs between audio callbacks.
                     let mut words = [0u32; 128];
+                    let phrase = part
+                        .phrase
+                        .as_ref()
+                        .map_or(0, |p| p.due(std::time::Instant::now(), &mut words[..64]));
                     let count = {
-                        let mut queue = live.lock().unwrap();
-                        let count = queue.len().min(words.len());
-                        for word in &mut words[..count] {
+                        let mut queue = part.live.as_ref().unwrap().lock().unwrap();
+                        let count = queue.len().min(words.len() - phrase);
+                        for word in &mut words[phrase..phrase + count] {
                             *word = queue.pop_front().unwrap();
                         }
-                        count
+                        phrase + count
                     };
                     render.process_live(&words[..count], scratch, channels)
                 } else if let Some(timeline) = timeline

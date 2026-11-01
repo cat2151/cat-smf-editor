@@ -308,7 +308,7 @@ fn a_selection_for_another_browser_or_song_is_refused() {
     let other_song = shown(patch, "another.mid".into());
     for target in [None, Some(&effect), Some(&other_song)] {
         let result = select(&mut app, patch, target, slot("synth", vec![1]));
-        assert!(result.unwrap_err().contains("target changed"));
+        assert!(result.unwrap_err().contains("選択先が変わった"));
     }
     assert_eq!(tracks(&app), before);
     let current = shown(patch, original);

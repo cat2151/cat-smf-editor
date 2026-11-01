@@ -1,5 +1,6 @@
 //! UI-prepared owner plans and audio sample boundaries. No native discovery in render.
 use crate::{app::App, play::audio_sequence::Sequence};
+use cat_smf_editor::message;
 use cat_smf_editor::{
     edit::parameter_curve::{self, Curve},
     score::{audition_timing::TempoMap, automation, instrument::Patch},
@@ -97,7 +98,7 @@ fn prepare(
     all: bool,
     selected: &[usize],
 ) -> Result<Vec<Arc<OwnerPlan>>, String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let collection = parameter_curve::read(&loaded.music)?;
     let patches: Vec<_> = parts
         .iter()
@@ -115,18 +116,18 @@ fn prepare(
         if !included {
             continue;
         }
-        let owner =
-            owner.ok_or_else(|| format!("Missing owner: {} / {}", curve.path, curve.name))?;
+        let owner = owner
+            .ok_or_else(|| format!("持ち主が見つかりません: {} / {}", curve.path, curve.name))?;
         if cat_smf_editor::voicevox::is_singer(&loaded.music.tracks[owner]) {
             return Err(format!(
-                "VOICEVOX cannot automate plugin parameters: {}",
+                "VOICEVOXではpluginのparameterをautomationできません: {}",
                 curve.name
             ));
         }
         let patch = patches
             .iter()
             .find_map(|(t, p)| (*t == owner).then_some(p))
-            .ok_or("Automation owner is outside playback scope")?;
+            .ok_or("automationの持ち主が再生範囲の外です")?;
         let fallback = if patch
             .layers
             .iter()
@@ -212,7 +213,7 @@ pub fn audition_notes(
         Ok(collection) => collection,
         Err(error) => {
             app.audition.stop();
-            app.load_error = Some(format!("Automation: {error}"));
+            app.load_error = Some(message::automation(error));
             return true;
         }
     };
@@ -245,7 +246,7 @@ pub fn audition_notes(
     let automation = Automation::scoped(app, &parts, false, &[track]);
     if let Some(error) = &automation.error {
         app.audition.stop();
-        app.load_error = Some(format!("Automation: {error}"));
+        app.load_error = Some(message::automation(error));
         return true;
     }
     #[cfg(test)]

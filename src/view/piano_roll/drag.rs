@@ -1,5 +1,6 @@
 //! Dragging one part of a note: the rectangle follows the pointer, and the edit is applied on release.
 use super::hover::Part;
+use cat_smf_editor::message;
 use cat_smf_editor::{
     edit::{note_length::set_duration, note_move::move_note, note_start::move_start},
     model::Track,
@@ -51,14 +52,14 @@ pub(crate) fn apply(
             let tick = track.events[on]
                 .tick
                 .checked_add_signed(shift)
-                .ok_or("The start cannot move before tick 0")?;
+                .ok_or("始まりはtick 0より前へ動かせません")?;
             move_start(track, on, tick)
         }
         Part::Middle => move_note(track, on, shift),
         Part::End => {
             let duration = duration
                 .checked_add_signed(shift)
-                .ok_or("The duration must be at least 1 tick")?;
+                .ok_or(message::THE_DURATION_MUST_BE_AT_LEAST_1_TICK)?;
             set_duration(track, on, duration)
         }
     }

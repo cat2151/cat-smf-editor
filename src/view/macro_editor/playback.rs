@@ -1,4 +1,5 @@
 use super::*;
+use cat_smf_editor::message;
 type Live = BTreeMap<Target, Arc<AtomicU64>>;
 pub(crate) fn live(app: &App, owner: usize) -> Live {
     app.macro_editor
@@ -18,7 +19,7 @@ pub(crate) fn plans(
     parts: &[(usize, Patch, Sequence)],
     owners: &mut BTreeMap<usize, Vec<Arc<Curve>>>,
 ) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     for (owner, patch, _) in parts {
         let mut values = cat_smf_editor::score::macro_curve::expand(&loaded.music.tracks[*owner])?;
         let fixed = macro_values::read(&loaded.music.tracks[*owner])?.parameters;

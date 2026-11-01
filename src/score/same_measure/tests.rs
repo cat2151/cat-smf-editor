@@ -168,28 +168,28 @@ fn error(events: Vec<Event>) -> String {
 
 #[test]
 fn expand_reports_each_error_with_track_tick_and_message() {
-    let crossing = "Note crosses measure boundary";
+    let crossing = crate::message::NOTE_CROSSES_MEASURE_BOUNDARY;
     for (events, expected) in [
         (
             vec![event(1921, 1)],
-            "tick 1921: Reference must be at measure start".to_string(),
+            "tick 1921: 参照は小節の始まりに置きます".to_string(),
         ),
-        (vec![event(0, 1)], "tick 0: Self reference".into()),
+        (vec![event(0, 1)], "tick 0: 自分自身を参照しています".into()),
         (
             vec![meter(1920, 3, 2), event(1920, 1)],
-            "tick 1920: Measure lengths differ".into(),
+            "tick 1920: 小節の長さが違います".into(),
         ),
         (
             vec![event(1920, 1), event(3840, 2)],
-            "tick 3840: Chained same measure reference".into(),
+            "tick 3840: same measureの参照先がさらに参照しています".into(),
         ),
         (
             vec![event(1920, 1), event(1920, 3)],
-            "tick 1920: Multiple references in destination".into(),
+            "tick 1920: 移動先に参照が複数あります".into(),
         ),
         (
             vec![note(3840, 0x90, 60), note(4000, 0x80, 60), event(3840, 1)],
-            "tick 3840: Destination contains notes".into(),
+            "tick 3840: 移動先にnoteがあります".into(),
         ),
         (
             vec![note(0, 0x90, 60), note(1921, 0x80, 60), event(3840, 1)],
@@ -217,31 +217,34 @@ fn expand_reports_each_error_with_track_tick_and_message() {
         ),
         (
             vec![event(1920, 0)],
-            "tick 1920: Same measure number must be positive".into(),
+            "tick 1920: same measureの小節番号は正の数で指定します".into(),
         ),
         (
             vec![event(1921, 1), event(3840, 2)],
-            "tick 1921: Reference must be at measure start".into(),
+            "tick 1921: 参照は小節の始まりに置きます".into(),
         ),
         (
             vec![event(1920, 1), event(5760, 2), event(5761, 1)],
-            "tick 5760: Chained same measure reference".into(),
+            "tick 5760: same measureの参照先がさらに参照しています".into(),
         ),
     ] {
-        assert_eq!(error(events), format!("Track 1, {expected}"));
+        assert_eq!(error(events), format!("Track 1・{expected}"));
     }
     let mut bad = event(1920, 1);
     bad.data.pop();
     assert_eq!(
         error(vec![bad]),
-        "Track 1, tick 1920: Invalid same measure payload"
+        "Track 1・tick 1920: same measureの中身が不正です"
     );
-    assert_eq!(expand(&music(vec![]), 1).unwrap_err(), "Missing track");
+    assert_eq!(
+        expand(&music(vec![]), 1).unwrap_err(),
+        crate::message::MISSING_TRACK
+    );
     let mut smpte = music(vec![event(1920, 1)]);
     smpte.division = 0xe728;
     assert_eq!(
         expand(&smpte, 0).unwrap_err(),
-        "Same measure requires PPQN timing"
+        crate::message::SAME_MEASURE_REQUIRES_PPQN_TIMING
     );
 }
 

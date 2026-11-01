@@ -1,5 +1,6 @@
 //! Variation-specific endpoints, using the common scalar curve canvas and commands.
 use super::*;
+use cat_smf_editor::message;
 use cat_smf_editor::score::macro_curve;
 
 pub(crate) fn open(app: &mut App, layer: u64) {
@@ -37,12 +38,12 @@ fn open_with_playback(app: &mut App, layer: u64, play: bool) {
 }
 
 pub(super) fn current(app: &App, layer: u64) -> Result<Curve, String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let track = loaded
         .music
         .tracks
         .get(app.track)
-        .ok_or("Missing macro owner")?;
+        .ok_or("macroの持ち主が見つかりません")?;
     macro_curve::expand(track)?;
     let values = cat_smf_editor::score::macro_values::read(track)?;
     let set = values
@@ -50,11 +51,11 @@ pub(super) fn current(app: &App, layer: u64) -> Result<Curve, String> {
         .iter()
         .find(|v| v.layer == layer)
         .filter(|v| v.snapshots.len() >= 2)
-        .ok_or("Create at least two Macro variations first")?;
+        .ok_or("先にMacroのvariationを2つ以上作ってください")?;
     let template = &set.snapshots[0][0];
     let key = plugin(&loaded.patches[app.track], layer)?;
     if template.target.plugin_format != key.format || template.target.plugin_id != key.id {
-        return Err("Macro variation instrument changed".into());
+        return Err("macro variationのinstrumentが変わりました".into());
     }
     let mut c = macro_curve::read(track)?
         .into_iter()

@@ -1,13 +1,14 @@
 //! User navigation owns both the pattern projection and its editor presentation.
 //! Low-level track rebinding and cursor restoration must not start user navigation.
 use super::*;
+use cat_smf_editor::message;
 use cat_smf_editor::score::{
     musical_time::MusicalTime,
-    pattern::{editing::Context, Catalog},
+    pattern::{editing::Context, Catalog, Kind},
 };
 use std::collections::BTreeMap;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct State {
     // Stable container IDs survive track insertions; this is document-local, not persisted.
     last: BTreeMap<u64, u64>,
@@ -65,9 +66,9 @@ pub fn enter_notes(a: &mut App) {
 
 pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
     // Resolve and validate the destination before touching the old editor or transport.
-    let loaded = a.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let catalog = Catalog::read(&loaded.music)?;
-    let pattern = catalog.patterns.get(&id).ok_or("Missing pattern")?;
+    let pattern = catalog.patterns.get(&id).ok_or(message::MISSING_PATTERN)?;
     let container = pattern.container;
     let context = Context {
         track: pattern.track,
@@ -86,7 +87,9 @@ pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
         cat_smf_editor::score::drums::tick(projection.division, 0)?;
     }
     let time = MusicalTime::new(&projection);
-    let map = time.map(context.track).ok_or("Missing pattern meter")?;
+    let map = time
+        .map(context.track)
+        .ok_or(message::MISSING_PATTERN_METER)?;
     let tick = cat_smf_editor::score::same_measure::bounds(map, 1)?.0;
 
     crate::play::transport::stop(a);
@@ -122,13 +125,13 @@ pub fn track_selected(a: &mut App) {
 }
 
 fn select_source(a: &mut App) -> Result<(), String> {
-    let l = a.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let l = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let c = Catalog::read(&l.music)?;
     let owner = c
         .tracks
         .iter()
         .find_map(|(&id, &t)| (t == a.track).then_some(id))
-        .ok_or("Missing sound container")?;
+        .ok_or(message::MISSING_SOUND_CONTAINER)?;
     let selected = a
         .patterns
         .navigation
@@ -140,7 +143,8 @@ fn select_source(a: &mut App) -> Result<(), String> {
             c.patterns
                 .values()
                 .filter(|p| p.container == owner)
-                .min_by_key(|p| p.tick)
+                // The keyboard's Capture only when the container has nothing else.
+                .min_by_key(|p| (p.kind == Kind::Capture, p.tick))
                 .map(|p| p.id)
         });
     let drum = l.patches.get(a.track).is_some_and(|p| p.drums.is_some());

@@ -1,4 +1,5 @@
 use super::*;
+use cat_smf_editor::message;
 pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if a.loaded.is_none() || s == Screen::ArrangementInput {
         return;
@@ -28,13 +29,6 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                     },
                 ));
             }
-            out.push(Command::plain(
-                s,
-                "export-performance",
-                "Export performance SMF",
-                &[],
-                |a, _| crate::view::files::performance::dialog(a),
-            ));
         }
 
         if cells {
@@ -214,9 +208,40 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             },
         ));
     }
-    if !matches!(s, Screen::Main | Screen::Scene | Screen::Song) {
-        return;
+    if s == Screen::Global {
+        global(s, out);
     }
+    if s == Screen::Scene {
+        out.push(Command::plain(
+            s,
+            "arrangement-delete-scene",
+            "Delete scene",
+            &[],
+            |a, _| {
+                let id = a.patterns.workspace.scene;
+                let r = id
+                    .ok_or(message::SELECT_A_SCENE.into())
+                    .and_then(|id| mutate(a, |m| model::delete_scene(m, id)));
+                result(a, r);
+            },
+        ));
+    }
+    if s == Screen::Main
+        && let Some(p) = a.patterns.workspace.return_to
+    {
+        out.push(Command::plain(
+            s,
+            "arrangement-return",
+            "Return to placement",
+            &[Key::Escape],
+            move |a, c| {
+                a.patterns.workspace.return_to = None;
+                focus(a, c, p);
+            },
+        ));
+    }
+}
+fn global(s: Screen, out: &mut Vec<Command>) {
     out.push(Command::plain(
         s,
         "scene-structure",
@@ -252,35 +277,6 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         &[],
         |a, _| play(a, Pane::Scene),
     ));
-    if s == Screen::Scene {
-        out.push(Command::plain(
-            s,
-            "arrangement-delete-scene",
-            "Delete scene",
-            &[],
-            |a, _| {
-                let id = a.patterns.workspace.scene;
-                let r = id
-                    .ok_or("Select a scene".into())
-                    .and_then(|id| mutate(a, |m| model::delete_scene(m, id)));
-                result(a, r);
-            },
-        ));
-    }
-    if s == Screen::Main
-        && let Some(p) = a.patterns.workspace.return_to
-    {
-        out.push(Command::plain(
-            s,
-            "arrangement-return",
-            "Return to placement",
-            &[Key::Escape],
-            move |a, c| {
-                a.patterns.workspace.return_to = None;
-                focus(a, c, p);
-            },
-        ));
-    }
 }
 pub(super) fn confirm(a: &mut App, p: Pane) {
     let s = a.patterns.workspace.selection_mut(p);

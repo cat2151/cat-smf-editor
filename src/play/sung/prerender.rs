@@ -1,6 +1,7 @@
 //! 再生の前に、歌う track を VOICEVOX で WAV にする。engine の起動と合成は別 thread で行う。
 use super::{take, Take};
 use crate::{app::App, play::transport::Prepared};
+use cat_smf_editor::message;
 use cat_smf_editor::voicevox::{
     cache,
     engine::{self, Engine, Failure},
@@ -89,7 +90,7 @@ pub(crate) fn run(
                 .map_err(|failure| match failure {
                     Failure::NoExecutable => {
                         no_executable = true;
-                        "VOICEVOX engine is not set".to_owned()
+                        message::VOICEVOX_ENGINE_IS_NOT_SET.to_owned()
                     }
                     Failure::Failed(error) => error,
                 })?;
@@ -178,7 +179,7 @@ fn spawn(app: &mut App, missing: Vec<(String, Score)>, rate: u32) -> Result<(), 
     let port = engine::PORT;
     #[cfg(test)]
     let port = app.voicevox.prerender.target.as_ref().map_or(0, |t| t.0);
-    let directory = directory(app).ok_or("VOICEVOX: no cache directory")?;
+    let directory = directory(app).ok_or("VOICEVOX: cacheフォルダがありません")?;
     let request = Request {
         port,
         configured: app.config.voicevox_engine.clone(),
@@ -347,7 +348,7 @@ fn finish(app: &mut App) {
     let outcome = match job.join() {
         Ok(outcome) => outcome,
         Err(_) => {
-            app.voicevox.error = Some("VOICEVOX: prerender thread panicked".into());
+            app.voicevox.error = Some("VOICEVOX: 事前合成の処理が異常終了しました".into());
             return;
         }
     };

@@ -1,4 +1,5 @@
 //! One owner/layer/plugin identity for playback and target presentation.
+use crate::message;
 use crate::{
     edit::parameter_curve::{Collection, Curve, ValueSpace},
     host::PluginKey,
@@ -35,38 +36,41 @@ pub fn resolve_in<'a>(
     let curve = collection
         .curves
         .get(&track)
-        .ok_or("Not a parameter track")?;
+        .ok_or(message::NOT_A_PARAMETER_TRACK)?;
     if collection
         .conflicts()
         .iter()
         .any(|tracks| tracks.contains(&track))
     {
         return Err(format!(
-            "Conflicting parameter curves: {} / {}",
+            "parameter curveが重複しています: {} / {}",
             curve.path, curve.name
         ));
     }
     let owner = collection
         .owner(track)
-        .ok_or_else(|| format!("Missing owner for parameter {}", curve.name))?;
+        .ok_or_else(|| format!("parameter {}の持ち主が見つかりません", curve.name))?;
     let patch = patches
         .into_iter()
         .find_map(|(index, patch)| (index == owner).then_some(patch))
-        .ok_or_else(|| format!("Owner track {} is unavailable", owner + 1))?;
+        .ok_or_else(|| format!("持ち主のtrack {}を使えません", owner + 1))?;
     let layer_index = patch
         .layers
         .iter()
         .position(|layer| layer.settings.id == curve.target.layer)
-        .ok_or_else(|| format!("Missing layer for parameter {}", curve.name))?;
+        .ok_or_else(|| format!("parameter {}のlayerが見つかりません", curve.name))?;
     let layer = &patch.layers[layer_index];
     let plugin = layer
         .instrument
         .as_ref()
         .map(|slot| &slot.plugin)
         .or(default_plugin)
-        .ok_or("Parameter instrument is unavailable")?;
+        .ok_or("parameterのinstrumentを使えません")?;
     if plugin.format != curve.target.plugin_format || plugin.id != curve.target.plugin_id {
-        return Err(format!("Instrument changed for parameter {}", curve.name));
+        return Err(format!(
+            "parameter {}のinstrumentが変わりました",
+            curve.name
+        ));
     }
     Ok(ResolvedTarget { owner, layer_index })
 }
@@ -83,7 +87,7 @@ pub fn validate_parameter(curve: &Curve, parameter: ParameterSpec<'_>) -> Result
     curve.validate()?;
     if curve.target.parameter_id != parameter.stable_id || !parameter.eligible {
         return Err(format!(
-            "Parameter is missing or not automatable: {} / {}",
+            "parameterが見つからないかautomationできません: {} / {}",
             curve.path, curve.name
         ));
     }
@@ -92,7 +96,7 @@ pub fn validate_parameter(curve: &Curve, parameter: ParameterSpec<'_>) -> Result
         || parameter.maximum != curve.maximum
     {
         return Err(format!(
-            "Parameter range or value space changed: {} / {}",
+            "parameterの範囲か値域が変わりました: {} / {}",
             curve.path, curve.name
         ));
     }

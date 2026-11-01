@@ -325,7 +325,7 @@ fn without_an_engine_the_playback_starts_with_the_singer_silent_and_asks_for_run
         crate::view::voicevox::close(&mut app);
         assert_eq!(
             app.voicevox.error.as_deref(),
-            Some("VOICEVOX engine is not set")
+            Some(cat_smf_editor::message::VOICEVOX_ENGINE_IS_NOT_SET)
         );
         app.voicevox.error = None;
     }

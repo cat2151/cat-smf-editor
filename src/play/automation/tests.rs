@@ -178,11 +178,15 @@ fn automation_missing_target_stops_and_empty_curve_is_inert() {
         .error
         .as_ref()
         .unwrap()
-        .contains("Instrument changed"));
+        .contains("のinstrumentが変わりました"));
     app.playback.pending = Some(failed);
     transport::advance(&mut app);
     assert!(app.playback.active.is_none() && app.playback.pending.is_none());
-    assert!(app.load_error.as_ref().unwrap().contains("Automation"));
+    assert!(app
+        .load_error
+        .as_ref()
+        .unwrap()
+        .starts_with(&cat_smf_editor::message::automation("")));
     // Empty curves are inert even when their target is unresolved.
     let loaded = app.loaded.as_mut().unwrap();
     c.points.clear();
@@ -216,7 +220,7 @@ fn automation_unrelated_owner_is_playable_and_voicevox_or_conflict_is_rejected()
         .error
         .as_ref()
         .unwrap()
-        .contains("Conflicting"));
+        .contains("parameter curveが重複しています"));
     let mut app = fixture();
     let loaded = app.loaded.as_mut().unwrap();
     cat_smf_editor::voicevox::voice::Voice::write(

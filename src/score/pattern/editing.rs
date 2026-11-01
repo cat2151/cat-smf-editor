@@ -1,5 +1,6 @@
 //! A transient local/destination projection mapped atomically to one stable pattern ID.
 use super::*;
+use crate::message;
 use crate::{edit, model::Track, score::note_view::note_off};
 type EditRanges = (Definition, (u64, u64), (u64, u64));
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -17,7 +18,7 @@ impl Context {
         let p = c
             .patterns
             .get(&self.pattern)
-            .ok_or("Pattern edit target no longer exists")?;
+            .ok_or(message::PATTERN_EDIT_TARGET_NO_LONGER_EXISTS)?;
         if self.standalone {
             self.track = p.track;
             self.measure = 1;
@@ -29,23 +30,23 @@ impl Context {
         let p = c
             .patterns
             .get(&self.pattern)
-            .ok_or("Pattern edit target no longer exists")?
+            .ok_or(message::PATTERN_EDIT_TARGET_NO_LONGER_EXISTS)?
             .clone();
         let source = p.range()?;
         if self.standalone {
             if self.track != p.track || self.scene.is_some() {
-                return Err("Pattern edit target changed".into());
+                return Err("patternの編集対象が変わりました".into());
             }
             let length = p.length()?;
             return Ok((p, source, (0, length)));
         }
-        let id = self.scene.ok_or("Pattern edit has no placement")?;
+        let id = self.scene.ok_or("編集中のpatternに配置がありません")?;
         let collection = crate::score::scene::read(music)?;
         let scene = collection
             .scenes
             .iter()
             .find(|s| s.id == id)
-            .ok_or("Missing edit scene")?;
+            .ok_or(message::MISSING_EDIT_SCENE)?;
         if self.track != p.track
             || !scene.cells.iter().any(|cell| {
                 u128::from(cell.measure) + 1 == self.measure
@@ -53,12 +54,12 @@ impl Context {
                     && self.placement.is_none_or(|id| id == cell.id)
             })
         {
-            return Err("Scene edit placement changed".into());
+            return Err("編集中のsceneの配置が変わりました".into());
         }
         let start = scene.range(self.measure)?.0;
         let end = start
             .checked_add(p.length()?)
-            .ok_or("Edit range overflow")?;
+            .ok_or("編集範囲が上限を超えました")?;
         Ok((p, source, (start, end)))
     }
     pub fn edit_range(&self, music: &Music) -> Result<(u64, u64), String> {
@@ -73,7 +74,7 @@ impl Context {
                 .scenes
                 .iter()
                 .find(|s| s.id == id)
-                .ok_or("Missing edit scene")?;
+                .ok_or(message::MISSING_EDIT_SCENE)?;
             return crate::score::scene::projection::music(music, scene, &c);
         }
         let mut next = music.clone();
@@ -111,7 +112,10 @@ impl Context {
     }
     pub fn map(&self, base: &Music, view: &Music, edited: &Music) -> Result<Music, String> {
         let (p, source, dest) = self.ranges(base)?;
-        let changed = edited.tracks.get(self.track).ok_or("Missing edit track")?;
+        let changed = edited
+            .tracks
+            .get(self.track)
+            .ok_or("編集中のtrackが見つかりません")?;
         let events = body::extract(&changed.events, dest)?;
         let masked = |m: &Music| -> Result<Vec<u8>, String> {
             let mut copy = m.clone();
@@ -122,7 +126,7 @@ impl Context {
             crate::smf_io::encode(&copy)
         };
         if masked(view)? != masked(edited)? {
-            return Err("Edit exceeds the selected pattern body".into());
+            return Err("編集が選んだpatternの本体を超えています".into());
         }
         let mut next = base.clone();
         let track = &mut next.tracks[p.track];

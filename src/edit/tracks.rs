@@ -1,4 +1,5 @@
 //! Minimal new songs and intersection-based track initialization.
+use crate::message;
 use crate::model::{Event, Music, Track};
 use crate::score::note_view::note_on;
 
@@ -92,7 +93,7 @@ pub(super) fn common_initial<'a>(tracks: impl Iterator<Item = &'a Track>) -> Vec
 
 pub fn add(music: &mut Music) -> Result<(), String> {
     if music.tracks.len() >= 32767 {
-        return Err("Too many SMF tracks".into());
+        return Err(message::TOO_MANY_SMF_TRACKS.into());
     }
     let sources: Vec<_> = music
         .tracks
@@ -124,7 +125,7 @@ pub fn add(music: &mut Music) -> Result<(), String> {
             .max(1)
     };
     if duration == 0 {
-        return Err("Invalid ticks per quarter note".into());
+        return Err("四分音符あたりのtick数が不正です".into());
     }
     append_note(&mut track, duration)?;
     let mut next = music.clone();

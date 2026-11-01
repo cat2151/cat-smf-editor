@@ -217,9 +217,7 @@ fn click(at: egui::Pos2) -> [Vec<egui::Event>; 2] {
 }
 
 fn popup_shown(texts: &[(String, egui::Pos2)]) -> bool {
-    texts
-        .iter()
-        .any(|(t, _)| t.starts_with("Invalid time signature"))
+    texts.iter().any(|(t, _)| t.starts_with("拍子が不正です"))
 }
 
 #[test]

@@ -7,15 +7,15 @@ pub fn pitch(text: &str) -> Result<u8, String> {
     if let Ok(value) = text.trim().parse::<u8>() {
         return (value < 128)
             .then_some(value)
-            .ok_or("Pitch must be 0–127".into());
+            .ok_or("音高は0–127で指定します".into());
     }
     (0..128)
         .find(|&pitch| crate::score::note_view::note_name(pitch).eq_ignore_ascii_case(text.trim()))
-        .ok_or("Invalid note name".into())
+        .ok_or("音名が不正です".into())
 }
 pub fn set_pitch(track: &mut Track, on: usize, pitch: u8) -> Result<(), String> {
     if pitch > 127 || !track.events.get(on).is_some_and(note_on) {
-        return Err("Invalid note".into());
+        return Err("noteが不正です".into());
     }
     let mut pending = HashMap::<(u8, u8), VecDeque<usize>>::new();
     let mut off = None;
@@ -35,14 +35,14 @@ pub fn set_pitch(track: &mut Track, on: usize, pitch: u8) -> Result<(), String> 
             break;
         }
     }
-    let off = off.ok_or("Note has no matching end")?;
+    let off = off.ok_or("noteに対応する終わりがありません")?;
     track.events[on].data[0] = pitch;
     track.events[off].data[0] = pitch;
     Ok(())
 }
 pub fn set_velocity(track: &mut Track, on: usize, velocity: u8) -> Result<(), String> {
     if !(1..=127).contains(&velocity) || !track.events.get(on).is_some_and(note_on) {
-        return Err("Velocity must be 1–127".into());
+        return Err("velocityは1–127で指定します".into());
     }
     track.events[on].data[1] = velocity;
     Ok(())

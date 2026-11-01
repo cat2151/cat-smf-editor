@@ -34,7 +34,7 @@ pub(super) struct Reference {
 }
 
 pub(super) fn load(app: &mut App) -> Result<[Vec<PatchReference>; 4], String> {
-    let home = dirs::config_local_dir().ok_or("No local application directory")?;
+    let home = dirs::config_local_dir().ok_or("local applicationフォルダがありません")?;
     let paths = [
         home.join("clap-mml-render-tui/patch-catalog/catalog.json"),
         home.join("cat-plugin-player/patch-catalog/surge-xt.json"),
@@ -89,7 +89,7 @@ pub(super) fn load(app: &mut App) -> Result<[Vec<PatchReference>; 4], String> {
         entries.dedup();
         if entries.is_empty() {
             return Err(format!(
-                "No installed {} patches in the catalog",
+                "catalogにinstall済みの{} patchがありません",
                 cat_smf_editor::score::drums::NAMES[row]
             ));
         }
@@ -100,7 +100,7 @@ pub(super) fn load(app: &mut App) -> Result<[Vec<PatchReference>; 4], String> {
 pub(super) fn parse(bytes: &[u8]) -> Result<Catalog, String> {
     let catalog: Catalog = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
     if catalog.format_version != 5 {
-        return Err("Unsupported patch catalog version".into());
+        return Err("対応していないpatch catalogのversionです".into());
     }
     Ok(catalog)
 }

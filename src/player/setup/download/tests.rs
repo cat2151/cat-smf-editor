@@ -102,7 +102,7 @@ fn published_release_is_checked_before_installing() {
     let desktop = tempfile::tempdir().unwrap();
     let result = install_inner(temp.path(), desktop.path()).map_err(|e| e.to_string());
     if let Err(error) = result {
-        assert!(error.contains("too old for this editor"), "{error}");
+        assert!(error.contains("このeditorには古すぎます"), "{error}");
         assert!(!temp.path().join(EXE).exists());
         assert_eq!(fs::read_dir(desktop.path()).unwrap().count(), 0);
         assert_eq!(

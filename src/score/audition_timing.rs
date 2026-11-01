@@ -8,11 +8,11 @@ pub struct TempoMap {
 impl TempoMap {
     pub fn constant(division: u16, bpm: f64) -> Result<Self, String> {
         if division == 0 || division & 0x8000 != 0 || !bpm.is_finite() || bpm <= 0.0 {
-            return Err("Invalid audition tempo or PPQN timing".into());
+            return Err("試聴tempoかPPQNの時間単位が不正です".into());
         }
         let slope = 60.0 / bpm / f64::from(division);
         if !slope.is_finite() || slope <= 0.0 {
-            return Err("Unrepresentable audition tempo".into());
+            return Err("試聴tempoを表せません".into());
         }
         Ok(Self {
             segments: vec![(0, 0.0, slope)],

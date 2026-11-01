@@ -205,7 +205,7 @@ fn restoring_into_a_control_conflict_rejects_and_keeps_the_song() {
     assert!(
         place(&mut m, None, two, 1, Some(PatternOrScene::Pattern(b)))
             .unwrap_err()
-            .contains("Overlapping pattern control")
+            .contains("patternのcontrolが重なっています")
     );
     toggle(&mut m, None, one, 1).unwrap();
     place(&mut m, None, two, 1, Some(PatternOrScene::Pattern(b))).unwrap();
@@ -213,6 +213,6 @@ fn restoring_into_a_control_conflict_rejects_and_keeps_the_song() {
     let before = crate::smf_io::encode(&m).unwrap();
     assert!(toggle(&mut m, None, one, 1)
         .unwrap_err()
-        .contains("Overlapping pattern control"));
+        .contains("patternのcontrolが重なっています"));
     assert_eq!(crate::smf_io::encode(&m).unwrap(), before);
 }

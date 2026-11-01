@@ -17,8 +17,24 @@ pub fn can_edit_notes(a: &App, track: usize) -> bool {
     !a.note_mode
         || a.loaded.as_ref().is_some_and(|l| {
             !cat_smf_editor::score::pattern::is_source(&l.music, track)
-                || source(a, track) && editing(a, track).is_some_and(|c| c.standalone)
+                || source(a, track)
+                    && editing(a, track)
+                        .is_some_and(|c| c.standalone && !capture(&l.music, c.pattern))
         })
+}
+/// The open Capture pattern is listened to like any track, but never edited.
+pub fn capture_shown(a: &App, track: usize) -> bool {
+    source(a, track)
+        && a.loaded.as_ref().is_some_and(|l| {
+            editing(a, track).is_some_and(|c| c.standalone && capture(&l.music, c.pattern))
+        })
+}
+/// The keyboard's Capture pattern is shown, never edited.
+fn capture(music: &cat_smf_editor::model::Music, id: u64) -> bool {
+    cat_smf_editor::score::pattern::Catalog::read(music)
+        .ok()
+        .and_then(|c| c.patterns.get(&id).map(|p| p.kind))
+        == Some(cat_smf_editor::score::pattern::Kind::Capture)
 }
 pub fn close_workspace(a: &mut App) {
     let tick = crate::play::playback::location(a).0;

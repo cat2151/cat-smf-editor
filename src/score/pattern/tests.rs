@@ -176,7 +176,7 @@ fn corrupt_ids_missing_references_and_crossing_notes_reject() {
     let meta = m.tracks[t]
         .events
         .iter()
-        .find(|e| matches!(record(e), Ok(Some(Record::Definition { .. }))))
+        .find(|e| matches!(record(e), Ok(Some(Record::Pattern(_)))))
         .unwrap()
         .clone();
     let mut bad = m.clone();
@@ -266,6 +266,67 @@ fn resizing_a_song_pattern_still_rejects_overlaps_without_changing_the_song() {
     let before = crate::smf_io::encode(&music).unwrap();
     let meters = body::parse_meters("4/4 4/4", music.division).unwrap();
     let error = operations::resize(&mut music, id, meters).unwrap_err();
-    assert!(error.contains("overlap"), "{error}");
+    assert!(error.contains("重なっています"), "{error}");
     assert_eq!(crate::smf_io::encode(&music).unwrap(), before);
+}
+
+#[test]
+fn a_new_pattern_writes_a_container_meta_and_a_normal_pattern_meta() {
+    let mut m = Music {
+        format: 1,
+        division: 480,
+        tracks: vec![Track { events: vec![] }],
+    };
+    let source = operations::create_source(&mut m).unwrap();
+    let id = operations::create(&mut m, source, None).unwrap();
+    let c = Catalog::read(&m).unwrap();
+    let container = c.patterns[&id].container;
+    assert_eq!(c.patterns[&id].kind, Kind::Normal);
+    let metas = m.tracks[source]
+        .events
+        .iter()
+        .filter(|e| e.status == 0xff && e.meta_type == 0x7f)
+        .map(|e| (e.tick, e.data.clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        metas,
+        vec![
+            (
+                0,
+                [
+                    b"\x7dcat-smf-editor\0pattern-container\0".as_slice(),
+                    format!(r#"{{"version":3,"id":{container}}}"#).as_bytes(),
+                ]
+                .concat()
+            ),
+            (
+                0,
+                [
+                    b"\x7dcat-smf-editor\0pattern\0".as_slice(),
+                    format!(
+                        r#"{{"version":3,"id":{id},"kind":"normal","name":"Pattern 1","meters":[{{"numerator":4,"exponent":2,"ticks":1920}}]}}"#
+                    )
+                    .as_bytes(),
+                ]
+                .concat()
+            ),
+        ]
+    );
+}
+#[test]
+fn the_previous_pattern_meta_form_is_rejected() {
+    for json in [
+        r#"{"kind":"Track","version":2,"id":5}"#,
+        r#"{"kind":"Definition","version":2,"id":6,"name":"Pattern 1","meters":[]}"#,
+        r#"{"version":2,"id":6,"kind":"normal","name":"Pattern 1","meters":[]}"#,
+    ] {
+        let e = Event {
+            tick: 0,
+            delta: 0,
+            status: 0xff,
+            meta_type: 0x7f,
+            data: [PREFIX, json.as_bytes()].concat(),
+        };
+        assert!(record(&e).is_err(), "{json}");
+    }
 }

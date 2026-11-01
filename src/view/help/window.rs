@@ -9,6 +9,35 @@ pub(crate) fn viewport() -> egui::ViewportId {
 pub(crate) fn summon(a: &mut App) {
     a.help_open = true;
     a.help.raise = true;
+    a.help.flash = Some(std::time::Instant::now());
+}
+
+const FLASH: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Blinks the window frame in two Monokai colors until `FLASH` has passed.
+fn flash(a: &mut App, ctx: &egui::Context) {
+    let Some(start) = a.help.flash else { return };
+    let elapsed = start.elapsed();
+    if elapsed >= FLASH {
+        a.help.flash = None;
+        return;
+    }
+    let color = if (elapsed.as_millis() / 125) % 2 == 0 {
+        egui::Color32::from_rgb(0xf9, 0x26, 0x72)
+    } else {
+        egui::Color32::from_rgb(0xe6, 0xdb, 0x74)
+    };
+    ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("help-flash"),
+    ))
+    .rect_stroke(
+        ctx.screen_rect().shrink(4.0),
+        0.0_f32,
+        egui::Stroke::new(8.0_f32, color),
+        egui::StrokeKind::Middle,
+    );
+    ctx.request_repaint_after_for(std::time::Duration::from_millis(30), egui::ViewportId::ROOT);
 }
 
 /// Puts the current native window above every normal window without activating it.
@@ -83,6 +112,7 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::both().show(ui, |ui| super::body(a, ui));
         });
+        flash(a, ctx);
         ctx.request_repaint_after_for(
             std::time::Duration::from_millis(100),
             egui::ViewportId::ROOT,

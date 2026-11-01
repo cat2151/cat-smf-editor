@@ -1,4 +1,5 @@
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::score::instrument::{self as chain_settings, Patch as Settings};
 use std::path::{Path, PathBuf};
 
@@ -35,7 +36,7 @@ pub fn resolve(
         return path
             .is_file()
             .then_some(path)
-            .ok_or("--player does not name an executable file".into());
+            .ok_or("--playerに指定したものが実行ファイルではありません".into());
     }
     if let Some(parent) = executable.parent() {
         let candidate = parent.join("cat-plugin-player.exe");
@@ -102,6 +103,8 @@ pub(crate) fn open_mode(app: &mut App, browser: Browser, bulk: bool, slot: Optio
         && !bulk
         && loaded.patches[app.track].drums.is_none()
         && !crate::player::bulk::has_notes(&loaded.music.tracks[app.track])
+        // A container sounds its patterns, even before the first one holds a note.
+        && !cat_smf_editor::score::pattern::is_source(&loaded.music, app.track)
     {
         app.player_selection.open = true;
         app.player_selection.no_notes_error = true;
@@ -110,7 +113,7 @@ pub(crate) fn open_mode(app: &mut App, browser: Browser, bulk: bool, slot: Optio
     }
     if browser == Browser::MasterEffect && loaded.music.format != 1 {
         app.player_selection.open = true;
-        app.player_selection.error = Some("Master effects editing requires SMF format 1".into());
+        app.player_selection.error = Some(message::MASTER_EFFECTS_REQUIRE_SMF_FORMAT_1.into());
         return;
     }
     let track = if bulk {
@@ -131,7 +134,7 @@ pub(crate) fn open_mode(app: &mut App, browser: Browser, bulk: bool, slot: Optio
     #[cfg(not(windows))]
     let result: Result<(), String> = {
         let _ = (track, slot);
-        Err("The resident player requires Windows".into())
+        Err("常駐playerにはWindowsが必要です".into())
     };
     match result {
         Ok(()) => {
@@ -150,7 +153,7 @@ pub fn store_master(
     app: &mut App,
     master: cat_smf_editor::master_effects::Settings,
 ) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     if *app.audition.master() == master {
         return Ok(());
     }
@@ -186,11 +189,11 @@ pub fn store_master(
 
 /// Writes one track's chain settings into the loaded SMF, keeping the playback position.
 pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let old = loaded
         .patches
         .get(track)
-        .ok_or("Missing sound owner")?
+        .ok_or("soundの持ち主が見つかりません")?
         .clone();
     if old == *settings {
         return Ok(());

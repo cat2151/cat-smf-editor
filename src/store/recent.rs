@@ -31,7 +31,7 @@ impl History {
         match super::config::directory() {
             Some(root) => Self::open(root.join("recent-files.json")),
             None => Self {
-                error: Some("Cannot save recent files: LOCALAPPDATA is unavailable".into()),
+                error: Some("最近使ったファイルを保存できません: LOCALAPPDATAを使えません".into()),
                 ..Default::default()
             },
         }

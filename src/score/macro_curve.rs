@@ -25,7 +25,7 @@ fn encode(curves: &[Curve]) -> Result<Vec<u8>, String> {
                 .target
                 .plugin_id
                 .split_once(':')
-                .ok_or("Invalid variation instrument identity")?;
+                .ok_or("variationのinstrumentの識別子が不正です")?;
             Ok(Saved {
                 version: c.version,
                 layer: c.target.layer,
@@ -47,7 +47,7 @@ pub fn read(track: &Track) -> Result<Vec<Curve>, String> {
         return Ok(vec![]);
     };
     if e.tick != 0 || e.data.len() > 1024 * 1024 || events.next().is_some() {
-        return Err("Misplaced or duplicate macro variation curves".into());
+        return Err("macro variation curveの置き場所が違うか重複しています".into());
     }
     let saved: Vec<Saved> =
         serde_json::from_slice(&e.data[PREFIX.len()..]).map_err(|e| e.to_string())?;
@@ -87,7 +87,7 @@ pub fn read(track: &Track) -> Result<Vec<Curve>, String> {
             || c.target.parameter_id != "macro-variation"
             || c.points.iter().any(|p| p.value.fract() != 0.0)
         {
-            return Err("Invalid macro variation curve".into());
+            return Err("macro variationのcurveが不正です".into());
         }
     }
     Ok(curves)
@@ -116,7 +116,7 @@ pub fn describe(json: &[u8]) -> String {
             })
             .collect::<Vec<_>>()
             .join("; "),
-        Err(e) => format!("invalid ({e})"),
+        Err(e) => crate::message::invalid_value(e),
     }
 }
 pub fn write(track: &mut Track, curve: &Curve) -> Result<(), String> {
@@ -160,12 +160,12 @@ pub fn expand(track: &Track) -> Result<Vec<Curve>, String> {
             .variations
             .iter()
             .find(|s| s.layer == c.target.layer)
-            .ok_or("Missing macro variations for curve")?;
+            .ok_or("curveのmacro variationが見つかりません")?;
         if c.points
             .iter()
             .any(|p| p.value as usize >= set.snapshots.len())
         {
-            return Err("Macro variation curve references a missing variation".into());
+            return Err("macro variation curveが無いvariationを参照しています".into());
         }
         for (parameter, template) in set.snapshots[0].iter().enumerate() {
             if format!(
@@ -173,7 +173,7 @@ pub fn expand(track: &Track) -> Result<Vec<Curve>, String> {
                 template.target.plugin_format, template.target.plugin_id
             ) != c.target.plugin_id
             {
-                return Err("Macro variation curve instrument changed".into());
+                return Err("macro variation curveのinstrumentが変わりました".into());
             }
             let value = |p: &Point| set.snapshots[p.value as usize][parameter].points[0].value;
             let mut lane = template.clone();

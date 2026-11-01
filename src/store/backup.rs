@@ -13,7 +13,7 @@ fn save_at(directory: &Path, source: &Path, bytes: &[u8], stamp: &str) -> io::Re
     std::fs::create_dir_all(directory)?;
     let stem = source
         .file_stem()
-        .ok_or_else(|| io::Error::other("SMF filename is missing"))?;
+        .ok_or_else(|| io::Error::other("SMFのファイル名がありません"))?;
     let mut sequence = 1u64;
     loop {
         let mut name = OsString::from(stem);
@@ -35,7 +35,7 @@ fn save_at(directory: &Path, source: &Path, bytes: &[u8], stamp: &str) -> io::Re
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 sequence = sequence
                     .checked_add(1)
-                    .ok_or_else(|| io::Error::other("Backup sequence exhausted"))?;
+                    .ok_or_else(|| io::Error::other("バックアップの通し番号を使い切りました"))?;
                 continue;
             }
             Err(error) => return Err(error),

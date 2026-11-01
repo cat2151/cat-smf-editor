@@ -13,7 +13,7 @@ pub(super) fn rows(ui: &mut egui::Ui) {
                     ("f", "配置先"),
                     ("E", "選択候補の編集"),
                     ("Shift+Delete", "候補pattern削除"),
-                    ("Esc", "終了"),
+                    ("Esc", "閉じる"),
                 ],
             )],
         );

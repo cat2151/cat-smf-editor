@@ -137,7 +137,7 @@ fn direct_save_preserves_payloads_backs_up_and_detects_external_changes() {
     assert!(document
         .save()
         .unwrap_err()
-        .contains("changed since it was loaded"));
+        .contains("読み込んだ後に変わった"));
     assert!(document.dirty());
     assert_eq!(std::fs::read(&path).unwrap(), b"external change");
     assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);

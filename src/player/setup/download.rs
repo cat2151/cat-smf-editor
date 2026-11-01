@@ -16,7 +16,7 @@ pub fn install(directory: &Path) -> Result<PathBuf, String> {
     if directory.join(EXE).is_file() {
         return Ok(directory.join(EXE));
     }
-    let desktop = dirs::desktop_dir().ok_or("Desktop directory is unavailable")?;
+    let desktop = dirs::desktop_dir().ok_or("デスクトップフォルダを使えません")?;
     install_inner(directory, &desktop).map_err(|e| format!("cat-plugin-player: {e}"))
 }
 
@@ -41,7 +41,7 @@ fn install_inner(directory: &Path, desktop: &Path) -> Result<PathBuf, Box<dyn st
         .take(MAX_ZIP + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_ZIP {
-        return Err("download exceeds size limit".into());
+        return Err("ダウンロードが大きさの上限を超えました".into());
     }
     unpack(&bytes, staging)?;
     publish(directory, staging, desktop)
@@ -107,7 +107,7 @@ fn validate_player(executable: &Path) -> Result<(), Box<dyn std::error::Error>> 
             .iter()
             .any(|flag| !help.contains(flag))
     {
-        return Err("Published cat-plugin-player is too old for this editor (requires --resident, --restore-state and --patch-roots). A newer player release is required.".into());
+        return Err("公開中のcat-plugin-playerはこのeditorには古すぎます（--resident・--restore-state・--patch-rootsが必要）。新しいplayerのreleaseが必要です。".into());
     }
     Ok(())
 }
@@ -118,7 +118,7 @@ fn unpack(bytes: &[u8], directory: &Path) -> Result<(), Box<dyn std::error::Erro
     for name in ["LICENSE", EXE] {
         let mut entry = zip.by_name(name)?;
         if entry.is_dir() || entry.size() > MAX_ZIP {
-            return Err("invalid release entry".into());
+            return Err("releaseの項目が不正です".into());
         }
         let mut output = fs::OpenOptions::new()
             .write(true)
@@ -129,7 +129,7 @@ fn unpack(bytes: &[u8], directory: &Path) -> Result<(), Box<dyn std::error::Erro
         if name == EXE {
             let data = fs::read(directory.join(name))?;
             if !data.starts_with(b"MZ") {
-                return Err("release is not a Windows executable".into());
+                return Err("releaseがWindowsの実行ファイルではありません".into());
             }
         }
     }

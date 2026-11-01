@@ -52,10 +52,7 @@ pub(crate) fn request(app: &mut App) {
 }
 
 pub(crate) fn accept(app: &mut App, settings: &Settings) -> Result<(), String> {
-    let loaded = app
-        .loaded
-        .as_ref()
-        .ok_or("Selection target is no longer loaded")?;
+    let loaded = app.loaded.as_ref().ok_or("選択先がもう開かれていません")?;
     let tracks = targets(&loaded.music);
     let session = app.session();
     let before = loaded.music.clone();
@@ -67,7 +64,7 @@ pub(crate) fn accept(app: &mut App, settings: &Settings) -> Result<(), String> {
         .lookup(app.player_selection.executable.clone());
     for &track in &tracks {
         let mut patch = loaded.patches[track].clone();
-        let selected = settings.layers.first().ok_or("No selected layer")?;
+        let selected = settings.layers.first().ok_or("layerを選んでいません")?;
         if let Some(primary) = patch.layers.first_mut() {
             primary.instrument = selected.instrument.clone();
         } else {

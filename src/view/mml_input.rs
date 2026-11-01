@@ -1,6 +1,7 @@
 //! Note insertion overlay for MML and chord progressions. Input changes paint a preparation message before
 //! updating the song and opening plugins for cursor audition or A–B playback.
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::{
     mml::{Action, CursorPreview},
     model::Music,
@@ -46,9 +47,9 @@ pub fn open(app: &mut App, ctx: &egui::Context, overwrite: bool) {
     if !app.can_edit_notes(app.track) {
         app.load_error = Some(
             if cat_smf_editor::score::chord_guide::track(&loaded.music) == Some(app.track) {
-                "Select a note track".into()
+                "note trackを選んでください".into()
             } else {
-                "Edit the pattern from its destination track".into()
+                message::EDIT_PATTERN_FROM_DESTINATION_TRACK.into()
             },
         );
         return;

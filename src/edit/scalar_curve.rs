@@ -67,7 +67,7 @@ pub fn insert<P: ScalarPoint>(
 ) -> Result<usize, String> {
     let index = points.partition_point(|p| p.tick() < point.tick());
     if points.get(index).is_some_and(|p| p.tick() == point.tick()) {
-        return Err("A curve point already exists at this tick".into());
+        return Err("このtickには既にcurveの点があります".into());
     }
     let old = points.clone();
     points.insert(index, point);
@@ -81,7 +81,7 @@ pub fn remove<P: ScalarPoint>(
     index: usize,
 ) -> Result<(), String> {
     if index >= points.len() {
-        return Err("No such curve point".into());
+        return Err("そのcurveの点はありません".into());
     }
     let old = points.clone();
     points.remove(index);
@@ -97,7 +97,7 @@ pub fn move_point<P: ScalarPoint>(
     value: f64,
 ) -> Result<(), String> {
     if index >= points.len() || !value.is_finite() {
-        return Err("Invalid curve point".into());
+        return Err("curveの点が不正です".into());
     }
     let min = index
         .checked_sub(1)
@@ -106,7 +106,7 @@ pub fn move_point<P: ScalarPoint>(
         .get(index + 1)
         .map_or(u64::MAX, |p| p.tick().saturating_sub(1));
     if tick < min || tick > max {
-        return Err("Curve points must remain in tick order".into());
+        return Err("curveの点はtick順に並べます".into());
     }
     points[index] = P::new(tick, value);
     for (pair, control) in points.windows(2).zip(controls) {

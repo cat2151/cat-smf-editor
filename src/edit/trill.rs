@@ -1,4 +1,5 @@
 //! Recognize rendered trills and retain their speed in seconds.
+use crate::message;
 use crate::{
     edit::{insert, refresh_deltas},
     model::{Event, Music},
@@ -66,7 +67,7 @@ pub fn read(music: &Music) -> Result<Vec<Region>, String> {
         let mut ids = BTreeSet::new();
         for e in source.events.iter().filter(|e| owned(e)) {
             if music.format != 1 || music.division == 0 || music.division & 0x8000 != 0 {
-                return Err("Trill metadata requires format 1 with PPQN timing".into());
+                return Err("trillのmetadataにはformat 1とPPQNの時間単位が必要です".into());
             }
             if let Some(data) = e.data.strip_prefix(START) {
                 let start: Start = serde_json::from_slice(data).map_err(|e| e.to_string())?;
@@ -88,15 +89,15 @@ pub fn read(music: &Music) -> Result<Vec<Region>, String> {
                     })
                     || !ids.insert(start.id)
                 {
-                    return Err("Invalid Trill Start metadata".into());
+                    return Err("Trill Startのmetadataが不正です".into());
                 }
                 pending.insert(start.id, (e.tick, start));
             } else {
                 let end: End =
                     serde_json::from_slice(&e.data[END.len()..]).map_err(|e| e.to_string())?;
-                let (tick, start) = pending.remove(&end.id).ok_or("Unmatched Trill End")?;
+                let (tick, start) = pending.remove(&end.id).ok_or("対応の無いTrill Endです")?;
                 if end.version != 1 || e.tick <= tick {
-                    return Err("Invalid Trill End metadata".into());
+                    return Err("Trill Endのmetadataが不正です".into());
                 }
                 out.push(Region {
                     track,
@@ -107,7 +108,7 @@ pub fn read(music: &Music) -> Result<Vec<Region>, String> {
             }
         }
         if !pending.is_empty() {
-            return Err("Unmatched Trill Start".into());
+            return Err("対応の無いTrill Startです".into());
         }
     }
     out.sort_by_key(|r| (r.track, r.start, r.metadata.id));
@@ -119,7 +120,7 @@ pub fn read(music: &Music) -> Result<Vec<Region>, String> {
 /// Other pitches may accompany the trill on the same channel.
 pub fn detect(music: &Music) -> Result<Vec<Region>, String> {
     if music.format != 1 || music.division == 0 || music.division & 0x8000 != 0 {
-        return Err("Trill detection requires format 1 with PPQN timing".into());
+        return Err("trillの検出にはformat 1とPPQNの時間単位が必要です".into());
     }
     let mut out = Vec::new();
     for (track, source) in music.tracks.iter().enumerate() {
@@ -164,10 +165,10 @@ pub fn detect(music: &Music) -> Result<Vec<Region>, String> {
                                 .1
                                 .tick
                                 .checked_add(gap)
-                                .ok_or("Trill end tick overflow")?;
+                                .ok_or("trillの終わりのtickが上限を超えました")?;
                             let interval_seconds = map.duration(start, gap);
                             if !interval_seconds.is_finite() || interval_seconds <= 0.0 {
-                                return Err("Invalid detected trill interval".into());
+                                return Err("検出したtrillの間隔が不正です".into());
                             }
                             candidates.push(Region {
                                 track,
@@ -226,7 +227,7 @@ pub(super) fn write_start(music: &mut Music, region: &Region) -> Result<(), Stri
                 && serde_json::from_slice::<Start>(&e.data[START.len()..])
                     .is_ok_and(|m| m.id == region.metadata.id)
         })
-        .ok_or("Missing Trill Start")?;
+        .ok_or("Trill Startが見つかりません")?;
     event.data = data;
     Ok(())
 }
@@ -248,7 +249,7 @@ pub fn for_event(music: &Music, track: usize, index: usize) -> Result<Option<Reg
         .tracks
         .get(track)
         .and_then(|t| t.events.get(index))
-        .ok_or("Unknown event")?;
+        .ok_or("不明なeventです")?;
     if !owned(e) {
         return Ok(None);
     }
@@ -265,7 +266,7 @@ pub fn for_event(music: &Music, track: usize, index: usize) -> Result<Option<Reg
         .into_iter()
         .find(|r| r.track == track && r.metadata.id == id)
         .map(Some)
-        .ok_or_else(|| "Unmatched trill metadata".into())
+        .ok_or_else(|| "対応の無いtrillのmetadataです".into())
 }
 
 pub fn label(event: &Event) -> Option<&'static str> {
@@ -289,7 +290,7 @@ pub fn set_first_note(
         read(music)?
             .into_iter()
             .find(|r| r.track == track && r.metadata.id == id)
-            .ok_or_else(|| "Unknown trill".to_owned())
+            .ok_or_else(|| message::UNKNOWN_TRILL.to_owned())
     };
     let mut region = find(music)?;
     if region.metadata.pattern.is_none() {
@@ -300,7 +301,7 @@ pub fn set_first_note(
         .metadata
         .pattern
         .as_mut()
-        .ok_or("Missing trill pattern")?
+        .ok_or("trillのpatternが見つかりません")?
         .first_note = region.metadata.notes[usize::from(upper)];
     write_start(music, &region)
 }
@@ -316,12 +317,12 @@ pub fn set_timing(
         .iter()
         .any(|s| !s.is_finite() || *s <= 0.0)
     {
-        return Err("Trill durations must be finite and positive".into());
+        return Err("trillの長さは有限の正の数で指定します".into());
     }
     let mut region = read(music)?
         .into_iter()
         .find(|r| r.track == track && r.metadata.id == id)
-        .ok_or("Unknown trill")?;
+        .ok_or(message::UNKNOWN_TRILL)?;
     region.metadata.interval_seconds = interval;
     region.metadata.first_note_seconds = Some(first);
     write_start(music, &region)
@@ -335,12 +336,12 @@ pub fn set_interval(
     seconds: f64,
 ) -> Result<(), String> {
     if !seconds.is_finite() || seconds <= 0.0 {
-        return Err("Trill interval must be finite and positive".into());
+        return Err("trillの間隔は有限の正の数で指定します".into());
     }
     let mut region = read(music)?
         .into_iter()
         .find(|r| r.track == track && r.metadata.id == id)
-        .ok_or("Unknown trill")?;
+        .ok_or(message::UNKNOWN_TRILL)?;
     region.metadata.interval_seconds = seconds;
     write_start(music, &region)
 }
@@ -352,7 +353,7 @@ pub fn ensure_note_editable(music: &Music, track: usize, index: usize) -> Result
         .tracks
         .get(track)
         .and_then(|t| t.events.get(index))
-        .ok_or("Unknown note")?;
+        .ok_or("不明なnoteです")?;
     if note_on(event)
         && read(music)?.iter().any(|r| {
             r.track == track
@@ -362,7 +363,7 @@ pub fn ensure_note_editable(music: &Music, track: usize, index: usize) -> Result
                 && r.metadata.notes.contains(&event.data[0])
         })
     {
-        return Err("Managed trill notes use the Trill interval".into());
+        return Err("管理されたtrillのnoteはTrillの間隔で変えます".into());
     }
     Ok(())
 }

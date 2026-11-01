@@ -1,4 +1,5 @@
 use super::*;
+use cat_smf_editor::message;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Purpose {
     Create,
@@ -62,12 +63,17 @@ impl Dialog {
         choice: Option<PatternOrScene>,
     ) -> Result<(), String> {
         if a.song_id != self.song {
-            return Err("Arrangement input target changed".into());
+            return Err(message::ARRANGEMENT_INPUT_TARGET_CHANGED.into());
         }
         match self.purpose {
             Purpose::ResizeScene => {
-                let id = self.scene.ok_or("Select a Scene")?;
-                let division = a.loaded.as_ref().ok_or("No SMF is loaded")?.music.division;
+                let id = self.scene.ok_or("Sceneを選んでください")?;
+                let division = a
+                    .loaded
+                    .as_ref()
+                    .ok_or(message::NO_SMF_LOADED)?
+                    .music
+                    .division;
                 let meters =
                     cat_smf_editor::score::pattern::body::parse_meters(&self.length, division)?;
                 mutate(a, |m| scene::sizing::scene(m, id, meters))?;
@@ -77,17 +83,17 @@ impl Dialog {
                     .length
                     .trim()
                     .parse()
-                    .map_err(|_| "Enter a positive scene length")?;
+                    .map_err(|_| "sceneの長さを正の数で入力してください")?;
                 let mut id = None;
                 mutate(a, |m| {
                     model::create_scene(m, &self.name, n, 1).map(|v| id = Some(v))
                 })?;
-                open_scene(a, id.ok_or("Missing scene")?)?;
+                open_scene(a, id.ok_or(message::MISSING_SCENE)?)?;
                 focus(a, ctx, Pane::Scene);
             }
             Purpose::Scene => {
                 let Some(PatternOrScene::Scene(id)) = choice else {
-                    return Err("Select a scene".into());
+                    return Err(message::SELECT_A_SCENE.into());
                 };
                 open_scene(a, id)?;
                 focus(a, ctx, Pane::Scene);
@@ -105,7 +111,7 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
         return;
     }
     if d.song != a.song_id {
-        a.patterns.workspace.error = Some("Arrangement input target changed".into());
+        a.patterns.workspace.error = Some(message::ARRANGEMENT_INPUT_TARGET_CHANGED.into());
         crate::play::transport::stop(a);
         return;
     }

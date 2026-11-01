@@ -2,6 +2,7 @@
 use super::*;
 use crate::view::patterns::Action;
 use cat_smf_editor::edit::meta_input::Kind;
+use cat_smf_editor::message;
 
 #[derive(Clone)]
 pub(crate) enum Operation {
@@ -60,10 +61,10 @@ pub(crate) fn submit(
     request: Request,
 ) -> Result<Execution, String> {
     if request.target != Target::of(app) {
-        return Err("Command target changed".into());
+        return Err("commandの対象が変わりました".into());
     }
     if crate::view::modal::is_open(app) || app.patterns.confirming_creation() {
-        return Err("Another command owns input".into());
+        return Err("別のcommandが入力中です".into());
     }
     if app.patterns.workspace.input_open()
         || matches!(
@@ -85,10 +86,10 @@ pub(crate) fn submit(
                 | Screen::Lyrics
         )
     {
-        return Err("Another editor owns input".into());
+        return Err("別のeditorが入力中です".into());
     }
     if app.loaded.is_none() {
-        return Err("No SMF is loaded".into());
+        return Err(message::NO_SMF_LOADED.into());
     }
     super::super::command_input::start(app, ctx, request.operation)
 }

@@ -55,7 +55,7 @@ impl Client {
 
     pub fn sing_as(&self, score_json: &str, rate: u32, voice: &Voice) -> Result<Vec<u8>, String> {
         if !self.voices()?.iter().any(|v| v.same_style(voice)) {
-            return Err(format!("VOICEVOX voice unavailable: {}", voice.label()));
+            return Err(format!("VOICEVOXの声を使えません: {}", voice.label()));
         }
         let query = self.post(
             &format!("/sing_frame_audio_query?speaker={QUERY_SPEAKER}"),
@@ -65,7 +65,7 @@ impl Client {
             .map_err(|e| format!("VOICEVOX /sing_frame_audio_query: {e}"))?;
         let fields = query
             .as_object_mut()
-            .ok_or("VOICEVOX /sing_frame_audio_query: not an object")?;
+            .ok_or("VOICEVOX /sing_frame_audio_query: objectではありません")?;
         fields.insert("outputSamplingRate".into(), rate.into());
         fields.insert("outputStereo".into(), true.into());
         self.post(

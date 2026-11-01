@@ -9,11 +9,14 @@ fn click(a: &mut App, button: Button) -> bool {
     a.patterns.recording = state;
     done
 }
+/// Patterns other than the keyboard's Capture.
 fn patterns(a: &App) -> usize {
     Catalog::read(&a.loaded.as_ref().unwrap().music)
         .unwrap()
         .patterns
-        .len()
+        .values()
+        .filter(|p| p.kind == cat_smf_editor::score::pattern::Kind::Normal)
+        .count()
 }
 fn to_loop(a: &mut App, ctx: &egui::Context) {
     frame(a, ctx, vec![key(Key::R, true, Modifiers::CTRL)], true);

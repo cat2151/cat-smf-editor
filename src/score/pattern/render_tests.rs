@@ -65,7 +65,7 @@ fn whole_occurrence_conflicts_include_scene_instances_but_distinct_targets_and_n
     assert!(
         grid::place(&mut m, None, song2, 1, Some(PatternOrScene::Scene(s)))
             .unwrap_err()
-            .contains("Overlapping pattern control")
+            .contains("patternのcontrolが重なっています")
     );
     assert_eq!(crate::smf_io::encode(&m).unwrap(), before);
     // A second body with the same controller conflicts for its entire duration, even equal values.
@@ -101,7 +101,7 @@ fn unsupported_cc_and_program_change_refuse_performance_without_deleting_content
     assert!(render::expand(&m, &c, &[(a, 0)], 1920)
         .err()
         .unwrap()
-        .contains("unsupported"));
+        .contains("対応していない"));
     assert_eq!(crate::smf_io::encode(&m).unwrap(), before);
     m.tracks[t]
         .events
@@ -123,7 +123,7 @@ fn unsupported_cc_and_program_change_refuse_performance_without_deleting_content
         let c = Catalog::read(&m).unwrap();
         let error = render::expand(&m, &c, &[(a, 0)], 1920).err().unwrap();
         assert!(
-            error.contains("unsupported") && error.contains("retained"),
+            error.contains("対応して") && error.contains("そのまま残します"),
             "{error}"
         );
         assert_eq!(crate::smf_io::encode(&m).unwrap(), before);

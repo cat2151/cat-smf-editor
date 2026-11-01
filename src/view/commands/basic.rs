@@ -5,8 +5,8 @@ use crate::{
 };
 
 pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
-    if matches!(s, Screen::Main) {
-        out.push(Command::plain(s, "quit", "終了", &[], |a, c| {
+    if matches!(s, Screen::Global) {
+        out.push(Command::plain(s, "quit", "アプリ終了", &[], |a, c| {
             a.request_close(c);
         }));
         out.push(Command::new(
@@ -23,79 +23,6 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             &[(Key::N, Modifiers::CTRL)],
             |a, c| a.new_smf(c),
         ));
-        if a.loaded.is_some() {
-            super::guide::collect(a, s, out);
-            out.push(Command::plain(
-                s,
-                "export-performance",
-                "Export performance SMF",
-                &[],
-                |a, _| files::performance::dialog(a),
-            ));
-            for (id, name, kind) in [
-                ("insert-event", "Insert event…", None),
-                (
-                    "insert-tempo",
-                    "Insert tempo",
-                    Some(cat_smf_editor::edit::meta_input::Kind::Tempo),
-                ),
-                (
-                    "insert-key-signature",
-                    "Insert key signature",
-                    Some(cat_smf_editor::edit::meta_input::Kind::KeySignature),
-                ),
-            ] {
-                out.push(Command::operation(
-                    s,
-                    id,
-                    name,
-                    Operation::InsertEvent { kind, text: None },
-                ));
-            }
-            out.push(Command::operation(
-                s,
-                "insert-same-measure",
-                "Insert same measure",
-                Operation::SameMeasure {
-                    batch: false,
-                    number: None,
-                },
-            ));
-            out.push(
-                Command::new(s, "save", "保存", &[(Key::S, Modifiers::CTRL)], |a, _| {
-                    a.allow_departure(files::Action::Save);
-                })
-                .repeating(),
-            );
-            out.push(Command::new(
-                s,
-                "add-track",
-                "トラック追加",
-                &[(Key::N, Modifiers::CTRL | Modifiers::SHIFT)],
-                |a, c| busy::request(a, c, busy::Task::AddTrack),
-            ));
-            out.push(Command::new(
-                s,
-                "layers",
-                "レイヤー",
-                &[(Key::T, Modifiers::SHIFT)],
-                |a, _| super::super::layers::open(a),
-            ));
-            out.push(Command::new(
-                s,
-                "drums",
-                "Drum sequencer",
-                &[(Key::D, Modifiers::SHIFT)],
-                |a, _| super::super::drums::open(a),
-            ));
-            out.push(Command::plain(
-                s,
-                "add-drum-track",
-                "ドラムトラック追加",
-                &[],
-                |a, _| super::super::drums::add_track(a),
-            ));
-        }
         out.push(
             Command::new(
                 s,
@@ -106,6 +33,81 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             )
             .repeating(),
         );
+        if a.loaded.is_some() {
+            out.push(
+                Command::new(s, "save", "保存", &[(Key::S, Modifiers::CTRL)], |a, _| {
+                    a.allow_departure(files::Action::Save);
+                })
+                .repeating(),
+            );
+            out.push(Command::plain(
+                s,
+                "export-performance",
+                "Export performance SMF",
+                &[],
+                |a, _| files::performance::dialog(a),
+            ));
+        }
+    }
+    if matches!(s, Screen::Main) && a.loaded.is_some() {
+        super::guide::collect(a, s, out);
+        for (id, name, kind) in [
+            ("insert-event", "Insert event…", None),
+            (
+                "insert-tempo",
+                "Insert tempo",
+                Some(cat_smf_editor::edit::meta_input::Kind::Tempo),
+            ),
+            (
+                "insert-key-signature",
+                "Insert key signature",
+                Some(cat_smf_editor::edit::meta_input::Kind::KeySignature),
+            ),
+        ] {
+            out.push(Command::operation(
+                s,
+                id,
+                name,
+                Operation::InsertEvent { kind, text: None },
+            ));
+        }
+        out.push(Command::operation(
+            s,
+            "insert-same-measure",
+            "Insert same measure",
+            Operation::SameMeasure {
+                batch: false,
+                number: None,
+            },
+        ));
+        out.push(Command::new(
+            s,
+            "add-track",
+            "トラック追加",
+            &[(Key::N, Modifiers::CTRL | Modifiers::SHIFT)],
+            |a, c| busy::request(a, c, busy::Task::AddTrack),
+        ));
+        out.push(Command::new(
+            s,
+            "layers",
+            "レイヤー",
+            &[(Key::T, Modifiers::SHIFT)],
+            |a, _| super::super::layers::open(a),
+        ));
+        out.push(Command::new(
+            s,
+            "drums",
+            "Drum sequencer",
+            &[(Key::D, Modifiers::SHIFT)],
+            |a, _| super::super::drums::open(a),
+        ));
+        out.push(Command::plain(
+            s,
+            "add-drum-track",
+            "ドラムトラック追加",
+            &[],
+            |a, _| super::super::drums::add_track(a),
+        ));
     }
     if matches!(s, Screen::Main | Screen::Timeline | Screen::Overview) {
         out.push(
@@ -165,7 +167,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             add("missing-new", "新規SMF", &[Key::N], |a, _| {
                 files::create_new_song(a)
             });
-            add("missing-quit", "終了", &[Key::Q], |a, c| {
+            add("missing-quit", "アプリ終了", &[Key::Q], |a, c| {
                 a.request_close(c)
             });
         }

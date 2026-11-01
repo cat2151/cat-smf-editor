@@ -1,6 +1,7 @@
 //! One editor shared by timeline labels and event-list metadata.
 use crate::app::App;
 use cat_smf_editor::edit::trill;
+use cat_smf_editor::message;
 use eframe::egui;
 
 pub struct Editing {
@@ -18,7 +19,7 @@ pub struct Editing {
 }
 
 pub(crate) fn begin(app: &mut App, track: usize, event: usize) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let music = loaded.music.clone();
     begin_prepared(app, track, event, &music)
 }
@@ -29,7 +30,7 @@ pub(crate) fn begin_prepared(
     event: usize,
     music: &cat_smf_editor::model::Music,
 ) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     if let Some(region) = trill::for_event(music, track, event)? {
         app.trill_edit = Some(Editing {
             track,
@@ -155,7 +156,7 @@ impl Editing {
             trill::set_first_note(&mut music, self.track, self.id, self.upper)?;
             cat_smf_editor::edit::regenerate(&mut music)?;
         }
-        let before = &app.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+        let before = &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
         if cat_smf_editor::smf_io::encode(before)? != cat_smf_editor::smf_io::encode(&music)? {
             app.apply_music(music)?;
             self.previewed = true;

@@ -61,7 +61,7 @@ fn comma_t_c_and_comma_t_a_are_saved_and_t_follows_them_without_asking() {
         .error
         .as_deref()
         .unwrap()
-        .contains("executable"));
+        .contains("実行ファイル"));
     std::fs::remove_file(&status).unwrap();
     std::fs::remove_dir(&root).unwrap();
 }

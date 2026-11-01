@@ -4,6 +4,7 @@ use crate::{
     play::audition::opening::Preparation,
     store::saved::Document,
 };
+use cat_smf_editor::message;
 use cat_smf_editor::model::Music;
 use eframe::egui;
 use std::path::PathBuf;
@@ -172,7 +173,7 @@ impl Job {
                         &mut app.patch_roots,
                         &mut app.state_cache,
                     )
-                    .map_err(|e| format!("Track {}: {e}", index + 1))?;
+                    .map_err(|e| message::track_error(index + 1, e))?;
                     sound.patches.push(patch);
                     sound.volumes.push(volume);
                     self.rows[index].1 = "Sound restored";
@@ -258,7 +259,7 @@ impl Job {
                     Phase::AwaitAudio(std::time::Instant::now())
                 } else if started.elapsed() > std::time::Duration::from_secs(10) {
                     crate::play::transport::stop(app);
-                    return Err("Audio device did not start playback".into());
+                    return Err(message::AUDIO_DEVICE_DID_NOT_START_PLAYBACK.into());
                 } else {
                     Phase::AwaitAudio(started)
                 }

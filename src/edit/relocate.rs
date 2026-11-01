@@ -47,7 +47,7 @@ pub(super) fn relocate(track: &mut Track, index: usize, tick: u64) -> Result<(),
         .enumerate()
         .all(|(position, &original)| after[position].map(|i| order[i]) == before[original]);
     if !unchanged {
-        return Err("The move crosses another note of the same key".into());
+        return Err("移動すると同じ音高の別のnoteと重なります".into());
     }
     let mut moved: Vec<Event> = order.iter().map(|&i| events[i].clone()).collect();
     moved[at].tick = tick;

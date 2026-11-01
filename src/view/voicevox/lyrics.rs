@@ -1,6 +1,7 @@
 //! The palette's one-line lyric input for one measure: the measure's lyrics are replaced as they
 //! are typed (`edit::lyric::measure`).
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::model::Music;
 use eframe::egui;
 
@@ -71,7 +72,7 @@ fn replaced(editing: &Editing, replacing: &Replacing) -> Result<Music, String> {
 
 /// Shows `music` unless it is already shown; true when the song changed.
 fn install(app: &mut App, music: Music) -> Result<bool, String> {
-    let current = &app.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+    let current = &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
     let encode = cat_smf_editor::smf_io::encode;
     if encode(current)? == encode(&music)? {
         return Ok(false);

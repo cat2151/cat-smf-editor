@@ -1,5 +1,6 @@
 //! Saved macro data rendered by the normal editor, without an audio session.
 use super::*;
+use cat_smf_editor::message;
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context, layer: u64) {
     let saved = std::mem::take(&mut app.macro_editor);
@@ -18,20 +19,20 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context, layer: u64) {
 }
 
 fn session(app: &App, layer: u64) -> Result<Session, String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let patch = loaded.patches[app.track].clone();
     let slot = patch
         .layers
         .iter()
         .find(|l| l.settings.id == layer)
         .and_then(|l| l.instrument.as_ref())
-        .ok_or("No instrument")?;
+        .ok_or("instrumentがありません")?;
     let instrument =
         cat_smf_editor::instrument_macros::Instrument::of(&slot.plugin.format, &slot.plugin.id)
             .ok_or(UNSUPPORTED)?;
     let macros = instrument
         .routed(&slot.plugin.format, &slot.state)
-        .ok_or_else(|| format!("Cannot inspect {} macro routing", instrument.name()))?;
+        .ok_or_else(|| message::cannot_inspect_macro_routing(instrument.name()))?;
     let saved = macro_values::read(&loaded.music.tracks[app.track])?;
     let mut rows = vec![];
     for m in macros {
@@ -72,7 +73,7 @@ fn session(app: &App, layer: u64) -> Result<Session, String> {
             controls: vec![],
         });
         let value = initial(&curve, existing.map(|c| c.points[0].value), m.position)
-            .ok_or_else(|| format!("Missing {prefix} saved position"))?;
+            .ok_or_else(|| format!("{prefix}の保存位置が見つかりません"))?;
         curve.points[0].value = value;
         curve.name = m
             .name

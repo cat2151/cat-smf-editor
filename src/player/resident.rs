@@ -2,6 +2,7 @@
 //! written into the song the same way as a returned selection.
 use crate::app::App;
 use crate::player::selection::{store_master, store_track};
+use cat_smf_editor::message;
 use cat_smf_editor::{
     chain_settings::PluginState,
     resident_ipc::{self, Open, Selected, Sender, ToPlayer},
@@ -31,7 +32,7 @@ pub fn answer(
     let result = check(app, &selected, target)
         .and_then(|bulk| {
             let state = resident_ipc::read_state(&selected.state)
-                .map_err(|error| format!("Could not read the plugin state: {error}"))?;
+                .map_err(|error| format!("pluginのstateを読めませんでした: {error}"))?;
             Ok((bulk, state))
         })
         .and_then(|(bulk, state)| {
@@ -95,21 +96,19 @@ fn check(app: &App, selected: &Selected, target: Option<&Target>) -> Result<bool
                 .and_then(|l| l.patches.get(track))
                 .is_some_and(|p| p.layers.iter().any(|l| l.settings.id == layer))
         {
-            return Err("Layer selection target no longer exists or is active".into());
+            return Err("layerの選択先が無くなったか、既に有効です".into());
         }
     }
-    let original = &app.loaded.as_ref().ok_or("No SMF is loaded")?.original;
+    let original = &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.original;
     target
         .filter(|t| t.open == selected.target && t.original == *original)
         .map(|t| t.bulk && matches!(t.open, Open::Patch { .. } | Open::Layer { .. }))
-        .ok_or_else(|| {
-            "Selection target changed while the browser was open; result discarded".into()
-        })
+        .ok_or_else(|| "browserを開いている間に選択先が変わったので、結果を捨てました".into())
 }
 
 /// A patch replaces the instrument; an effect replaces or adds one chain slot.
 pub fn apply(app: &mut App, target: Open, slot: PluginState) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     match target {
         Open::Layer {
             track,
@@ -117,34 +116,49 @@ pub fn apply(app: &mut App, target: Open, slot: PluginState) -> Result<(), Strin
             song,
         } => {
             if song != app.song_id {
-                return Err("Song changed".into());
+                return Err("Songが変わりました".into());
             }
-            let mut settings = loaded.patches.get(track).ok_or("No such track")?.clone();
+            let mut settings = loaded
+                .patches
+                .get(track)
+                .ok_or(message::NO_SUCH_TRACK)?
+                .clone();
             let layer = settings
                 .layers
                 .iter_mut()
                 .find(|l| l.settings.id == id)
-                .ok_or("Layer was removed")?;
+                .ok_or(message::LAYER_WAS_REMOVED)?;
             layer.instrument = Some(slot);
             settings.validate()?;
             store_track(app, track, &settings)
         }
         Open::Patch { track } => {
-            let mut settings = loaded.patches.get(track).ok_or("No such track")?.clone();
-            let layer = settings.layers.first_mut().ok_or("Track has no layers")?;
+            let mut settings = loaded
+                .patches
+                .get(track)
+                .ok_or(message::NO_SUCH_TRACK)?
+                .clone();
+            let layer = settings
+                .layers
+                .first_mut()
+                .ok_or("trackにlayerがありません")?;
             layer.instrument = Some(slot);
             settings.validate()?;
             store_track(app, track, &settings)
         }
         Open::Effect { track, slot: at } => {
-            let mut settings = loaded.patches.get(track).ok_or("No such track")?.clone();
+            let mut settings = loaded
+                .patches
+                .get(track)
+                .ok_or(message::NO_SUCH_TRACK)?
+                .clone();
             place(&mut settings.effects, at, slot)?;
             settings.validate()?;
             store_track(app, track, &settings)
         }
         Open::MasterEffect { slot: at } => {
             if loaded.music.format != 1 {
-                return Err("Master effects editing requires SMF format 1".into());
+                return Err(message::MASTER_EFFECTS_REQUIRE_SMF_FORMAT_1.into());
             }
             let mut master = app.audition.master().clone();
             place(&mut master.effects, at, slot)?;
@@ -167,14 +181,14 @@ fn place(
             && effect.plugin.id == slot.plugin.id
     }) {
         return Err(format!(
-            "{} is already connected in another slot",
+            "{}は既に別のslotにつながっています",
             slot.plugin.name
         ));
     }
     match at.cmp(&effects.len()) {
         std::cmp::Ordering::Less => effects[at] = slot,
         std::cmp::Ordering::Equal => effects.push(slot),
-        std::cmp::Ordering::Greater => return Err("No such effect slot".into()),
+        std::cmp::Ordering::Greater => return Err("そのeffect slotはありません".into()),
     }
     Ok(())
 }

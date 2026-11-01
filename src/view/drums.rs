@@ -1,5 +1,6 @@
 //! Track-local 4 × 16 grid with GM notes and independent instrument rows.
 use crate::app::App;
+use cat_smf_editor::message;
 use cat_smf_editor::{
     patch_reference::PatchReference,
     score::{
@@ -56,10 +57,10 @@ fn create_track_with(
     app: &mut App,
     prepare: impl FnOnce(&mut App) -> Result<(Patch, Catalog), String>,
 ) -> Result<(), String> {
-    let mut music = app.loaded.as_ref().ok_or("No song")?.music.clone();
+    let mut music = app.loaded.as_ref().ok_or(message::NO_SONG)?.music.clone();
     drums::tick(music.division, 0)?;
     if music.tracks.len() >= 32767 {
-        return Err("Too many SMF tracks".into());
+        return Err(message::TOO_MANY_SMF_TRACKS.into());
     }
     let (patch, catalog) = prepare(app)?;
     let mut source = cat_smf_editor::model::Track {
@@ -111,7 +112,7 @@ fn needs_track(app: &App) -> bool {
 
 fn ensure(app: &mut App) -> Result<(), String> {
     let track = app.track;
-    if app.loaded.as_ref().ok_or("No song")?.patches[track]
+    if app.loaded.as_ref().ok_or(message::NO_SONG)?.patches[track]
         .drums
         .is_some()
     {
@@ -169,7 +170,7 @@ fn activate(app: &mut App) -> Result<(), String> {
     let row = state.row;
     let track = app.track;
     let patch = &app.loaded.as_ref().unwrap().patches[track];
-    let settings = patch.drums.as_ref().ok_or("No drum settings")?;
+    let settings = patch.drums.as_ref().ok_or(message::NO_DRUM_SETTINGS)?;
     match state.field {
         0 => {
             let layer = settings.rows[row].layer;
@@ -191,14 +192,14 @@ fn activate(app: &mut App) -> Result<(), String> {
 
 fn confirm(app: &mut App) -> Result<(), String> {
     let row = app.drum_editor.row;
-    let mut patch = app.loaded.as_ref().ok_or("No song")?.patches[app.track].clone();
-    match app.drum_editor.input.as_ref().ok_or("No input")? {
+    let mut patch = app.loaded.as_ref().ok_or(message::NO_SONG)?.patches[app.track].clone();
+    match app.drum_editor.input.as_ref().ok_or("入力がありません")? {
         Input::Note { text, .. } => {
-            let note: u8 = text.parse().map_err(|_| "MIDI note must be 0–127")?;
+            let note: u8 = text.parse().map_err(|_| message::MIDI_NOTE_MUST_BE_0_127)?;
             if note > 127 {
-                return Err("MIDI note must be 0–127".into());
+                return Err(message::MIDI_NOTE_MUST_BE_0_127.into());
             }
-            patch.drums.as_mut().ok_or("No drum settings")?.rows[row].output = note;
+            patch.drums.as_mut().ok_or(message::NO_DRUM_SETTINGS)?.rows[row].output = note;
         }
     }
     crate::player::selection::store_track(app, app.track, &patch)?;

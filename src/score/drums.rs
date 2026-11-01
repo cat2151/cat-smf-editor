@@ -1,4 +1,5 @@
 //! Four GM lanes; the score keeps GM pitches and the renderer maps each lane.
+use crate::message;
 use crate::{
     edit,
     model::{Event, Track},
@@ -49,7 +50,7 @@ impl Settings {
                 .enumerate()
                 .any(|(i, r)| self.rows[..i].iter().any(|p| p.layer == r.layer))
         {
-            return Err("Invalid drum sequencer settings".into());
+            return Err("drum sequencerの設定が不正です".into());
         }
         Ok(())
     }
@@ -71,7 +72,7 @@ impl Settings {
                 .iter()
                 .any(|r| !layers.iter().any(|l| l.id == r.layer))
         {
-            return Err("Drum sequencer requires its four instrument rows".into());
+            return Err("drum sequencerには4つのinstrumentの行が必要です".into());
         }
         Ok(())
     }
@@ -83,7 +84,7 @@ pub fn read(track: &Track) -> Result<Option<Settings>, String> {
     let mut found = None;
     for e in track.events.iter().filter(|e| owned(e)) {
         if found.is_some() || e.tick != 0 || e.data.len() > 4096 {
-            return Err("Duplicate, misplaced or oversized drum metadata".into());
+            return Err("drumのmetadataが重複しているか、置き場所が違うか、大きすぎます".into());
         }
         let settings: Settings =
             serde_json::from_slice(&e.data[PREFIX.len()..]).map_err(|e| e.to_string())?;
@@ -121,11 +122,11 @@ pub fn write(track: &mut Track, settings: Option<&Settings>) -> Result<(), Strin
 /// Rational boundaries avoid accumulating rounding error for PPQN not divisible by four.
 pub fn tick(division: u16, step: u64) -> Result<u64, String> {
     if division < 4 || division & 0x8000 != 0 {
-        return Err("Drum editing requires PPQN >= 4".into());
+        return Err("drumの編集にはPPQN 4以上が必要です".into());
     }
     step.checked_mul(u64::from(division))
         .map(|v| v / 4)
-        .ok_or("Drum step exceeds tick range".into())
+        .ok_or("drum stepがtickの範囲を超えました".into())
 }
 pub fn active(track: &Track, division: u16, row: usize, step: u64) -> bool {
     let (Ok(start), Ok(end)) = (tick(division, step), tick(division, step.saturating_add(1)))
@@ -138,9 +139,12 @@ pub fn active(track: &Track, division: u16, row: usize, step: u64) -> bool {
         .any(|e| note_on(e) && e.data[0] == NOTES[row] && e.tick >= start && e.tick < end)
 }
 pub fn toggle(track: &mut Track, division: u16, row: usize, step: u64) -> Result<(), String> {
-    let pitch = *NOTES.get(row).ok_or("Invalid drum row")?;
+    let pitch = *NOTES.get(row).ok_or(message::INVALID_DRUM_ROW)?;
     let start = tick(division, step)?;
-    let end = tick(division, step.checked_add(1).ok_or("Drum step overflow")?)?;
+    let end = tick(
+        division,
+        step.checked_add(1).ok_or(message::DRUM_STEP_OVERFLOW)?,
+    )?;
     let remove: Vec<_> = track
         .events
         .iter()

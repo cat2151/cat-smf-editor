@@ -28,8 +28,8 @@ fn list_navigation_repeats_clamps_and_preserves_query_and_owner() {
     }
     query(&mut a, &c, "quit");
     frame(&mut a, &c, vec![key(Key::End, Modifiers::CTRL)]);
-    assert_eq!(a.palette.selected, 0);
-    assert_eq!(listed(&mut a).len(), 1);
+    assert_eq!(a.palette.selected, 1);
+    assert_eq!(listed(&mut a).len(), 2);
     frame(&mut a, &c, vec![egui::Event::Text("no-match".into())]);
     frame(&mut a, &c, vec![key(Key::End, Modifiers::CTRL)]);
     assert_eq!(a.palette.selected, 0);

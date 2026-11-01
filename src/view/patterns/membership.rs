@@ -1,9 +1,10 @@
 use super::*;
+use cat_smf_editor::message;
 use cat_smf_editor::score::pattern::{automation, operations, Catalog};
 pub(crate) fn move_to(a: &mut App, id: u64, container: u64) -> Result<(), String> {
-    let loaded = a.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let catalog = Catalog::read(&loaded.music)?;
-    let p = catalog.patterns.get(&id).ok_or("Missing pattern")?;
+    let p = catalog.patterns.get(&id).ok_or(message::MISSING_PATTERN)?;
     if p.container == container {
         return Ok(());
     }
@@ -11,11 +12,11 @@ pub(crate) fn move_to(a: &mut App, id: u64, container: u64) -> Result<(), String
         .tracks
         .get(&container)
         .filter(|t| catalog.sources.contains(t))
-        .ok_or("Select a container")?;
+        .ok_or(message::SELECT_A_CONTAINER)?;
     let patch = loaded
         .patches
         .get(target)
-        .ok_or("Missing destination sound")?
+        .ok_or("移動先のsoundが見つかりません")?
         .clone();
     let curves = automation::curves(&loaded.music, p)?;
     let tick = catalog
@@ -26,7 +27,9 @@ pub(crate) fn move_to(a: &mut App, id: u64, container: u64) -> Result<(), String
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .max()
-        .map_or(Ok(0), |end| end.checked_add(1).ok_or("Storage overflow"))?;
+        .map_or(Ok(0), |end| {
+            end.checked_add(1).ok_or(message::STORAGE_OVERFLOW)
+        })?;
     if !curves.is_empty() {
         crate::play::transport::stop(a);
     }

@@ -1,6 +1,7 @@
 //! Track and master effect chains: order, bypass, removal and the browser entry.
 use crate::app::App;
 use cat_smf_editor::chain_settings::PluginState;
+use cat_smf_editor::message;
 use eframe::egui;
 
 pub(crate) mod commands;
@@ -76,8 +77,12 @@ fn effects(app: &App, target: Target) -> Option<Vec<PluginState>> {
 fn store(app: &mut App, target: Target, effects: Vec<PluginState>) -> Result<(), String> {
     match target {
         Target::Track(track) => {
-            let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
-            let mut patch = loaded.patches.get(track).ok_or("No such track")?.clone();
+            let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
+            let mut patch = loaded
+                .patches
+                .get(track)
+                .ok_or(message::NO_SUCH_TRACK)?
+                .clone();
             patch.effects = effects;
             patch.validate()?;
             crate::player::selection::store_track(app, track, &patch)

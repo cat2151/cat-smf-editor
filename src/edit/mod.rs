@@ -57,8 +57,8 @@ pub fn refresh_deltas(track: &mut Track) -> Result<(), String> {
         let delta = event
             .tick
             .checked_sub(previous)
-            .ok_or("SMF events are out of tick order")?;
-        event.delta = u32::try_from(delta).map_err(|_| "Delta time is too large")?;
+            .ok_or("SMFのeventがtick順に並んでいません")?;
+        event.delta = u32::try_from(delta).map_err(|_| "delta timeが大きすぎます")?;
         previous = event.tick;
     }
     Ok(())

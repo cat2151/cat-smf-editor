@@ -5,7 +5,7 @@ pub fn read(
     roots: &mut dyn crate::patch_roots::Roots,
 ) -> Result<Patch, String> {
     let mut patch = Patch::resolve(crate::instrument_layers::read(track, roots)?, |_| {
-        Err("Patch state requires session restoration".into())
+        Err("patchのstateにはsessionの復元が必要です".into())
     })?;
     patch.drums = super::drums::read(track)?;
     patch.validate()?;

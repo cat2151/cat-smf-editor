@@ -34,18 +34,18 @@ pub fn generate(reference: &PatchReference, explicit: Option<PathBuf>) -> Result
     let sent = child
         .stdin
         .take()
-        .ok_or("Player stdin unavailable")?
+        .ok_or("playerの標準入力を使えません")?
         .write_all(&bytes);
     let output = child.wait_with_output().map_err(|e| e.to_string())?;
     sent.map_err(|e| e.to_string())?;
     if !output.status.success() {
         return Err(format!(
-            "Player restoration failed: {}",
+            "playerの復元に失敗しました: {}",
             String::from_utf8_lossy(&output.stderr)
         ));
     }
     if output.stdout.is_empty() || output.stdout.len() > 16 * 1024 * 1024 {
-        return Err("Player returned an invalid state size".into());
+        return Err("playerが返したstateの大きさが不正です".into());
     }
     Ok(output.stdout)
 }

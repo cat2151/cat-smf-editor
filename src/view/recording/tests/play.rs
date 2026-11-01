@@ -145,8 +145,10 @@ fn help_switches_between_preparing_and_playing_keys() {
     let playing = help(&mut a);
     assert_eq!(playing[0], "Virtual MIDI keyboard");
     assert!(playing.iter().any(|t| t == "Ctrl+,"));
-    // The settings window shows the item shortcuts beside the items.
-    assert!(!playing.iter().any(|t| t == "Tab" || t == "Enter"));
+    // The settings window shows the item shortcuts beside the items; Enter is the Capture window's.
+    assert!(!playing.iter().any(|t| t == "Tab"));
+    assert_eq!(playing.iter().filter(|t| *t == "Enter").count(), 1);
+    assert!(playing.iter().any(|t| t == "pattern化"));
 }
 
 #[test]

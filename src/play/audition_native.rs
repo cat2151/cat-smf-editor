@@ -1,4 +1,5 @@
 //! Independent instruments and one post-sum effect chain, owned on the main thread.
+use cat_smf_editor::message;
 use cat_smf_editor::{
     chain::Chain,
     chain_settings::Settings,
@@ -28,7 +29,7 @@ impl Native {
             .layers
             .iter()
             .position(|l| l.settings.id == layer)
-            .ok_or("Missing instrument layer")?;
+            .ok_or(message::MISSING_INSTRUMENT_LAYER)?;
         self.layers[index].parameters()
     }
     pub fn parameter_text(
@@ -41,7 +42,7 @@ impl Native {
             .layers
             .iter()
             .position(|l| l.settings.id == layer)
-            .ok_or("Missing instrument layer")?;
+            .ok_or(message::MISSING_INSTRUMENT_LAYER)?;
         self.layers[index].parameter_text(value)
     }
     pub fn open(rate: u32, patch: &Patch) -> Result<Self, String> {
@@ -76,7 +77,7 @@ impl Native {
     /// Bypass changes reach the running chain without reopening it.
     pub fn set_bypass(&mut self, patch: &Patch) -> Result<(), String> {
         if !self.settings.same_except_bypass(patch) {
-            return Err("Bypass change must keep the chain".into());
+            return Err("bypassの切り替えでchainを変えられません".into());
         }
         if let Some(effects) = &self.effects {
             effects.set_master_bypass(&patch.effects)?;
@@ -166,23 +167,26 @@ impl Native {
                 .layers
                 .iter()
                 .position(|l| l.settings.id == curve.target.layer)
-                .ok_or_else(|| format!("Missing automation layer: {}", curve.name))?;
+                .ok_or_else(|| format!("automationのlayerが見つかりません: {}", curve.name))?;
             let key = match &self.settings.layers[layer].instrument {
                 Some(slot) => slot.plugin.clone(),
                 None => cat_smf_editor::chain::default_instrument()?,
             };
             if key.format != curve.target.plugin_format || key.id != curve.target.plugin_id {
-                return Err(format!("Automation instrument changed: {}", curve.name));
+                return Err(format!(
+                    "automationのinstrumentが変わりました: {}",
+                    curve.name
+                ));
             }
             let parameters = self.layers[layer].parameters()?;
             let mut matching = parameters
                 .iter()
                 .filter(|p| p.stable_id == curve.target.parameter_id);
-            let parameter = matching
-                .next()
-                .ok_or_else(|| format!("Missing parameter: {} / {}", curve.path, curve.name))?;
+            let parameter = matching.next().ok_or_else(|| {
+                format!("parameterが見つかりません: {} / {}", curve.path, curve.name)
+            })?;
             if matching.next().is_some() {
-                return Err(format!("Ambiguous parameter ID: {}", curve.name));
+                return Err(format!("parameter IDが1つに決まりません: {}", curve.name));
             }
             validate_parameter(
                 curve,
@@ -206,7 +210,7 @@ impl Native {
                 result.len() - 1
             };
             if result[index].lanes.len() >= 256 {
-                return Err("Too many automated parameters on one layer".into());
+                return Err("1つのlayerでautomationするparameterが多すぎます".into());
             }
             result[index].values.push(parameter.binding);
             result[index].lanes.push(Binding {

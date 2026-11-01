@@ -1,25 +1,32 @@
 //! Measure navigation and the drum editor's temporary audition scope.
 use super::*;
+use cat_smf_editor::message;
 
 pub(super) fn measure(app: &App) -> Result<drums::Measure, String> {
-    let loaded = app.loaded.as_ref().ok_or("No song")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SONG)?;
     let result = drums::Measure::new(
-        loaded.time.map(app.track).ok_or("Missing measure map")?,
+        loaded
+            .time
+            .map(app.track)
+            .ok_or(message::MISSING_MEASURE_MAP)?,
         loaded.music.division,
         app.drum_editor.page + 1,
     )?;
     if let Some(context) = crate::view::patterns::mode::editing(app, app.track) {
         let range = context.edit_range(&loaded.music)?;
         if result.start < range.0 || result.end > range.1 {
-            return Err("Measure is outside the pattern length".into());
+            return Err("小節がpatternの長さの外です".into());
         }
     }
     Ok(result)
 }
 
 pub(super) fn range(app: &App) -> Result<(u64, u64), String> {
-    let loaded = app.loaded.as_ref().ok_or("No song")?;
-    let map = loaded.time.map(app.track).ok_or("Missing measure map")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SONG)?;
+    let map = loaded
+        .time
+        .map(app.track)
+        .ok_or(message::MISSING_MEASURE_MAP)?;
     let s = &app.drum_editor;
     let result = (
         drums::Measure::new(map, loaded.music.division, s.first)?.start,
@@ -28,7 +35,7 @@ pub(super) fn range(app: &App) -> Result<(u64, u64), String> {
     if let Some(context) = crate::view::patterns::mode::editing(app, app.track) {
         let range = context.edit_range(&loaded.music)?;
         if result.0 < range.0 || result.1 > range.1 {
-            return Err("Drum range is outside the pattern length".into());
+            return Err("drumの範囲がpatternの長さの外です".into());
         }
     }
     Ok(result)
@@ -54,7 +61,7 @@ pub(super) fn restart(app: &mut App) -> Result<(), String> {
     }
     let range = range(app)?;
     let prepared =
-        crate::play::transport::repeat::prepare(app, range).ok_or("Cannot prepare drum loop")?;
+        crate::play::transport::repeat::prepare(app, range).ok_or("drumのloopを準備できません")?;
     app.audition.stop();
     app.playback.active = None;
     app.playback.pending = Some(prepared);

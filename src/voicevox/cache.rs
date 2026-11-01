@@ -46,7 +46,7 @@ pub fn load_or_sing(
 fn check(bytes: &[u8], rate: u32) -> Result<Vec<f32>, String> {
     let (actual, samples) = pcm::decode(bytes)?;
     if actual != rate {
-        return Err(format!("VOICEVOX WAV: {actual} Hz, expected {rate} Hz"));
+        return Err(format!("VOICEVOX WAV: {actual} Hzです（{rate} Hzのはず）"));
     }
     Ok(samples)
 }

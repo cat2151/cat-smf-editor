@@ -42,8 +42,11 @@ impl Setup {
                     Ok(_) => self.start_scan(false),
                     Err(error) if explicit.is_some() => Err(error),
                     Err(_) => {
-                        self.destination =
-                            Some(exe.parent().ok_or("No executable directory")?.to_owned());
+                        self.destination = Some(
+                            exe.parent()
+                                .ok_or("実行ファイルのフォルダがありません")?
+                                .to_owned(),
+                        );
                         self.download(ctx);
                         Ok(())
                     }
@@ -79,7 +82,9 @@ impl Setup {
         let mut installed = None;
         if let Some(result) = self.download.as_ref().and_then(|rx| match rx.try_recv() {
             Ok(result) => Some(result),
-            Err(mpsc::TryRecvError::Disconnected) => Some(Err("Download worker stopped".into())),
+            Err(mpsc::TryRecvError::Disconnected) => {
+                Some(Err("ダウンロード処理が止まりました".into()))
+            }
             Err(mpsc::TryRecvError::Empty) => None,
         }) {
             self.download = None;

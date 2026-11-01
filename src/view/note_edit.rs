@@ -1,6 +1,7 @@
 //! Typing over a Note On's MBT or Duration cell moves only that note's start or end;
 //! its lyric is typed over the Note cell.
 use crate::app::App;
+use cat_smf_editor::message;
 use eframe::egui;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,8 +75,11 @@ pub fn begin(
     rect: egui::Rect,
     text: &str,
 ) {
+    if crate::view::patterns::mode::capture_shown(app, track) {
+        return;
+    }
     if !app.can_edit_notes(track) {
-        app.load_error = Some("Edit the pattern from its destination track".into());
+        app.load_error = Some(message::EDIT_PATTERN_FROM_DESTINATION_TRACK.into());
         return;
     }
     app.note_edit = Some(Editing {
@@ -96,9 +100,9 @@ pub fn begin(
 
 fn apply(app: &mut App, editing: &Editing) -> Result<(), String> {
     if editing.generation != app.generation {
-        return Err("Note edit target changed".into());
+        return Err("noteの編集対象が変わりました".into());
     }
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let (track, event) = (editing.track, editing.event);
     cat_smf_editor::edit::trill::ensure_note_editable(loaded.visible(), track, event)?;
     match editing.field {
@@ -109,7 +113,10 @@ fn apply(app: &mut App, editing: &Editing) -> Result<(), String> {
             })
         }
         Field::Velocity => {
-            let value = editing.text.parse::<u8>().map_err(|_| "Invalid velocity")?;
+            let value = editing
+                .text
+                .parse::<u8>()
+                .map_err(|_| "velocityが不正です")?;
             app.edit_music(|music| {
                 cat_smf_editor::edit::note_value::set_velocity(
                     &mut music.tracks[track],
@@ -121,7 +128,7 @@ fn apply(app: &mut App, editing: &Editing) -> Result<(), String> {
         Field::Mbt => {
             let tick = crate::store::session::parse_mbt(&editing.text)
                 .and_then(|position| loaded.time.map(track)?.tick_at(&position))
-                .ok_or("Invalid MBT")?;
+                .ok_or("MBTが不正です")?;
             app.edit_music(|music| {
                 cat_smf_editor::edit::note_start::move_start(&mut music.tracks[track], event, tick)
             })
@@ -130,7 +137,7 @@ fn apply(app: &mut App, editing: &Editing) -> Result<(), String> {
             let duration = editing
                 .text
                 .parse::<u64>()
-                .map_err(|_| "Invalid duration".to_string())?;
+                .map_err(|_| "長さが不正です".to_string())?;
             app.edit_music(|music| {
                 cat_smf_editor::edit::note_length::set_duration(
                     &mut music.tracks[track],

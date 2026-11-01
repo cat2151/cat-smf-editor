@@ -1,21 +1,22 @@
 use super::*;
+use cat_smf_editor::message;
 pub(super) fn current(app: &App) -> Result<Curve, String> {
     if let Some(layer) = app.parameter_editor.variation_layer {
         return variation::current(app, layer);
     }
     if let Some((id, target)) = &app.parameter_editor.pattern_curve {
-        let music = &app.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+        let music = &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
         let catalog = cat_smf_editor::score::pattern::Catalog::read(music)?;
-        let definition = catalog.patterns.get(id).ok_or("Missing pattern")?;
+        let definition = catalog.patterns.get(id).ok_or(message::MISSING_PATTERN)?;
         return cat_smf_editor::score::pattern::automation::curves(music, definition)?
             .into_iter()
             .find(|c| &c.target == target)
-            .ok_or("Missing pattern parameter".into());
+            .ok_or("patternのparameterが見つかりません".into());
     }
-    parameter_curve::read(&app.loaded.as_ref().ok_or("No SMF is loaded")?.music)?
+    parameter_curve::read(&app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?
         .curves
         .remove(&source_track(app))
-        .ok_or("Not a parameter track".into())
+        .ok_or(message::NOT_A_PARAMETER_TRACK.into())
 }
 pub(super) fn store(app: &mut App, next: Curve) {
     let result = current(app).and_then(|old| {
@@ -43,15 +44,15 @@ pub(super) fn store(app: &mut App, next: Curve) {
 }
 
 pub(super) fn curve_owner(app: &App) -> Result<usize, String> {
-    let music = &app.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+    let music = &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
     if let Some((id, _)) = &app.parameter_editor.pattern_curve {
         return cat_smf_editor::score::pattern::Catalog::read(music)?
             .patterns
             .get(id)
             .map(|p| p.track)
-            .ok_or("Missing pattern".into());
+            .ok_or(message::MISSING_PATTERN.into());
     }
     parameter_curve::read(music)?
         .owner(source_track(app))
-        .ok_or("Missing automation owner".into())
+        .ok_or("automationの持ち主が見つかりません".into())
 }

@@ -1,8 +1,9 @@
 //! Pattern-relative curves and immutable container baselines, separate from runtime values.
 use super::*;
 use crate::edit::parameter_curve::{Curve, Target, ValueSpace};
+use crate::message;
 pub const PREFIX: &[u8] = b"\x7dcat-smf-editor\0pattern-parameter\0";
-pub const BASELINES: &[u8] = b"\x7dcat-smf-editor\0container-baselines\0";
+pub const BASELINES: &[u8] = b"\x7dcat-smf-editor\0pattern-container-baselines\0";
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum Baseline {
@@ -41,14 +42,14 @@ fn event<T: Serialize>(tick: u64, prefix: &[u8], value: &T) -> Result<Event, Str
     })
 }
 pub fn baselines(m: &Music, track: usize) -> Result<Vec<Baseline>, String> {
-    let t = m.tracks.get(track).ok_or("Missing container")?;
+    let t = m.tracks.get(track).ok_or(message::MISSING_CONTAINER)?;
     let records = t
         .events
         .iter()
         .filter(|e| meta(e, BASELINES))
         .collect::<Vec<_>>();
     if records.len() > 1 || records.first().is_some_and(|e| e.tick != 0) {
-        return Err("Invalid container baselines".into());
+        return Err("containerの基準値が不正です".into());
     }
     let values = records
         .first()
@@ -63,13 +64,13 @@ pub fn baselines(m: &Music, track: usize) -> Result<Vec<Baseline>, String> {
             Baseline::Parameter {target,value_space,minimum,maximum,value} => {
                 crate::host::parameters::domain::Domain::new(*value_space,*minimum,*maximum)?;
                 if !value.is_finite() || !(*minimum..=*maximum).contains(value) || values[..i].iter().any(|other|matches!(other,Baseline::Parameter {target:t,..} if t==target)) {
-                    return Err("Invalid or duplicate parameter baseline".into());
+                    return Err("parameterの基準値が不正か重複しています".into());
                 }
             }
             Baseline::Midi {channel,controller,value} => {
                 if *channel>15 || controller.is_some_and(|cc|!supported_cc(cc)) || *value>if controller.is_some(){127}else{16383}
                     || values[..i].iter().any(|other|matches!(other,Baseline::Midi {channel:c,controller:cc,..} if c==channel && cc==controller)) {
-                    return Err("Invalid or duplicate MIDI baseline".into());
+                    return Err("MIDIの基準値が不正か重複しています".into());
                 }
             }
         }
@@ -86,7 +87,7 @@ pub fn curves(m: &Music, p: &Definition) -> Result<Vec<Curve>, String> {
             continue;
         }
         if e.tick != p.tick {
-            return Err("Pattern curves must be stored at the body start".into());
+            return Err("pattern curveは本体の始まりに置きます".into());
         }
         let c: Curve =
             serde_json::from_slice(&e.data[PREFIX.len()..]).map_err(|e| e.to_string())?;
@@ -98,7 +99,7 @@ pub fn curves(m: &Music, p: &Definition) -> Result<Vec<Curve>, String> {
                 .any(|point| point.tick > p.length().unwrap_or(0))
             || out.iter().any(|other: &Curve| other.target == c.target)
         {
-            return Err("Invalid pattern curve ownership or range".into());
+            return Err("pattern curveの持ち主か範囲が不正です".into());
         }
         out.push(c);
     }
@@ -111,7 +112,7 @@ pub fn write(
     baseline: Option<f64>,
 ) -> Result<(), String> {
     let catalog = Catalog::read(m)?;
-    let p = catalog.patterns.get(&id).ok_or("Missing pattern")?;
+    let p = catalog.patterns.get(&id).ok_or(message::MISSING_PATTERN)?;
     curve.target.group = p.container;
     curve.validate()?;
     let mut values = baselines(m, p.track)?;
@@ -119,7 +120,7 @@ pub fn write(
         .iter()
         .any(|b| matches!(b,Baseline::Parameter {target,..} if target==&curve.target))
     {
-        let value = baseline.ok_or("Missing parameter baseline")?;
+        let value = baseline.ok_or("parameterの基準値が見つかりません")?;
         values.push(Baseline::Parameter {
             target: curve.target.clone(),
             value_space: curve.value_space,
@@ -158,7 +159,7 @@ pub fn set_midi_baseline(
         .tracks
         .get(&container)
         .filter(|t| catalog.sources.contains(t))
-        .ok_or("Missing container")?;
+        .ok_or(message::MISSING_CONTAINER)?;
     let mut values = baselines(m, track)?;
     values.retain(|b|!matches!(b,Baseline::Midi {channel:c,controller:cc,..} if *c==channel && *cc==controller));
     values.push(Baseline::Midi {
@@ -179,7 +180,7 @@ pub fn set_midi_baseline(
 pub fn describe(data: &[u8]) -> String {
     serde_json::from_slice::<Curve>(&data[PREFIX.len()..])
         .map(|c| format!("{} · {} · {} points", c.path, c.name, c.points.len()))
-        .unwrap_or_else(|_| "invalid".into())
+        .unwrap_or_else(|_| crate::message::INVALID.into())
 }
 pub fn describe_baselines(data: &[u8]) -> String {
     serde_json::from_slice::<Vec<Baseline>>(&data[BASELINES.len()..])
@@ -211,7 +212,7 @@ pub fn describe_baselines(data: &[u8]) -> String {
                 .collect::<Vec<_>>()
                 .join(" · ")
         })
-        .unwrap_or_else(|_| "invalid".into())
+        .unwrap_or_else(|_| crate::message::INVALID.into())
 }
 
 pub fn parameter_baseline(
@@ -225,7 +226,7 @@ pub fn parameter_baseline(
         .tracks
         .get(&container)
         .filter(|t| c.sources.contains(t))
-        .ok_or("Missing destination container")?;
+        .ok_or("移動先のcontainerが見つかりません")?;
     let mut target = curve.target.clone();
     target.group = container;
     let mut values = baselines(m, track)?;

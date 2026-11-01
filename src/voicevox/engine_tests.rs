@@ -1,6 +1,6 @@
 //! 実 engine との契約。repo root の `.voicevox-engine-path`（git 管理外）に `run.exe` の
 //! パスを1行で書いておき、`cargo test -- --ignored voicevox` で走らせる。
-use super::engine::{connect, executable, Engine, Failure, START_TIMEOUT};
+use super::engine::{connect, executable, kill_listener, Engine, Failure, START_TIMEOUT};
 use super::{cache, client::Client, score::Score, score::ScoreNote};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 const PORT: u16 = 50121;
 const LIFECYCLE_PORT: u16 = 50123;
 const ONE_NOTE_PORT: u16 = 50129;
+const KILL_PORT: u16 = 50132;
 const RATE: u32 = 48000;
 
 fn configured() -> std::path::PathBuf {
@@ -139,7 +140,7 @@ fn voicevox_connect_reports_an_executable_that_exits_without_answering() {
     let Err(Failure::Failed(error)) = connect(50122, Some(&shell), Duration::from_secs(30)) else {
         panic!("cmd.exe must not count as an engine");
     };
-    assert!(error.contains("exited before answering"), "{error}");
+    assert!(error.contains("応答する前に終了しました"), "{error}");
 }
 
 #[test]
@@ -188,4 +189,28 @@ fn voicevox_engine_sings_one_note_for_an_audition() {
     }
     drop(engine);
     assert!(!running(pid));
+}
+
+/// editor が起動していない engine（別の process が起動したもの）も落とせる。
+#[test]
+#[ignore = "requires a VOICEVOX engine at .voicevox-engine-path"]
+fn voicevox_engine_started_elsewhere_is_killed_by_its_port() {
+    let client = Client::new(&format!("http://127.0.0.1:{KILL_PORT}"));
+    assert!(
+        client.version().is_err(),
+        "port {KILL_PORT} is already in use"
+    );
+    let mut other = Command::new(configured())
+        .args(["--port", &KILL_PORT.to_string()])
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + START_TIMEOUT;
+    while client.version().is_err() {
+        assert!(Instant::now() < deadline, "engine did not answer");
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    kill_listener(KILL_PORT).unwrap();
+    assert!(other.wait().is_ok());
+    assert!(client.version().is_err(), "engine still answers");
+    assert!(!running(other.id()));
 }

@@ -1,4 +1,5 @@
 use super::Curve;
+use crate::message;
 use crate::{
     edit::{insert, refresh_deltas},
     model::{Event, Music, Track},
@@ -66,7 +67,7 @@ fn payload<T: Serialize>(prefix: &[u8], value: &T) -> Result<Vec<u8>, String> {
     let mut bytes = prefix.to_vec();
     bytes.extend(serde_json::to_vec(value).map_err(|e| e.to_string())?);
     if bytes.len() > MAX_PAYLOAD {
-        return Err("Parameter metadata is too large".into());
+        return Err("parameterのmetadataが大きすぎます".into());
     }
     Ok(bytes)
 }
@@ -80,7 +81,7 @@ pub fn read(music: &Music) -> Result<Collection, String> {
                 continue;
             }
             if music.format != 1 || e.tick != 0 || e.data.len() > MAX_PAYLOAD {
-                return Err("Parameter metadata requires tick zero in SMF format 1".into());
+                return Err("parameterのmetadataはSMF format 1のtick 0に置きます".into());
             }
             if group_event(e) {
                 let value: Group = serde_json::from_slice(&e.data[GROUP_PREFIX.len()..])
@@ -90,16 +91,14 @@ pub fn read(music: &Music) -> Result<Collection, String> {
                     || group.replace(value.id).is_some()
                     || result.owners.insert(value.id, track).is_some()
                 {
-                    return Err("Invalid or duplicate instance group identity".into());
+                    return Err("instance groupの識別子が不正か重複しています".into());
                 }
             } else {
                 let curve: Curve =
                     serde_json::from_slice(&e.data[PREFIX.len()..]).map_err(|e| e.to_string())?;
                 curve.validate()?;
                 if track == 0 || result.curves.insert(track, curve).is_some() {
-                    return Err(
-                        "A dedicated parameter track needs one curve outside the conductor".into(),
-                    );
+                    return Err("専用のparameter trackにはconductorの外にcurveが1本必要です".into());
                 }
             }
         }
@@ -110,7 +109,7 @@ pub fn read(music: &Music) -> Result<Collection, String> {
                     .iter()
                     .any(|e| matches!(e.status & 0xf0, 0x80 | 0x90)))
         {
-            return Err("A parameter track cannot also own an instrument or notes".into());
+            return Err("parameter trackにはinstrumentやnoteを持たせられません".into());
         }
     }
     Ok(result)
@@ -121,7 +120,7 @@ pub fn read(music: &Music) -> Result<Collection, String> {
 pub fn create(music: &mut Music, owner: usize, mut curve: Curve) -> Result<usize, String> {
     let saved = read(music)?;
     if music.format != 1 || owner >= music.tracks.len() || saved.curves.contains_key(&owner) {
-        return Err("Automation requires a format 1 instrument owner track".into());
+        return Err("automationにはformat 1のinstrumentを持つtrackが必要です".into());
     }
     let group = saved
         .owners
@@ -137,7 +136,7 @@ pub fn create(music: &mut Music, owner: usize, mut curve: Curve) -> Result<usize
             .max()
             .unwrap_or(0)
             .checked_add(1)
-            .ok_or("Instance group IDs exhausted")?,
+            .ok_or("instance groupのIDを使い切りました")?,
     };
     curve.target.group = id;
     curve.validate()?;
@@ -147,12 +146,12 @@ pub fn create(music: &mut Music, owner: usize, mut curve: Curve) -> Result<usize
         .filter(|(_, c)| c.target == curve.target);
     if let Some((&track, _)) = matches.next() {
         if matches.next().is_some() {
-            return Err("Multiple tracks share this parameter target".into());
+            return Err("複数のtrackがこのparameterを対象にしています".into());
         }
         return Ok(track);
     }
     if music.tracks.len() >= 32767 {
-        return Err("Too many SMF tracks".into());
+        return Err(message::TOO_MANY_SMF_TRACKS.into());
     }
     let mut next = music.clone();
     if group.is_none() {
@@ -189,9 +188,12 @@ pub fn create(music: &mut Music, owner: usize, mut curve: Curve) -> Result<usize
 
 pub fn write(music: &mut Music, track: usize, curve: &Curve) -> Result<(), String> {
     let saved = read(music)?;
-    let old = saved.curves.get(&track).ok_or("Not a parameter track")?;
+    let old = saved
+        .curves
+        .get(&track)
+        .ok_or(message::NOT_A_PARAMETER_TRACK)?;
     if old.target != curve.target {
-        return Err("Parameter target changed during editing".into());
+        return Err("編集中にparameterの対象が変わりました".into());
     }
     curve.validate()?;
     let data = payload(PREFIX, curve)?;

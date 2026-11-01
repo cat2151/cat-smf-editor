@@ -86,7 +86,7 @@ pub(super) fn apply(app: &mut App, action: Action) {
         Action::Init => edit::event_range::initialize(music, track),
         Action::DeleteTrack => {
             if music.tracks.len() == 1 {
-                return Err("Cannot delete the last SMF track".into());
+                return Err("最後のSMF trackは削除できません".into());
             }
             music.tracks.remove(track);
             Ok(())

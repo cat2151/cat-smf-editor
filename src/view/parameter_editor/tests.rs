@@ -230,7 +230,7 @@ fn migemo_multiple_terms_and_stale_song_rejection_preserve_document() {
     let mut a = app();
     let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
     a.parameter_editor.picker = Some(p);
-    assert!(create(&mut a).unwrap_err().contains("target changed"));
+    assert!(create(&mut a).unwrap_err().contains("対象が変わりました"));
     assert_eq!(
         before,
         cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap()

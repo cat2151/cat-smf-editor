@@ -90,6 +90,9 @@ impl Command {
             .join(" / ")
     }
     pub fn label(&self) -> String {
+        if self.screen == Screen::Global {
+            return self.name.clone();
+        }
         format!("{}: {}", self.screen.label(), self.name)
     }
 }
@@ -217,42 +220,38 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     result
 }
 
-pub fn candidates(app: &App, ctx: &egui::Context) -> Vec<Command> {
-    let current = if !app.patterns.workspace.input_open()
+/// A pane's filter field types text, yet its palette belongs to the pane.
+fn palette_screen(app: &App, ctx: &egui::Context) -> Screen {
+    if !app.patterns.workspace.input_open()
         && let Some(p) = super::patterns::workspace::focused_query(ctx)
     {
         p.screen()
     } else {
         owner(app, ctx)
-    };
+    }
+}
+
+pub fn candidates(app: &App, ctx: &egui::Context) -> Vec<Command> {
+    let current = palette_screen(app, ctx);
     let mut result = contextual_definitions(app, ctx, current);
-    let screens: &[Screen] = match current {
-        Screen::Main => &[
-            Screen::Settings,
-            Screen::Program,
-            Screen::Edit,
-            Screen::Go,
-            Screen::Tracks,
-            Screen::Split,
-            Screen::Play,
-            Screen::Mixer,
-            Screen::Layers,
-            Screen::Effects,
-            Screen::Recent,
-            Screen::Timeline,
-        ],
-        Screen::Timeline | Screen::Overview => &[Screen::Settings, Screen::Program, Screen::Play],
-        Screen::Mixer => &[Screen::Effects],
-        Screen::Patterns | Screen::Scene | Screen::Song => &[Screen::Settings, Screen::Play],
-        Screen::Settings => &[Screen::Program],
-        Screen::Go => &[Screen::Tracks],
-        _ => &[],
-    };
-    for &screen in screens {
-        if ownership::reachable(app, screen) {
-            result.extend(contextual_definitions(app, ctx, screen));
+    if !current.app_dialog() {
+        result.extend(contextual_definitions(app, ctx, Screen::Global));
+    }
+    if !current.transient() {
+        for screen in ownership::destinations(app) {
+            if screen != current {
+                // Opening a screen only to close it again does nothing.
+                let close = screen.close();
+                result.extend(
+                    contextual_definitions(app, ctx, screen)
+                        .into_iter()
+                        .filter(|c| Some(c.id.as_str()) != close),
+                );
+            }
         }
     }
+    let mut seen = std::collections::HashSet::new();
+    result.retain(|c| seen.insert(c.id.clone()));
     result.retain(|c| c.id != "browse-views" || c.screen == current);
     result
 }
@@ -268,8 +267,8 @@ pub fn execute(app: &mut App, ctx: &egui::Context, command: &Command) -> bool {
     else {
         return false;
     };
-    if owner(app, ctx) != fresh.screen {
-        ownership::enter(app, ctx, fresh.screen);
+    if !ownership::navigate(app, ctx, palette_screen(app, ctx), fresh.screen) {
+        return false;
     }
     if let Some(valid) = definitions(app, fresh.screen)
         .into_iter()
@@ -309,7 +308,11 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
     }
     let events = ctx.input(|i| i.events.clone());
     for event in events {
-        let defs = contextual_definitions(app, ctx, screen);
+        let mut defs = contextual_definitions(app, ctx, screen);
+        // Global のキーは Event list でだけ効き、他の editor へ漏らさない。
+        if screen == Screen::Main {
+            defs.extend(contextual_definitions(app, ctx, Screen::Global));
+        }
         let command = match event {
             egui::Event::Key {
                 key,

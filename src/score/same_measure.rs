@@ -1,4 +1,5 @@
 //! Validated, transient note expansion. The saved document is never modified.
+use crate::message;
 use crate::{
     model::{Event, Music},
     score::{
@@ -23,10 +24,10 @@ pub fn reference(event: &Event) -> Result<Option<u64>, String> {
     let payload = &event.data[PREFIX.len()..];
     let measure = match payload {
         [1, bytes @ ..] if bytes.len() == 8 => u64::from_le_bytes(bytes.try_into().unwrap()),
-        _ => return Err("Invalid same measure payload".into()),
+        _ => return Err("same measureの中身が不正です".into()),
     };
     if measure == 0 {
-        return Err("Same measure number must be positive".into());
+        return Err("same measureの小節番号は正の数で指定します".into());
     }
     Ok(Some(measure))
 }
@@ -46,7 +47,7 @@ pub fn event(tick: u64, measure: u64) -> Event {
 
 pub fn bounds(map: &MeterMap, measure: u128) -> Result<(u64, u64), String> {
     if measure == 0 {
-        return Err("Measure number must be positive".into());
+        return Err("小節番号は正の数で指定します".into());
     }
     let mut p = Position {
         measure,
@@ -54,12 +55,12 @@ pub fn bounds(map: &MeterMap, measure: u128) -> Result<(u64, u64), String> {
         tick_numerator: 0,
         tick_denominator: 1,
     };
-    let start = map.tick_at(&p).ok_or("Invalid measure start")?;
-    p.measure = p.measure.checked_add(1).ok_or("Measure overflow")?;
+    let start = map.tick_at(&p).ok_or("小節の始まりが不正です")?;
+    p.measure = p.measure.checked_add(1).ok_or(message::MEASURE_OVERFLOW)?;
     let end = map
         .tick_at(&p)
         .filter(|&end| end > start)
-        .ok_or("Invalid measure end")?;
+        .ok_or("小節の終わりが不正です")?;
     Ok((start, end))
 }
 
@@ -105,7 +106,7 @@ impl<'a> Notes<'a> {
     fn within(&self, (start, end): (u64, u64)) -> Result<Vec<Event>, String> {
         let before = self.ons.partition_point(|on| on.0 < start.min(end));
         if self.reach[before] > u128::from(start) {
-            return Err("Note crosses measure boundary".into());
+            return Err(message::NOTE_CROSSES_MEASURE_BOUNDARY.into());
         }
         let first = self.ons.partition_point(|on| on.0 < start);
         let last = self.ons.partition_point(|on| on.0 < end).max(first);
@@ -116,7 +117,7 @@ impl<'a> Notes<'a> {
             let on = &self.events[i];
             let until = until
                 .filter(|&tick| tick <= end)
-                .ok_or("Note crosses measure boundary")?;
+                .ok_or(message::NOTE_CROSSES_MEASURE_BOUNDARY)?;
             result.push(on.clone());
             result.push(Event {
                 tick: until,
@@ -135,13 +136,19 @@ impl<'a> Notes<'a> {
 }
 
 pub fn expand(music: &Music, track: usize) -> Result<(Cow<'_, [Event]>, u64), String> {
-    let source = &music.tracks.get(track).ok_or("Missing track")?.events;
+    let source = &music
+        .tracks
+        .get(track)
+        .ok_or(message::MISSING_TRACK)?
+        .events;
     let mut end = source.last().map_or(0, |e| e.tick);
     if !source.iter().any(owned) {
         return Ok((Cow::Borrowed(source), end));
     }
     let time = MusicalTime::new(music);
-    let map = time.map(track).ok_or("Same measure requires PPQN timing")?;
+    let map = time
+        .map(track)
+        .ok_or(message::SAME_MEASURE_REQUIRES_PPQN_TIMING)?;
     let notes = Notes::new(source);
     let mut references: Vec<u64> = source.iter().filter(|e| owned(e)).map(|e| e.tick).collect();
     references.sort_unstable();
@@ -156,22 +163,22 @@ pub fn expand(music: &Music, track: usize) -> Result<(Cow<'_, [Event]>, u64), St
             let dest = bounds(map, to)?;
             let origin = bounds(map, from)?;
             if meta.tick != dest.0 {
-                return Err("Reference must be at measure start".into());
+                return Err("参照は小節の始まりに置きます".into());
             }
             if from == to {
-                return Err("Self reference".into());
+                return Err("自分自身を参照しています".into());
             }
             if dest.1 - dest.0 != origin.1 - origin.0 {
-                return Err("Measure lengths differ".into());
+                return Err("小節の長さが違います".into());
             }
             if references_in(origin) != 0 {
-                return Err("Chained same measure reference".into());
+                return Err("same measureの参照先がさらに参照しています".into());
             }
             if references_in(dest) != 1 {
-                return Err("Multiple references in destination".into());
+                return Err("移動先に参照が複数あります".into());
             }
             if !notes.within(dest)?.is_empty() {
-                return Err("Destination contains notes".into());
+                return Err("移動先にnoteがあります".into());
             }
             let mut copied = notes.within(origin)?;
             for e in &mut copied {
@@ -182,7 +189,7 @@ pub fn expand(music: &Music, track: usize) -> Result<(Cow<'_, [Event]>, u64), St
         };
         result.extend(
             operation()
-                .map_err(|error| format!("Track {}, tick {}: {error}", track + 1, meta.tick))?,
+                .map_err(|error| format!("Track {}・tick {}: {error}", track + 1, meta.tick))?,
         );
     }
     result.sort_by_key(|e| e.tick);

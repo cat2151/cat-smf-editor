@@ -24,22 +24,22 @@ enum Control {
 fn midi_control(e: &Event, container: u64) -> Result<Option<Control>, String> {
     let status = e.status & 0xf0;
     if matches!(status, 0xa0 | 0xd0) {
-        return Err("Pattern aftertouch performance is unsupported; content retained".into());
+        return Err("patternのaftertouch演奏には対応していません。内容はそのまま残します".into());
     }
     if !matches!(status, 0xb0 | 0xc0 | 0xe0) {
         return Ok(None);
     }
     if status == 0xc0 {
-        return Err("Program Change cannot change a pattern container's sound".into());
+        return Err("Program Changeではpattern containerのsoundを変えられません".into());
     }
     if e.data.len() != 2 || e.data.iter().any(|v| *v > 127) {
-        return Err("Malformed pattern MIDI control".into());
+        return Err("patternのMIDI controlが壊れています".into());
     }
     let controller = if status == 0xb0 {
         let cc = e.data[0];
         if !automation::supported_cc(cc) {
             return Err(format!(
-                "CC {cc} requires an unsupported compound/channel state machine; content retained"
+                "CC {cc}は対応していない複合/channelの状態遷移を要します。内容はそのまま残します"
             ));
         }
         Some(cc)
@@ -80,12 +80,15 @@ pub fn expand(
     let mut occupied = BTreeMap::<Control, Vec<(u64, u64)>>::new();
     let mut midi_intervals = vec![];
     for (id, start) in occurrences {
-        let p = c.patterns.get(&id).ok_or("Missing pattern occurrence")?;
+        let p = c
+            .patterns
+            .get(&id)
+            .ok_or("patternの出現箇所が見つかりません")?;
         let until = start
             .checked_add(p.length()?)
-            .ok_or("Pattern occurrence overflow")?;
+            .ok_or("patternの出現箇所が上限を超えました")?;
         if until > end {
-            return Err("Pattern occurrence exceeds the declared length".into());
+            return Err("patternの出現箇所が宣言した長さを超えています".into());
         }
         let body = body::extract(&m.tracks[p.track].events, p.range()?)?;
         let baselines = automation::baselines(m, p.track)?;
@@ -99,7 +102,7 @@ pub fn expand(
                     }
                     _ => None,
                 })
-                .ok_or("Missing container parameter baseline")?;
+                .ok_or("containerのparameter基準値が見つかりません")?;
             controls.insert(Control::Parameter(curve.target.clone()));
             result
                 .parameters
@@ -118,7 +121,9 @@ pub fn expand(
                 controls.insert(control);
             }
             if matches!(e.status, 0xf0 | 0xf7) {
-                return Err("Pattern SysEx performance is unsupported; content retained".into());
+                return Err(
+                    "patternのSysEx演奏には対応していません。内容はそのまま残します".into(),
+                );
             }
             if automation::owned(e) {
                 continue;
@@ -126,13 +131,13 @@ pub fn expand(
             let mut e = e.clone();
             e.tick = start
                 .checked_add(e.tick - p.tick)
-                .ok_or("Pattern event overflow")?;
+                .ok_or("patternのeventが上限を超えました")?;
             output.push(e);
         }
         for control in controls {
             let intervals = occupied.entry(control.clone()).or_default();
             if intervals.iter().any(|&(a, b)| start < b && until > a) {
-                return Err(format!("Overlapping pattern control {control:?}"));
+                return Err(format!("patternのcontrolが重なっています {control:?}"));
             }
             intervals.push((start, until));
             if let Control::Midi(_, channel, controller) = control {
@@ -148,7 +153,7 @@ pub fn expand(
                     })
                     .ok_or_else(|| {
                         format!(
-                            "Missing container baseline for channel {} {}",
+                            "channel {} {}のcontainer基準値が見つかりません",
                             channel + 1,
                             controller.map_or("pitch bend".into(), |cc| format!("CC {cc}"))
                         )

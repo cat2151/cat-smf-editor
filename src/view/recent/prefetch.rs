@@ -8,6 +8,7 @@ use crate::{
         sung::{audition::stored, Take},
     },
 };
+use cat_smf_editor::message;
 use cat_smf_editor::{
     master_effects,
     score::{instrument::Patch, note_view::note_on, state_cache::Cache},
@@ -115,7 +116,7 @@ fn refresh<'a>(app: &'a mut App, path: &Path) -> Result<&'a Known, String> {
             .or_else(|| {
                 cat_smf_editor::storage_paths::cache_directory().map(|c| c.join("recent-preview"))
             })
-            .ok_or("Cache directory unavailable")?;
+            .ok_or("cacheフォルダを使えません")?;
         let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let wav = directory.join(format!("{}.wav", hash(&bytes)));
         let status = if wav.exists() {
@@ -197,9 +198,10 @@ fn load(
     if let Some(error) = preview.load_error.take() {
         return Err(error);
     }
-    let range = first_measure(&preview).ok_or("No notes")?;
-    let prepared = crate::play::transport::repeat::prepare(&preview, range).ok_or("No notes")?;
-    let music = &preview.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+    let range = first_measure(&preview).ok_or(message::NO_NOTES)?;
+    let prepared =
+        crate::play::transport::repeat::prepare(&preview, range).ok_or(message::NO_NOTES)?;
+    let music = &preview.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
     let tracks = music.tracks.len();
     let takes = voices.map_or_else(Vec::new, |directory| {
         stored(
@@ -298,7 +300,7 @@ pub(crate) fn update(app: &mut App, ctx: &egui::Context) {
                 match receiver.try_recv() {
                     Ok(result) => work.phase = Phase::Loaded(result),
                     Err(mpsc::TryRecvError::Disconnected) => {
-                        work.phase = Phase::Loaded(Err("Prefetch worker stopped".into()))
+                        work.phase = Phase::Loaded(Err("先読み処理が止まりました".into()))
                     }
                     Err(mpsc::TryRecvError::Empty) => {}
                 }
@@ -315,7 +317,7 @@ pub(crate) fn update(app: &mut App, ctx: &egui::Context) {
                     let result = thread.take().unwrap().join();
                     Some(match result {
                         Ok(Some(result)) => result,
-                        _ => Err("Render stopped".into()),
+                        _ => Err("書き出しが止まりました".into()),
                     })
                 } else {
                     None

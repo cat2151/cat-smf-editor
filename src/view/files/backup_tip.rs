@@ -116,11 +116,11 @@ pub(super) fn open_directory(path: &Path) -> Result<(), String> {
             )
         };
         if result <= 32 {
-            return Err(format!("ShellExecuteW failed ({result})"));
+            return Err(format!("ShellExecuteWに失敗しました ({result})"));
         }
         Ok(())
     })();
-    result.map_err(|e| format!("Cannot open {}: {e}", path.display()))
+    result.map_err(|e| format!("{}を開けません: {e}", path.display()))
 }
 
 #[link(name = "kernel32")]

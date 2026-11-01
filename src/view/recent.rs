@@ -79,7 +79,7 @@ fn direct(key: Key, modifiers: Modifiers) -> Option<usize> {
     None
 }
 
-fn age(seconds: u64) -> (String, Color32) {
+pub(crate) fn age(seconds: u64) -> (String, Color32) {
     let (count, unit, rgb) = match seconds {
         0..=3599 => ((seconds / 60).max(1), "m", [249, 38, 114]),
         3600..=86399 => (seconds / 3600, "h", [253, 151, 31]),

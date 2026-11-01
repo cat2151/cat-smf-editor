@@ -1,4 +1,5 @@
 //! App-owned track output gain, independent of MIDI CC and instrument identity.
+use cat_smf_editor::message;
 use cat_smf_editor::{
     app_meta::TRACK_VOLUME as PREFIX,
     model::{Event, Track},
@@ -23,11 +24,11 @@ pub fn read(track: &Track) -> Result<f32, String> {
             || event.data.len() != PREFIX.len() + 5
             || event.data[PREFIX.len()] != 1
         {
-            return Err("Invalid or duplicate track volume metadata".into());
+            return Err("trackの音量のmetadataが不正か重複しています".into());
         }
         let gain = f32::from_le_bytes(event.data[PREFIX.len() + 1..].try_into().unwrap());
         if !gain.is_finite() || !(0.0..=db_to_gain(MAX_DB)).contains(&gain) {
-            return Err("Invalid track volume".into());
+            return Err(message::INVALID_TRACK_VOLUME.into());
         }
         found = Some(gain);
     }

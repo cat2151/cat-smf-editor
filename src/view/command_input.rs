@@ -4,6 +4,7 @@ use super::{
     modal::{self, Origin},
 };
 use crate::app::App;
+use cat_smf_editor::message;
 use eframe::egui::{self, Key, Modifiers};
 use modal::clear;
 pub(crate) mod guide_edit;
@@ -125,7 +126,7 @@ pub(crate) fn start(
         } => {
             if action == super::patterns::Action::Create {
                 if pattern.is_some() || value.is_some() {
-                    return Err("Add pattern takes no existing pattern arguments".into());
+                    return Err("pattern追加には既存のpatternを指定しません".into());
                 }
                 if let Some(id) = container {
                     super::patterns::library::create_for_container(a, id)?;
@@ -136,7 +137,7 @@ pub(crate) fn start(
                 return Ok(Execution::Completed);
             }
             if action == super::patterns::Action::AuditionTempo && pattern.is_some() {
-                return Err("Audition tempo has no pattern target".into());
+                return Err("試聴tempoの対象patternがありません".into());
             }
             let mut input = pattern_args::State::new(a, action)?;
             input.preset(value, container)?;
@@ -154,7 +155,7 @@ pub(crate) fn start(
             if kind == Some(cat_smf_editor::edit::meta_input::Kind::Chord)
                 && !guide_edit::on_guide(a)
             {
-                return Err("Select the chord guide track".into());
+                return Err(message::SELECT_THE_CHORD_GUIDE_TRACK.into());
             }
             if let (Some(kind), Some(text)) = (kind, text.as_ref()) {
                 insert_event::apply(a, kind, text)?;
@@ -184,7 +185,7 @@ pub(crate) fn start(
         Operation::Views => state.views = Some(views::State::new(a)),
         Operation::GuideEvent { moving } => {
             state.insert_event =
-                Some(guide_edit::state(a, moving).ok_or("No guide event selected")?);
+                Some(guide_edit::state(a, moving).ok_or("guide eventを選んでいません")?);
         }
     }
     state.origin = Some(Origin::capture(a, ctx));

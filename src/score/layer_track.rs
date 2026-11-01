@@ -46,10 +46,10 @@ pub fn reference(slot: &PluginState) -> Result<PatchReference, String> {
     let reference = slot
         .reference
         .as_ref()
-        .ok_or("Plugin state has no restoration reference")?;
+        .ok_or("pluginのstateに復元の参照がありません")?;
     reference.validate()?;
     if reference.plugin != slot.plugin {
-        return Err("State/reference plugin mismatch".into());
+        return Err("stateと参照のpluginが合いません".into());
     }
     Ok(reference.clone())
 }

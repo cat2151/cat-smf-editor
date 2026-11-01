@@ -4,6 +4,7 @@ pub mod edit;
 pub mod instrument_layers;
 #[path = "../../cat-plugin-player/shared/master_references.rs"]
 pub mod master_references;
+pub mod message;
 #[path = "../../cat-plugin-player/shared/patch_reference.rs"]
 pub mod patch_reference;
 #[path = "../../cat-plugin-player/shared/patch_roots.rs"]

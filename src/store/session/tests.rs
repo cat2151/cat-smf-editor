@@ -191,6 +191,8 @@ fn session_json_is_renamed_and_existing_status_takes_priority() {
         help_window: None,
         pattern_windows: Default::default(),
         keyboard_windows: Default::default(),
+        phrase_loop: false,
+        keyboard_settings: None,
         voicevox_engine: None,
         mascot_enabled: false,
     })

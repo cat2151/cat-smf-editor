@@ -1,6 +1,7 @@
 //! Faster-than-realtime rendering into memory, through the playback mixer, without a device.
 use super::{mix::Mixer, Command, Part};
 use crate::play::{audio_sequence::Sequence, audition_native::Native, layer_render::Render};
+use cat_smf_editor::message;
 use cat_smf_editor::{chain::Chain, master_effects, score::instrument::Patch};
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 
@@ -53,7 +54,7 @@ impl Instruments {
                 continue;
             }
             let mut native =
-                Native::open(rate, patch).map_err(|e| format!("Track {}: {e}", track + 1))?;
+                Native::open(rate, patch).map_err(|e| message::track_error(track + 1, e))?;
             bindings.push(match plan {
                 Some(plan) => native.prepare_automation(&plan)?,
                 None => Vec::new(),
@@ -63,7 +64,7 @@ impl Instruments {
         let master = if master.effects.is_empty() {
             None
         } else {
-            Some(Chain::open_master(rate, master).map_err(|e| format!("Master: {e}"))?)
+            Some(Chain::open_master(rate, master).map_err(message::master)?)
         };
         Ok(Self {
             natives,
@@ -214,7 +215,7 @@ impl Job {
             let max = (self.frames - mixer.elapsed).min(1024) as usize;
             out.extend_from_slice(mixer.block(&mut self.renders, &self.command, max, &failed));
             if failed.load(Ordering::Relaxed) {
-                return Some(Err("Audio: plugin stopped while rendering".into()));
+                return Some(Err("音声: 書き出し中にpluginが止まりました".into()));
             }
         }
         fade_out(&mut out, self.rate);

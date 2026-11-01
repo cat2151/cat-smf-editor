@@ -1,5 +1,6 @@
 //! Service native work without leaving invalid bindings for the next GUI frame.
 use super::Audition;
+use cat_smf_editor::message;
 use std::sync::atomic::Ordering;
 
 impl Audition {
@@ -34,7 +35,7 @@ impl Audition {
             if let Err(error) = voice.pump(native_work, || pump_side(side)) {
                 self.voice = None;
                 self.progress = None;
-                self.error = Some(format!("Audio automation refresh: {error}"));
+                self.error = Some(message::audio_automation_refresh(error));
                 return;
             }
         } else {
@@ -49,23 +50,20 @@ impl Audition {
                 Err(error) => {
                     self.voice = None;
                     self.progress = None;
-                    self.error = Some(format!("Audio automation refresh: {error}"));
+                    self.error = Some(message::audio_automation_refresh(error));
                     return;
                 }
             }
             let error = voice.parameter_error().map(|code| {
                 format!(
-                    "Audio parameter batch failed ({code}): {}",
-                    voice
-                        .parameter_context
-                        .as_deref()
-                        .unwrap_or("unknown target")
+                    "音声: parameterの一括設定に失敗しました ({code}): {}",
+                    voice.parameter_context.as_deref().unwrap_or("不明な対象")
                 )
             });
             self.voice = None;
             self.progress = None;
             self.error =
-                Some(error.unwrap_or_else(|| "Audio: plugin or audio device stopped".into()));
+                Some(error.unwrap_or_else(|| "音声: pluginか音声デバイスが止まりました".into()));
         }
     }
 }

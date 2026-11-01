@@ -46,7 +46,7 @@ fn t_on_conductor_goes_bulk_when_auto_and_errors_when_current() {
         .error
         .as_deref()
         .unwrap()
-        .contains("executable"));
+        .contains("実行ファイル"));
     app.player_selection.error = None;
     app.config.program_target = crate::store::config::ProgramTarget::Current;
     request(&mut app);

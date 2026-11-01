@@ -1,4 +1,5 @@
 //! Lyric meta events (`0xFF 0x05`, UTF-8) held per tick: a note's lyric is the one at its tick.
+use crate::message;
 use crate::{
     model::{Event, Track},
     score::note_view::note_on,
@@ -28,7 +29,7 @@ pub fn set(track: &mut Track, on: usize, text: &str) -> Result<(), String> {
         .events
         .get(on)
         .filter(|e| note_on(e))
-        .ok_or("Not a Note On")?;
+        .ok_or(message::NOT_A_NOTE_ON)?;
     let tick = note.tick;
     let removed_before = track.events[..on]
         .iter()

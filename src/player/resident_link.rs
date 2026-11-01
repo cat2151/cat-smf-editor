@@ -4,6 +4,7 @@
 use crate::app::App;
 use crate::player::resident::{answer, Target};
 use crate::player::selection::{resolve, Browser};
+use cat_smf_editor::message;
 use cat_smf_editor::patch_identity::PatchIdentity;
 use cat_smf_editor::resident_ipc::{self, Listener, Open, Selected, Sender, ToEditor, ToPlayer};
 use cat_smf_editor::resident_log;
@@ -83,7 +84,7 @@ enum Event {
 
 /// Shows the requested browser, starting the player if this editor has none.
 pub fn request(app: &mut App, request: Request) -> Result<(), String> {
-    let loaded = app.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let open = match request.browser {
         Browser::Patch => Open::Layer {
             track: request.track,
@@ -96,7 +97,7 @@ pub fn request(app: &mut App, request: Request) -> Result<(), String> {
                         .first()
                         .map(|l| l.settings.id)
                 })
-                .ok_or("Track has no instrument layer")?,
+                .ok_or("trackにinstrument layerがありません")?,
             song: app.song_id,
         },
         Browser::Effect => Open::Effect {
@@ -192,7 +193,7 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
                     continue;
                 };
                 if let Err(error) = answer(app, selected, Some(&link.target), sender) {
-                    break Some(Some(format!("Could not answer the player: {error}")));
+                    break Some(Some(format!("playerに応答できませんでした: {error}")));
                 }
             }
             Event::Panes(context, panes, query) => {
@@ -213,7 +214,7 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
             log(format_args!("link closed: {error:?}"));
             app.player_selection.open = true;
             app.player_selection.error = Some(match error {
-                Some(error) => format!("cat-plugin-player stopped: {error}"),
+                Some(error) => format!("cat-plugin-playerが止まりました: {error}"),
                 None => "cat-plugin-player closed".into(),
             });
             ctx.request_repaint();
@@ -297,8 +298,9 @@ impl Link {
             "start player {} on {name}",
             executable.display()
         ));
-        let listener = Listener::create(&name).map_err(|e| format!("Cannot listen: {e}"))?;
-        let child = launch(executable, &name).map_err(|e| format!("Cannot start player: {e}"))?;
+        let listener = Listener::create(&name).map_err(|e| format!("待ち受けできません: {e}"))?;
+        let child =
+            launch(executable, &name).map_err(|e| format!("playerを起動できません: {e}"))?;
         let (deliver, events) = mpsc::channel();
         let context = Arc::new(Mutex::new(None::<egui::Context>));
         let repaint = context.clone();
@@ -374,7 +376,7 @@ impl Link {
                     query: self.query.clone(),
                     cursor: self.cursor.clone(),
                 })
-                .map_err(|e| format!("Cannot reach cat-plugin-player: {e}")),
+                .map_err(|e| format!("cat-plugin-playerにつながりません: {e}")),
             None => Ok(()),
         }
     }

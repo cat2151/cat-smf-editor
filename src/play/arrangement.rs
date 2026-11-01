@@ -9,6 +9,7 @@ use crate::{
         transport::{Active, Origin, Prepared},
     },
 };
+use cat_smf_editor::message;
 use cat_smf_editor::score::{
     audition_timing::TempoMap,
     note_view::{note_on, NoteView},
@@ -16,7 +17,7 @@ use cat_smf_editor::score::{
     scene::arrangement,
 };
 pub fn prepare(a: &App, scene: Option<u64>) -> Result<Prepared, String> {
-    let music = &a.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+    let music = &a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
     let (occurrences, end) = arrangement::occurrences(music, scene)?;
     prepare_occurrences(
         a,
@@ -28,7 +29,7 @@ pub fn prepare(a: &App, scene: Option<u64>) -> Result<Prepared, String> {
     )
 }
 fn tempo(a: &App, scene: Option<u64>) -> Result<TempoMap, String> {
-    let music = &a.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+    let music = &a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
     if scene.is_some() {
         TempoMap::constant(music.division, a.patterns.tempo.0)
     } else {
@@ -43,7 +44,7 @@ pub(crate) fn prepare_occurrences(
     mode: Mode,
     clock_track: usize,
 ) -> Result<Prepared, String> {
-    let loaded = a.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let loaded = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let c = Catalog::read(&loaded.music)?;
     let expansion =
         cat_smf_editor::score::pattern::render::expand(&loaded.music, &c, occurrences, end_tick)?;
@@ -53,7 +54,7 @@ pub(crate) fn prepare_occurrences(
         let patch = loaded
             .patches
             .get(track)
-            .ok_or("Missing container sound")?
+            .ok_or(message::MISSING_CONTAINER_SOUND)?
             .clone();
         let view = NoteView::new(events);
         let selected = events
@@ -115,7 +116,7 @@ pub fn start_at(a: &mut App, scene: Option<u64>, measure: u64) {
     let tick = a
         .loaded
         .as_ref()
-        .ok_or_else(|| "No SMF is loaded".to_string())
+        .ok_or_else(|| message::NO_SMF_LOADED.to_string())
         .and_then(|l| arrangement::measure_tick(&l.music, scene, measure));
     match tick {
         Ok(tick) => start_from(a, scene, tick),

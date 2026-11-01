@@ -4,7 +4,7 @@
 pub fn decode(bytes: &[u8]) -> Result<(u32, Vec<f32>), String> {
     let invalid = |why: &str| format!("VOICEVOX WAV: {why}");
     if bytes.get(..4) != Some(b"RIFF") || bytes.get(8..12) != Some(b"WAVE") {
-        return Err(invalid("not RIFF/WAVE"));
+        return Err(invalid("RIFF/WAVEではありません"));
     }
     let u16_at = |at: usize| {
         bytes
@@ -27,15 +27,16 @@ pub fn decode(bytes: &[u8]) -> Result<(u32, Vec<f32>), String> {
                     || u16_at(body + 2) != Some(2)
                     || u16_at(body + 14) != Some(16)
                 {
-                    return Err(invalid("expected 16-bit PCM stereo"));
+                    return Err(invalid("16-bit PCM stereoではありません"));
                 }
                 rate = u32_at(body + 4);
             }
             b"data" => {
-                let rate = rate.ok_or_else(|| invalid("data before fmt"))?;
+                let rate =
+                    rate.ok_or_else(|| invalid("dataチャンクがfmtチャンクより前にあります"))?;
                 let data = bytes
                     .get(body..body + size)
-                    .ok_or_else(|| invalid("truncated data"))?;
+                    .ok_or_else(|| invalid("dataが途中で切れています"))?;
                 let samples = data
                     .as_chunks::<2>()
                     .0
@@ -48,7 +49,7 @@ pub fn decode(bytes: &[u8]) -> Result<(u32, Vec<f32>), String> {
         }
         at = body + size + size % 2;
     }
-    Err(invalid("no data chunk"))
+    Err(invalid("dataチャンクがありません"))
 }
 
 #[cfg(test)]

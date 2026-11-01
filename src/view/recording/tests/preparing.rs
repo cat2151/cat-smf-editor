@@ -246,3 +246,21 @@ fn window_keys_toggle_the_companions_and_raise_help() {
     settings_keys(&mut a, &[(Key::F1, Modifiers::NONE), ctrl(Key::Comma)]);
     assert!(!session(&a).settings_open);
 }
+
+#[test]
+fn settings_return_after_the_app_restarts() {
+    let dir = tempfile::tempdir().unwrap();
+    let status = dir.path().join("status.json");
+    let mut a = app();
+    a.config = crate::store::config::Store::open(status.clone());
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    press(&mut a, &ctx, &[(Key::Tab, Modifiers::NONE); 2]);
+    assert_eq!(recorder(&a).settings().mode, Mode::Seventh);
+    assert!(close_for_exit(&mut a));
+
+    let mut restarted = app();
+    restarted.config = crate::store::config::Store::open(status);
+    open_key(&mut restarted, &ctx);
+    assert_eq!(recorder(&restarted).settings().mode, Mode::Seventh);
+}

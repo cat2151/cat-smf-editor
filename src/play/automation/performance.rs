@@ -1,11 +1,12 @@
 use super::*;
+use cat_smf_editor::message;
 pub(super) fn prepare(
     app: &App,
     parts: &[(usize, Patch, Sequence)],
     collection: &parameter_curve::Collection,
     plans: &mut Vec<Arc<OwnerPlan>>,
 ) -> Result<(), String> {
-    let music = &app.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+    let music = &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
     let windows = cat_smf_editor::score::performance::read(music)?;
     for part in parts
         .iter()
@@ -17,7 +18,7 @@ pub(super) fn prepare(
             .keys()
             .any(|&track| collection.owner(track) == Some(owner))
         {
-            return Err("Performance expression windows cannot share an owner with ordinary parameter tracks".into());
+            return Err("演奏表現の範囲は通常のparameter trackと持ち主を共有できません".into());
         }
         let events = BTreeMap::from([(owner, music.tracks[owner].events.clone())]);
         let plan = super::pattern::prepare(

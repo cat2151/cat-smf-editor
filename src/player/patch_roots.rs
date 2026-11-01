@@ -57,7 +57,7 @@ impl Cache {
             .map_err(|e| e.to_string())?;
         if !output.status.success() {
             return Err(format!(
-                "Player root discovery failed: {}",
+                "playerのroot探索に失敗しました: {}",
                 String::from_utf8_lossy(&output.stderr)
             ));
         }

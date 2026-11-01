@@ -29,7 +29,7 @@ fn arrangement_baselines_and_performance_meta_are_readable() {
     .concat();
     assert_eq!(
         decoded(&event(0xff, 0x7f, &data)),
-        "Container baselines: Channel 2 / CC 64: 0"
+        "Pattern container baselines: Channel 2 / CC 64: 0"
     );
     assert_eq!(
         decoded(&event(0xff, 0x7f, &[performance::OWNER, &[1]].concat())),
@@ -233,7 +233,11 @@ fn own_sequencer_specific_payloads_read_as_their_purpose() {
     );
     let mut broken = instrument_layers::PREFIX.to_vec();
     broken.extend(b"{");
-    assert!(decoded(&event(0xff, 0x7f, &broken)).starts_with("Instrument layers: invalid ("));
+    let invalid = cat_smf_editor::message::invalid_value("");
+    let invalid = invalid.strip_suffix(')').unwrap();
+    assert!(
+        decoded(&event(0xff, 0x7f, &broken)).starts_with(&format!("Instrument layers: {invalid}"))
+    );
 }
 
 // Namespace-only literals classify ownership; only concrete payload prefixes need decoders.
@@ -349,5 +353,27 @@ fn chord_guide_role_and_chord_are_readable() {
     assert_eq!(
         decoded(&chord_guide::event(1920, "Isus4").unwrap()),
         "Chord: Isus4"
+    );
+}
+
+#[test]
+fn pattern_container_and_pattern_read_as_separate_lines_with_the_kind() {
+    use cat_smf_editor::score::pattern::{operations, Catalog};
+    let mut m = cat_smf_editor::edit::tracks::new_song();
+    let source = operations::create_source(&mut m).unwrap();
+    let id = operations::create(&mut m, source, None).unwrap();
+    let container = Catalog::read(&m).unwrap().patterns[&id].container;
+    let texts = m.tracks[source]
+        .events
+        .iter()
+        .filter(|e| cat_smf_editor::score::pattern::owned(e))
+        .map(decoded)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        texts,
+        [
+            format!("Pattern container: {container}"),
+            format!("Pattern: Pattern 1 · Normal · {id} · 1 measures"),
+        ]
     );
 }

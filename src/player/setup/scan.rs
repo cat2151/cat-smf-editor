@@ -21,8 +21,8 @@ unsafe extern "C" fn done(user: *mut c_void, error: *const c_char) {
 
 impl Scan {
     pub fn start(rescan: bool) -> Result<Self, String> {
-        let host = unsafe { Host::new(wake, std::ptr::null_mut()) }
-            .ok_or("Cannot create plugin scanner")?;
+        let host =
+            unsafe { Host::new(wake, std::ptr::null_mut()) }.ok_or("plugin scannerを作れません")?;
         let (tx, receiver) = mpsc::channel();
         let mut scan = Self {
             host,
@@ -32,7 +32,7 @@ impl Scan {
         let user = (&mut *scan.sender) as *mut _ as *mut c_void;
         // SAFETY: boxed sender remains alive until after host destruction.
         if !unsafe { scan.host.scan_async(rescan, done, user) } {
-            return Err("Cannot start plugin scan".into());
+            return Err("pluginのscanを始められません".into());
         }
         Ok(scan)
     }

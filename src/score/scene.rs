@@ -1,4 +1,5 @@
 //! Named relative placements, with intrinsic measure lengths and stable lane identities.
+use crate::message;
 use crate::{
     model::{Event, Music, Track},
     score::{musical_time::MusicalTime, pattern::Catalog, same_measure},
@@ -69,21 +70,22 @@ pub fn owned(e: &Event) -> bool {
 pub use persistence::{read, write};
 impl Scene {
     pub fn range(&self, measure: u128) -> Result<(u64, u64), String> {
-        let index = usize::try_from(measure.checked_sub(1).ok_or("Invalid scene measure")?)
-            .map_err(|_| "Invalid scene measure")?;
-        let meter = self
-            .meters
-            .get(index)
-            .ok_or("Scene measure is outside its length")?;
+        let index = usize::try_from(
+            measure
+                .checked_sub(1)
+                .ok_or(message::INVALID_SCENE_MEASURE)?,
+        )
+        .map_err(|_| message::INVALID_SCENE_MEASURE)?;
+        let meter = self.meters.get(index).ok_or("sceneの小節が長さの外です")?;
         let start = self.meters[..index]
             .iter()
             .try_fold(0u64, |sum, m| sum.checked_add(m.ticks))
-            .ok_or("Scene length overflow")?;
+            .ok_or(message::SCENE_LENGTH_OVERFLOW)?;
         Ok((
             start,
             start
                 .checked_add(meter.ticks)
-                .ok_or("Scene length overflow")?,
+                .ok_or(message::SCENE_LENGTH_OVERFLOW)?,
         ))
     }
     pub fn meter_music(&self, division: u16) -> Result<Music, String> {
@@ -91,7 +93,7 @@ impl Scene {
         let mut tick = 0u64;
         for meter in &self.meters {
             if meter.numerator == 0 || meter.exponent > 63 || meter.ticks == 0 {
-                return Err("Invalid scene meter".into());
+                return Err("sceneの拍子が不正です".into());
             }
             events.push(Event {
                 tick,
@@ -102,7 +104,7 @@ impl Scene {
             });
             tick = tick
                 .checked_add(meter.ticks)
-                .ok_or("Scene length overflow")?;
+                .ok_or(message::SCENE_LENGTH_OVERFLOW)?;
         }
         Ok(Music {
             format: 1,
@@ -121,20 +123,22 @@ pub fn validate(music: &Music, catalog: &Catalog) -> Result<(), String> {
             || scene.meters.is_empty()
             || scene.lanes.is_empty()
         {
-            return Err("Invalid scene identity or length".into());
+            return Err("sceneの識別子か長さが不正です".into());
         }
         let mut lanes = BTreeSet::new();
         for id in &scene.lanes {
             if !lanes.insert(*id) || !collection.lanes.iter().any(|l| l.id == *id) {
-                return Err("Missing or invalid scene lane".into());
+                return Err("sceneのlaneが見つからないか不正です".into());
             }
         }
         let grid = scene.meter_music(music.division)?;
         let grid_time = MusicalTime::new(&grid);
-        let map = grid_time.map(0).ok_or("Scene requires PPQN timing")?;
+        let map = grid_time
+            .map(0)
+            .ok_or("sceneにはPPQNの時間単位が必要です")?;
         for i in 0..scene.meters.len() {
             if same_measure::bounds(map, i as u128 + 1)? != scene.range(i as u128 + 1)? {
-                return Err("Scene meter cannot represent its exact measure boundaries".into());
+                return Err("sceneの拍子で小節の境界を正確に表せません".into());
             }
         }
         let mut cells = Vec::new();
@@ -151,19 +155,19 @@ pub fn validate(music: &Music, catalog: &Catalog) -> Result<(), String> {
                         ) > a
                 })
             {
-                return Err("Invalid or duplicate scene cell".into());
+                return Err("sceneのcellが不正か重複しています".into());
             }
             let destination = scene.range(u128::from(cell.measure) + 1)?;
             let p = catalog
                 .patterns
                 .get(&cell.pattern)
-                .ok_or("Missing scene pattern")?;
+                .ok_or(message::MISSING_SCENE_PATTERN)?;
             cells.push((
                 cell.lane,
                 cell.measure,
                 cell.measure
                     .checked_add(p.meters.len() as u64)
-                    .ok_or("Scene placement overflow")?,
+                    .ok_or("sceneの配置が上限を超えました")?,
             ));
             let source = p.range()?;
             if scene
@@ -175,7 +179,7 @@ pub fn validate(music: &Music, catalog: &Catalog) -> Result<(), String> {
                     .checked_add(source.1 - source.0)
                     .is_none_or(|end| end > scene.range(scene.meters.len() as u128).unwrap().1)
             {
-                return Err("Scene pattern measure lengths differ".into());
+                return Err("sceneのpatternの小節の長さが違います".into());
             }
         }
     }
@@ -216,7 +220,7 @@ pub fn describe(data: &[u8]) -> String {
                 commented(c.song.iter().filter(|p| p.disabled).count())
             )
         })
-        .unwrap_or_else(|_| "invalid".into())
+        .unwrap_or_else(|_| crate::message::INVALID.into())
 }
 #[cfg(test)]
 mod tests;

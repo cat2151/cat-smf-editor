@@ -4,6 +4,7 @@ pub(crate) mod singer;
 
 use crate::app::App;
 use crate::view::commands::{Command, Screen};
+use cat_smf_editor::message;
 use cat_smf_editor::voicevox::engine::{self, Engine};
 use eframe::egui::{self, Color32, Key};
 use std::path::PathBuf;
@@ -48,7 +49,7 @@ pub(crate) fn request_executable(app: &mut App) {
 pub(crate) fn close(app: &mut App) {
     app.voicevox.wizard = false;
     if std::mem::take(&mut app.voicevox.for_prerender) {
-        app.voicevox.error = Some("VOICEVOX engine is not set".into());
+        app.voicevox.error = Some(message::VOICEVOX_ENGINE_IS_NOT_SET.into());
     }
 }
 
@@ -67,7 +68,16 @@ fn open_page(app: &mut App, ctx: &egui::Context) {
         .map(drop);
     app.voicevox.error = result
         .err()
-        .map(|e| format!("Cannot open {OFFICIAL_PAGE}: {e}"));
+        .map(|e| format!("{OFFICIAL_PAGE}を開けません: {e}"));
+}
+
+/// editor が起動していない engine も落とす。落とせなければ終了せず、GPU を握ったままにしない。
+fn kill_engine_and_quit(app: &mut App, ctx: &egui::Context) {
+    crate::play::sung::prerender::shut_down(app);
+    match engine::kill_listener(engine::PORT) {
+        Ok(()) => app.request_close(ctx),
+        Err(error) => app.voicevox.error = Some(error),
+    }
 }
 
 /// ファイル選択 dialog は editor の window を親にするので、eframe の frame を持つ側で開く。
@@ -148,6 +158,13 @@ pub(super) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
                 ));
             }
         }
+        Screen::Global => out.push(Command::plain(
+            screen,
+            "voicevox-kill-quit",
+            "VOICEVOX engine を終了してアプリ終了",
+            &[],
+            kill_engine_and_quit,
+        )),
         Screen::Lyrics => {
             out.push(Command::plain(
                 screen,

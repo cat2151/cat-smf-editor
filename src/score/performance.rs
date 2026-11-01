@@ -61,11 +61,11 @@ pub fn read(m: &Music) -> Result<BTreeMap<usize, Vec<ParameterInterval>>, String
                 .first()
                 .is_some_and(|e| e.tick != 0 || e.data.strip_prefix(OWNER) != Some(&[1][..]))
         {
-            return Err("Invalid performance owner".into());
+            return Err("演奏表現の持ち主が不正です".into());
         }
         for e in t.events.iter().filter(|e| owned(e)) {
             let saved: Saved = serde_json::from_slice(&e.data[PREFIX.len()..])
-                .map_err(|e| format!("Invalid performance parameter: {e}"))?;
+                .map_err(|e| format!("演奏表現のparameterが不正です: {e}"))?;
             saved.curve.validate()?;
             if saved.version != 1
                 || headers.is_empty()
@@ -80,7 +80,7 @@ pub fn read(m: &Music) -> Result<BTreeMap<usize, Vec<ParameterInterval>>, String
                     .iter()
                     .any(|p| p.tick > saved.end - e.tick)
             {
-                return Err("Invalid performance parameter window".into());
+                return Err("演奏表現のparameterの範囲が不正です".into());
             }
             if windows.iter().any(|w| {
                 let a = &w.curve.target;
@@ -92,7 +92,7 @@ pub fn read(m: &Music) -> Result<BTreeMap<usize, Vec<ParameterInterval>>, String
                     && w.start < saved.end
                     && e.tick < w.end
             }) {
-                return Err("Overlapping performance parameter windows".into());
+                return Err("演奏表現のparameterの範囲が重なっています".into());
             }
             windows.push(ParameterInterval {
                 start: e.tick,
@@ -134,11 +134,11 @@ pub fn song(m: &Music) -> Result<Music, String> {
     let catalog = pattern::Catalog::read(m)?;
     let collection = scene::read(m)?;
     if collection.song_length == 0 {
-        return Err("Song has no explicit performance length".into());
+        return Err("Songに演奏の長さの指定がありません".into());
     }
     let (occurrences, length) = scene::arrangement::occurrences(m, None)?;
     let expanded = pattern::render::expand(m, &catalog, &occurrences, length)?;
-    let mut conductor = m.tracks.first().ok_or("Missing conductor")?.clone();
+    let mut conductor = m.tracks.first().ok_or("conductorが見つかりません")?.clone();
     conductor.events.retain(|e| {
         e.status == 0xff
             && !arrangement_meta(e)
@@ -156,7 +156,7 @@ pub fn song(m: &Music) -> Result<Music, String> {
             .any(|e| e.data.starts_with(super::macro_curve::PREFIX))
         {
             return Err(
-                "Container macro variation curves are not pattern expressions; content retained"
+                "containerのmacro variation curveはpatternの表現ではありません。内容はそのまま残します"
                     .into(),
             );
         }
@@ -203,7 +203,7 @@ pub fn describe(data: &[u8]) -> String {
                 s.curve.path, s.curve.name, s.end, s.baseline
             )
         })
-        .unwrap_or_else(|_| "invalid".into())
+        .unwrap_or_else(|_| crate::message::INVALID.into())
 }
 #[cfg(test)]
 mod tests;

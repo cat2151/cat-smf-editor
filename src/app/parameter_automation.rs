@@ -1,5 +1,6 @@
 use super::App;
 use cat_smf_editor::edit::parameter_curve::{self, Curve};
+use cat_smf_editor::message;
 
 impl App {
     pub(crate) fn create_parameter_track(
@@ -7,7 +8,7 @@ impl App {
         owner: usize,
         curve: Curve,
     ) -> Result<usize, String> {
-        let original = &self.loaded.as_ref().ok_or("No SMF is loaded")?.music;
+        let original = &self.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
         let mut next = original.clone();
         let track = parameter_curve::create(&mut next, owner, curve)?;
         if cat_smf_editor::smf_io::encode(original)? != cat_smf_editor::smf_io::encode(&next)? {

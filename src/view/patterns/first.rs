@@ -1,5 +1,6 @@
 //! Container selection precedes creation; cancellation does not mutate the song.
 use super::*;
+use cat_smf_editor::message;
 use eframe::egui::{self, Key};
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Choice {
@@ -19,7 +20,7 @@ pub(super) struct Pending {
 /// A new container is offered only once every container of that kind holds notes,
 /// so an unused one is reused instead of piling up tracks and instances.
 pub(super) fn choices(a: &App) -> Result<Vec<(Choice, String)>, String> {
-    let l = a.loaded.as_ref().ok_or("No SMF is loaded")?;
+    let l = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let m = &l.music;
     let c = cat_smf_editor::score::pattern::Catalog::read(m)?;
     if c.sources.is_empty() {

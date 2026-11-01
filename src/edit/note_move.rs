@@ -1,4 +1,5 @@
 //! Moves one note's Note On and Note Off by the same amount; every other event keeps its tick.
+use crate::message;
 use crate::{
     edit::relocate::{pairs, relocate},
     model::Track,
@@ -10,12 +11,12 @@ use crate::{
 pub fn move_note(track: &mut Track, on: usize, shift: i64) -> Result<(), String> {
     let events = &track.events;
     if !events.get(on).is_some_and(note_on) {
-        return Err("Not a Note On".into());
+        return Err(message::NOT_A_NOTE_ON.into());
     }
-    let off = pairs(events.iter())[on].ok_or("This note has no Note Off")?;
+    let off = pairs(events.iter())[on].ok_or(message::THIS_NOTE_HAS_NO_NOTE_OFF)?;
     let shifted = |tick: u64| {
         tick.checked_add_signed(shift)
-            .ok_or("The note cannot move before tick 0 or that far")
+            .ok_or("noteはtick 0より前やそこまで遠くへは動かせません")
     };
     let start = shifted(events[on].tick)?;
     let end = shifted(events[off].tick)?;
