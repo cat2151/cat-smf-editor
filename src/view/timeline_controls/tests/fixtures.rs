@@ -33,6 +33,17 @@ impl Fixture {
         }
     }
 
+    /// Starts `expected_mode` the way the screen's Space does.
+    pub fn start_playback(&mut self) -> crate::play::playback::Mode {
+        let mode = self.expected_mode();
+        if let crate::play::playback::Mode::Arrangement(scene) = mode {
+            crate::play::arrangement::start(&mut self.app, scene);
+        } else {
+            crate::play::playback::start(&mut self.app, mode);
+        }
+        mode
+    }
+
     pub fn visible(&mut self, visible: bool) {
         match self.screen {
             Screen::Staff | Screen::Song | Screen::Scene => self.app.note_mode = visible,

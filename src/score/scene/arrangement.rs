@@ -101,6 +101,9 @@ pub fn validate(m: &Music, catalog: &Catalog, c: &Collection) -> Result<(), Stri
 }
 fn check_pattern(m: &Music, c: &Catalog, id: u64, measure: u64) -> Result<(), String> {
     let p = c.patterns.get(&id).ok_or("配置のpatternが見つかりません")?;
+    if p.kind == crate::score::pattern::Kind::Loop {
+        return Err(message::LOOP_IS_NOT_PLACED.into());
+    }
     let time = MusicalTime::new(m);
     let map = time.map(0).ok_or(message::MISSING_SONG_METER)?;
     for (i, meter) in p.meters.iter().enumerate() {

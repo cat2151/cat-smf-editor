@@ -17,6 +17,14 @@ impl ResolvedLayer {
             s.preset_name.as_deref().unwrap_or(&s.plugin.name)
         })
     }
+
+    /// The label without its folders and extension, as the screens show it.
+    pub fn name(&self) -> String {
+        let label = self.label();
+        std::path::Path::new(label)
+            .file_stem()
+            .map_or(label.into(), |s| s.to_string_lossy().trim().to_owned())
+    }
 }
 
 /// The sound of a layer without a patch.

@@ -5,8 +5,10 @@ use cat_smf_editor::edit;
 pub(super) enum Action {
     Repeat,
     DeleteEvents,
+    Quantize,
     Init,
     DeleteTrack,
+    Crop,
 }
 
 fn sources(app: &App) -> Vec<usize> {
@@ -64,9 +66,25 @@ pub(super) fn apply(app: &mut App, action: Action) {
     let track = app.track;
     let selected = sources(app);
     let notes = app.note_mode;
-    if matches!(action, Action::DeleteEvents) {
+    if matches!(action, Action::Crop) {
+        match crop(app, &selected) {
+            Ok(start) => {
+                app.event_selection = State::default();
+                crate::cursor::moves::at_tick(app, start);
+            }
+            Err(error) => app.load_error = Some(error),
+        }
+        return;
+    }
+    if matches!(action, Action::DeleteEvents | Action::Quantize) {
         let result = app.edit_music(|music| {
-            edit::event_range::delete(&mut music.tracks[track], &selected, notes)
+            let track = &mut music.tracks[track];
+            if matches!(action, Action::Quantize) {
+                let grid = edit::quantize::sixteenth(music.division)?;
+                edit::quantize::notes(track, &selected, grid)
+            } else {
+                edit::event_range::delete(track, &selected, notes)
+            }
         });
         match result {
             Ok(()) => {
@@ -82,7 +100,7 @@ pub(super) fn apply(app: &mut App, action: Action) {
         return;
     }
     let result = app.edit_tracks(|music| match action {
-        Action::DeleteEvents => unreachable!(),
+        Action::DeleteEvents | Action::Quantize => unreachable!(),
         Action::Init => edit::event_range::initialize(music, track),
         Action::DeleteTrack => {
             if music.tracks.len() == 1 {
@@ -91,7 +109,7 @@ pub(super) fn apply(app: &mut App, action: Action) {
             music.tracks.remove(track);
             Ok(())
         }
-        Action::Repeat => unreachable!(),
+        Action::Repeat | Action::Crop => unreachable!(),
     });
     match result {
         Ok(()) => {
@@ -116,4 +134,17 @@ pub(super) fn apply(app: &mut App, action: Action) {
         }
         Err(error) => app.load_error = Some(error),
     }
+}
+
+/// Crops the edited pattern to the selection; returns the pattern's first tick in the editor.
+fn crop(app: &mut App, selected: &[usize]) -> Result<u64, String> {
+    let context = crate::view::patterns::mode::editing(app, app.track)
+        .cloned()
+        .ok_or("patternを開いてください")?;
+    let l = app.loaded.as_ref().unwrap();
+    let view = l.visible().clone();
+    app.edit_tracks(|music| context.crop(music, &view, selected))?;
+    context
+        .edit_range(&app.loaded.as_ref().unwrap().music)
+        .map(|r| r.0)
 }

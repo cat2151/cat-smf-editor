@@ -61,6 +61,16 @@ pub(super) fn show(
                         paint_part(painter, area, music, keys, &catalog, c, part, None);
                     },
                 );
+                if let PatternOrScene::Pattern(id) = part
+                    && catalog
+                        .patterns
+                        .get(&id)
+                        .is_some_and(|p| p.kind == cat_smf_editor::score::pattern::Kind::Loop)
+                {
+                    let strip = egui::Rect::from_min_size(rect.min, egui::vec2(4.0, rect.height()));
+                    ui.painter()
+                        .rect_filled(strip, 2.0, crate::view::recording::LOOPING);
+                }
                 if cells && Some(part) == selected && p == Pane::Song {
                     ui.painter().circle_filled(
                         rect.right_center() - egui::vec2(7.0, 0.0),

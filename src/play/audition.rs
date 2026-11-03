@@ -65,9 +65,9 @@ pub struct Audition {
     /// Whether the keyboard's instrument was opened and not stopped since.
     #[cfg(test)]
     live_active: bool,
-    /// The patch the keyboard's instrument last opened with.
+    /// The tracks and patches the keyboard's instruments last opened with.
     #[cfg(test)]
-    pub live_patch: Option<Patch>,
+    pub live_patches: Vec<(usize, Patch)>,
     voice: Option<Voice>,
     error: Option<String>,
     disabled: bool,

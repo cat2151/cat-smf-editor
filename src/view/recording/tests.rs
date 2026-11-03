@@ -2,12 +2,14 @@ use super::*;
 use cat_smf_editor::{edit, score::pattern::body};
 use std::time::Duration;
 mod capture;
+mod layered;
 mod loop_takes;
 mod mouse;
 mod native;
 mod phrase_loop;
 mod play;
 mod preparing;
+mod quantize;
 mod transport;
 
 /// A key whose physical position matches its US letter, as on the measured Japanese keyboard.
@@ -85,15 +87,16 @@ fn keyboard_recording_commit_round_trip_and_single_undo() {
     assert!(recorder(&a).sounding(60) && recorder(&a).sounding(64));
     let s = session(&a);
     let queued = s
-        .queue
-        .as_ref()
+        .queue()
         .unwrap()
         .lock()
         .unwrap()
+        .words
         .iter()
         .copied()
         .collect::<Vec<_>>();
-    assert_eq!(queued, vec![0x2090_3c50, 0x2090_4050]);
+    // Each press takes the next velocity of the 80 -> 127 sweep.
+    assert_eq!(queued, vec![0x2090_3c50, 0x2090_4056]);
     // Opening and playing have not changed the document or Undo history.
     assert_eq!(
         original,
@@ -187,12 +190,12 @@ fn empty_cancel_repeat_and_focus_loss_do_not_stick_notes_or_leak_keys() {
         true,
     );
     let s = session(&a);
-    assert_eq!(s.queue.as_ref().unwrap().lock().unwrap().len(), 1);
+    assert_eq!(s.queue().unwrap().lock().unwrap().words.len(), 1);
     frame(&mut a, &ctx, vec![egui::Event::WindowFocused(false)], false);
     let s = session(&a);
     assert!(!recorder(&a).sounding(60));
     assert_eq!(
-        s.queue.as_ref().unwrap().lock().unwrap().back(),
+        s.queue().unwrap().lock().unwrap().words.back(),
         Some(&0x2080_3c00)
     );
     frame(

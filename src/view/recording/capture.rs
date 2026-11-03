@@ -36,12 +36,12 @@ impl Pending {
     }
 }
 
-/// Notes that started or stopped sounding by the keys.
-pub(super) fn record(s: &mut Session, pitches: &[u8], on: bool, at: Duration) {
+/// Notes that started at `velocity`, or stopped for 0, by the keys.
+pub(super) fn record(s: &mut Session, pitches: &[u8], velocity: u8, at: Duration) {
     let at = s.pending.base + at.as_millis() as u64;
     let container = s.sounds[s.selected].container;
     for &pitch in pitches {
-        s.pending.keys.key(at, pitch, on, container, GAP);
+        s.pending.keys.key(at, pitch, velocity, container, GAP);
     }
 }
 
@@ -59,44 +59,33 @@ pub(super) fn flush(a: &mut App, s: &mut Session, all: bool) -> Result<(), Strin
     Ok(())
 }
 
+/// Puts `phrase` in the song with the CC1 the keyboard played over it.
 fn append(a: &mut App, s: &mut Session, phrase: &Phrase) -> Result<(), String> {
-    let music = &a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
-    let source = match phrase.container {
-        Some(c) => Some(
-            *Catalog::read(music)?
-                .tracks
-                .get(&c)
-                .ok_or("phraseのcontainerが無くなりました")?,
-        ),
-        None => None,
-    };
+    let source = super::take::source(a, phrase.container)?;
     let tempo = s.settings().tempo;
     let stamp = rows::stamp(phrase.start);
+    let from = Duration::from_millis(phrase.start.saturating_sub(s.pending.base));
+    let controls: Vec<(u64, u8)> = s
+        .settings()
+        .modulation
+        .changes(from, from + Duration::from_millis(phrase.end()))
+        .into_iter()
+        .map(|(at, value)| ((at - from).as_millis() as u64, value))
+        .collect();
     let mut id = 0;
-    a.replace_tracks(|music| {
-        id = capture::append(music, source, tempo, phrase, &stamp)?;
+    a.append_tracks(|music| {
+        id = capture::append(music, source, tempo, phrase, &controls, &stamp)?;
         Ok(())
     })?;
-    // The keyboard's own edit keeps it open.
-    s.song = a.song_id;
-    if phrase.container.is_none() {
-        let c = Catalog::read(&a.loaded.as_ref().unwrap().music)?;
-        let container = c.patterns[&id].container;
-        // The fallback sound now plays the container it created.
-        for sound in s.sounds.iter_mut().filter(|s| s.container.is_none()) {
-            sound.container = Some(container);
-            sound.track = c.tracks[&container];
-        }
-    }
-    Ok(())
+    super::take::adopt(a, s, id)
 }
 
 /// The open Capture window.
 pub(super) struct Browser {
     /// Newest first.
     phrases: Vec<Captured>,
-    /// The song `phrases` were read from; `None` until the first read.
-    song: Option<u64>,
+    /// The `App::generation` `phrases` were read at; `None` until the first read.
+    generation: Option<u64>,
     selected: usize,
     /// The editor's view before the first audition.
     back: Option<shown::Back>,
@@ -112,7 +101,7 @@ pub(super) fn toggle(a: &mut App, s: &mut Session) {
     }
     s.capture = Some(Browser {
         phrases: vec![],
-        song: None,
+        generation: None,
         selected: 0,
         back: None,
         place: None,
@@ -130,13 +119,13 @@ pub(super) fn close(a: &mut App, s: &mut Session) {
 /// Rereads the phrases after the song changed, keeping the selected one; the first read
 /// puts the open phrase in the song so it is listed too.
 fn read(a: &mut App, s: &mut Session) -> Result<(), String> {
-    let Some(song) = s.capture.as_ref().map(|b| b.song) else {
+    let Some(generation) = s.capture.as_ref().map(|b| b.generation) else {
         return Ok(());
     };
-    if song == Some(a.song_id) {
+    if generation == Some(a.generation) {
         return Ok(());
     }
-    if song.is_none() {
+    if generation.is_none() {
         flush(a, s, true)?;
     }
     let phrases = capture::captured(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
@@ -146,7 +135,7 @@ fn read(a: &mut App, s: &mut Session) -> Result<(), String> {
         .and_then(|k| phrases.iter().position(|p| (p.pattern, p.range.0) == k))
         .unwrap_or(0);
     b.phrases = phrases;
-    b.song = Some(a.song_id);
+    b.generation = Some(a.generation);
     Ok(())
 }
 

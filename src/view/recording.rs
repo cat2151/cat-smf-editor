@@ -32,6 +32,7 @@ mod tests;
 pub(crate) mod window;
 pub(crate) use companions::reset as reset_windows;
 pub(crate) use companions::{piano_viewport, settings_viewport};
+pub(crate) use panel::LOOPING;
 pub(crate) use resume::begin as resume;
 use take::{finish, reveal};
 
@@ -66,6 +67,9 @@ struct Sound {
     track: usize,
     patch: Patch,
     name: String,
+    /// Its keys and phrase, playing beside the other containers' phrases.
+    live: live::Live,
+    looper: phrase::Looper,
 }
 struct Session {
     /// The window the keyboard opened from; it gets the takes and the focus back.
@@ -89,17 +93,17 @@ struct Session {
     piano_open: bool,
     /// The keyboard came to the front, so its companions follow it there.
     raise: bool,
+    /// Of the keyboard and `origin`, the keyboard had the focus last.
+    focused: bool,
     /// Where each open companion window opened, fixed while it is open so it can be moved.
     companions: companions::Places,
     /// The pad the mouse holds in each `window::Pointer` window.
     mouse: [Option<recording::Pad>; 2],
     /// Present while playing.
     recorder: Option<Recorder>,
-    queue: Option<live::Queue>,
-    /// The recording voice's metronome; its first click fixes the loop origin.
+    /// The recording voice's metronome, present while the instruments play; its first click
+    /// fixes the loop origin.
     click: Option<std::sync::Arc<crate::play::audition::click::Click>>,
-    phrase: Option<std::sync::Arc<crate::play::audition::phrase::Phrase>>,
-    looper: phrase::Looper,
     /// The app generation whose patches `sounds` hold.
     generation: u64,
     /// Keys sounded, recording or not, not yet in the song.
@@ -117,6 +121,13 @@ struct Session {
     down: fn(u8) -> bool,
 }
 impl Session {
+    fn sound(&self) -> &Sound {
+        &self.sounds[self.selected]
+    }
+    /// The keys of the playing container, while the instruments play.
+    fn queue(&self) -> Option<&live::Queue> {
+        self.click.as_ref().map(|_| &self.sound().live.queue)
+    }
     fn settings(&self) -> &Settings {
         self.recorder
             .as_ref()
@@ -194,6 +205,12 @@ fn song_key(music: &cat_smf_editor::model::Music) -> recording::Key {
     }))
 }
 
+fn container_name(music: &cat_smf_editor::model::Music, id: u64, track: usize) -> String {
+    music.tracks[track]
+        .name()
+        .unwrap_or_else(|| format!("Container {id}"))
+}
+
 fn open(a: &mut App, ctx: &egui::Context) -> Result<(), String> {
     let pane = super::patterns::workspace::pane(ctx);
     open_from(a, ctx, ctx.viewport_id(), pane)
@@ -226,6 +243,13 @@ fn open_from(
         settings.set_key(key);
     }
     Recorder::new(loaded.music.division, settings)?;
+    let looper = || {
+        if a.config.phrase_loop {
+            phrase::Looper::Waiting
+        } else {
+            phrase::Looper::Off
+        }
+    };
     let mut sounds = c
         .tracks
         .iter()
@@ -234,9 +258,9 @@ fn open_from(
             container: Some(id),
             track,
             patch: loaded.patches[track].clone(),
-            name: loaded.music.tracks[track]
-                .name()
-                .unwrap_or_else(|| format!("Container {id}")),
+            name: container_name(&loaded.music, id, track),
+            live: live::Live::default(),
+            looper: looper(),
         })
         .collect::<Vec<_>>();
     sounds.sort_by_key(|s| s.track);
@@ -256,9 +280,18 @@ fn open_from(
             track: loaded.music.tracks.len(),
             patch: Patch::default(),
             name: "Init Saw".into(),
+            live: live::Live::default(),
+            looper: looper(),
         });
     }
     let selected = sounds.iter().position(|s| s.container == target);
+    let index = selected.unwrap_or(0);
+    if let Some(v) = sounds[index]
+        .container
+        .and_then(|id| a.config.keyboard_voicings.get(&id))
+    {
+        settings.set_voicing(*v);
+    }
     // No container is implied, so the settings open on the container row.
     let ambiguous = selected.is_none() && sounds.len() > 1;
     let division = loaded.music.division;
@@ -275,24 +308,18 @@ fn open_from(
         division,
         clock: Instant::now(),
         sounds,
-        selected: selected.unwrap_or(0),
+        selected: index,
         settings,
         measures,
         item: setup::Item::Sound,
         settings_open: false,
         piano_open: true,
         raise: false,
+        focused: true,
         companions: companions::Places::default(),
         mouse: [None; 2],
         recorder: None,
-        queue: None,
         click: None,
-        phrase: None,
-        looper: if a.config.phrase_loop {
-            phrase::Looper::Waiting
-        } else {
-            phrase::Looper::Off
-        },
         generation: a.generation,
         pending: capture::Pending::new(),
         capture: None,
@@ -364,6 +391,11 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         if let Some(at) = moved {
             companions::remember(a, companions::KEYBOARD, at);
         }
+        if ctx.input_for(window::viewport(), |i| i.focused) {
+            s.focused = true;
+        } else if ctx.input_for(s.origin, |i| i.focused) {
+            s.focused = false;
+        }
         if !done {
             if let Err(error) = capture::flush(a, s, false) {
                 s.error = Some(error);
@@ -371,7 +403,7 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
             let keyboard = moved.unwrap_or(s.position);
             companions::show(a, ctx, s, keyboard);
             capture::show(a, ctx, s, keyboard);
-            adopt(s);
+            companions::adopt(ctx, s);
         }
     }
     if done {
@@ -392,34 +424,13 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
     ctx.request_repaint_after(std::time::Duration::from_millis(8));
 }
 
-/// Gives each open keyboard window to the editor once its native window exists.
-fn adopt(s: &mut Session) {
-    let open = [
-        (window::TITLE, true),
-        (companions::SETTINGS_TITLE, s.settings_open),
-        (companions::PIANO_TITLE, s.piano_open),
-        (capture::TITLE, s.capture.is_some()),
-    ];
-    // A closed companion gets a new native window when it reopens.
-    s.owned
-        .retain(|t| open.iter().any(|(title, shown)| title == t && *shown));
-    #[cfg(windows)]
-    if let Some(owner) = s.owner {
-        for (title, shown) in open {
-            if shown && !s.owned.contains(&title) && super::analysis::owner::adopt_by(owner, title)
-            {
-                s.owned.push(title);
-            }
-        }
-    }
-}
-
 fn shut(a: &mut App, state: &mut State) {
     if let Some(s) = state.session.take() {
         a.audition.stop_live();
         // Settings and the loop length survive closing and restarts; the key is reread at every open.
         a.config
             .select_keyboard_settings((*s.settings(), s.measures));
+        setup::keep_voicing(a, &s);
     }
 }
 
@@ -427,10 +438,11 @@ fn shut(a: &mut App, state: &mut State) {
 /// `false` keeps it open with the commit error.
 pub(crate) fn close_for_exit(a: &mut App) -> bool {
     let mut state = std::mem::take(&mut a.patterns.recording);
-    let done = state
-        .session
-        .as_mut()
-        .is_none_or(|s| play::close(a, s, s.clock.elapsed()));
+    let done = state.session.as_mut().is_none_or(|s| {
+        // Closing from the editor moves the focus there first, so the last of the two counts.
+        a.config.select_keyboard_focused(s.focused);
+        play::close(a, s, s.clock.elapsed())
+    });
     if done {
         shut(a, &mut state);
     }

@@ -126,7 +126,9 @@ pub fn scene_id(a: &App, p: Pane) -> Option<u64> {
     }
 }
 /// The keyboard's Capture is not offered; it reaches a song only as a pattern made from it.
+/// The keyboard's Loop leads its container.
 pub fn choices(a: &App, p: Pane) -> Vec<(PatternOrScene, String)> {
+    use cat_smf_editor::score::pattern::Kind;
     let Some(l) = &a.loaded else { return vec![] };
     let Ok(c) = Catalog::read(&l.music) else {
         return vec![];
@@ -134,9 +136,9 @@ pub fn choices(a: &App, p: Pane) -> Vec<(PatternOrScene, String)> {
     let mut patterns = c
         .patterns
         .values()
-        .filter(|p| p.kind != cat_smf_editor::score::pattern::Kind::Capture)
+        .filter(|p| p.kind != Kind::Capture)
         .collect::<Vec<_>>();
-    patterns.sort_by_key(|p| (p.track, p.tick));
+    patterns.sort_by_key(|p| (p.track, p.kind != Kind::Loop, p.tick));
     let mut out = patterns
         .into_iter()
         .map(|p| (PatternOrScene::Pattern(p.id), p.name.clone()))

@@ -1,5 +1,6 @@
 use super::*;
 use crate::message;
+use crate::score::note_view::note_off;
 use crate::{edit, model::Track};
 
 pub fn create_source(music: &mut Music) -> Result<usize, String> {
@@ -40,6 +41,29 @@ pub(super) fn free_tick(c: &Catalog, track: usize) -> Result<u64, String> {
         .collect::<Result<Vec<_>, _>>()
         .map(|ends| ends.into_iter().max().unwrap_or(0))
 }
+/// An ordinary pattern of `id`'s container with the same meters and body as `id`.
+pub fn same_normal(music: &Music, id: u64) -> Result<Option<u64>, String> {
+    let c = Catalog::read(music)?;
+    let p = c.patterns.get(&id).ok_or(message::MISSING_PATTERN)?;
+    let body = |p: &Definition| -> Result<Vec<_>, String> {
+        Ok(body::extract(&music.tracks[p.track].events, p.range()?)?
+            .into_iter()
+            .map(|e| (e.tick - p.tick, e.status, e.meta_type, e.data))
+            .collect())
+    };
+    let wanted = body(p)?;
+    for other in c.patterns.values() {
+        if other.id != id
+            && other.kind == Kind::Normal
+            && other.track == p.track
+            && other.meters == p.meters
+            && body(other)? == wanted
+        {
+            return Ok(Some(other.id));
+        }
+    }
+    Ok(None)
+}
 fn commit(music: &mut Music, next: Music) -> Result<(), String> {
     Catalog::read(&next)?;
     *music = next;
@@ -63,7 +87,12 @@ pub fn create(music: &mut Music, source: usize, duplicate: Option<u64>) -> Resul
                 .checked_add(e.tick - p.tick)
                 .ok_or(message::STORAGE_OVERFLOW)?;
         }
-        (p.kind, format!("{} copy", p.name), p.meters.clone(), events)
+        // A container keeps one Loop, so its copy is an ordinary pattern.
+        let (kind, name) = match p.kind {
+            Kind::Loop => (Kind::Normal, format!("Pattern {}", c.patterns.len() + 1)),
+            kind => (kind, format!("{} copy", p.name)),
+        };
+        (kind, name, p.meters.clone(), events)
     } else {
         let ticks = u64::from(music.division)
             .checked_mul(4)
@@ -98,8 +127,8 @@ pub fn create(music: &mut Music, source: usize, duplicate: Option<u64>) -> Resul
     commit(music, next)?;
     Ok(id)
 }
-/// An empty one-bar Capture pattern named `Capture`.
-pub fn create_capture(music: &mut Music, source: usize) -> Result<u64, String> {
+/// An empty one-bar pattern of `kind`, named after it.
+pub fn create_as(music: &mut Music, source: usize, kind: Kind) -> Result<u64, String> {
     let id = create(music, source, None)?;
     let meta = music.tracks[source]
         .events
@@ -109,8 +138,8 @@ pub fn create_capture(music: &mut Music, source: usize) -> Result<u64, String> {
     let Ok(Some(Record::Pattern(mut r))) = record(meta) else {
         return Err(message::MISSING_DEFINITION.into());
     };
-    r.kind = Kind::Capture;
-    r.name = "Capture".into();
+    r.kind = kind;
+    r.name = kind.label().into();
     *meta = event(meta.tick, &Record::Pattern(r));
     Ok(id)
 }
@@ -232,5 +261,71 @@ pub fn resize(music: &mut Music, id: u64, meters: Vec<Meter>) -> Result<(), Stri
     }) {
         crate::score::scene::arrangement::commit(&mut next, &collection)?;
     }
+    commit(music, next)
+}
+/// Gives pattern `id` the `meters` and adds `events` at ticks from `offset` into it.
+pub(super) fn fill(
+    music: &mut Music,
+    id: u64,
+    meters: Vec<Meter>,
+    offset: u64,
+    mut events: Vec<Event>,
+) -> Result<(), String> {
+    resize(music, id, meters)?;
+    let p = Catalog::read(music)?.patterns[&id].clone();
+    // Stable sorting retains Note Off / retrigger order at equal ticks.
+    events.sort_by_key(|e| e.tick);
+    for mut event in events {
+        event.tick = p
+            .tick
+            .checked_add(offset)
+            .and_then(|t| t.checked_add(event.tick))
+            .ok_or(message::STORAGE_OVERFLOW)?;
+        edit::insert(&mut music.tracks[p.track], event);
+    }
+    edit::refresh_deltas(&mut music.tracks[p.track])?;
+    Catalog::read(music)?;
+    Ok(())
+}
+/// Replaces pattern `id`'s body with `kept` (ticks from the pattern start), moved earlier so the
+/// first one starts the pattern, and shortens the pattern to the leading bars that hold them.
+pub fn crop(music: &mut Music, id: u64, mut kept: Vec<Event>) -> Result<(), String> {
+    let c = Catalog::read(music)?;
+    let p = c.patterns.get(&id).ok_or(message::MISSING_PATTERN)?;
+    let first = kept
+        .iter()
+        .map(|e| e.tick)
+        .min()
+        .ok_or("残すeventを選んでください")?;
+    for e in &mut kept {
+        e.tick -= first;
+    }
+    let mut meters = vec![];
+    let mut length = 0;
+    for m in &p.meters {
+        meters.push(m.clone());
+        length += m.ticks;
+        if kept
+            .iter()
+            .all(|e| e.tick < length || (e.tick == length && note_off(e)))
+        {
+            break;
+        }
+    }
+    refill(music, p, meters, kept)
+}
+/// Replaces `p`'s body with `events` (ticks from its start) in `meters`.
+pub(super) fn refill(
+    music: &mut Music,
+    p: &Definition,
+    meters: Vec<Meter>,
+    events: Vec<Event>,
+) -> Result<(), String> {
+    let (start, end) = p.range()?;
+    let mut next = music.clone();
+    next.tracks[p.track].events.retain(|e| {
+        !(body::expression(e) && ((start..end).contains(&e.tick) || e.tick == end && note_off(e)))
+    });
+    fill(&mut next, p.id, meters, 0, events)?;
     commit(music, next)
 }

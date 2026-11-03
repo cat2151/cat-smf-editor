@@ -45,9 +45,15 @@ pub(crate) struct Status {
     /// The app closed with the Virtual MIDI keyboard open and its phrase loop on.
     #[serde(default)]
     pub phrase_loop: bool,
+    /// The keyboard, not the window it opened from, had the focus last when the app closed.
+    #[serde(default)]
+    pub keyboard_focused: bool,
     /// Virtual MIDI keyboard settings and loop length the keyboard last closed with.
     #[serde(default)]
     pub keyboard_settings: Option<(recording::Settings, u16)>,
+    /// What the pads of each container played, by container id.
+    #[serde(default)]
+    pub keyboard_voicings: std::collections::BTreeMap<u64, recording::Voicing>,
     /// VOICEVOX engine の `run.exe`。
     #[serde(default)]
     pub voicevox_engine: Option<PathBuf>,
@@ -80,7 +86,9 @@ impl Default for Status {
             pattern_windows: Default::default(),
             keyboard_windows: Default::default(),
             phrase_loop: false,
+            keyboard_focused: false,
             keyboard_settings: None,
+            keyboard_voicings: Default::default(),
             voicevox_engine: None,
             mascot_enabled: false,
         }

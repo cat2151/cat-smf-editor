@@ -93,11 +93,11 @@ fn tab_and_octave_keys_while_holding_pads_leave_nothing_sounding() {
     }
     assert!((0..128).all(|p| !recorder(&a).sounding(p)));
     let queued: Vec<u32> = session(&a)
-        .queue
-        .as_ref()
+        .queue()
         .unwrap()
         .lock()
         .unwrap()
+        .words
         .iter()
         .copied()
         .collect();

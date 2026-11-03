@@ -1,5 +1,7 @@
 use super::*;
-use cat_smf_editor::score::pattern::recording::{Layout, Mode, Range, Scale, Start};
+use cat_smf_editor::score::pattern::recording::{
+    Layout, Mode, Modulation, Range, Scale, Start, Velocity,
+};
 use setup::Item;
 
 fn press(a: &mut App, ctx: &egui::Context, keys: &[(Key, Modifiers)]) {
@@ -55,7 +57,7 @@ fn every_item_changes_in_the_settings_window_while_the_pads_play() {
         &ctx,
         &[
             DOWN, RIGHT, RIGHT, RIGHT, RIGHT, DOWN, RIGHT, DOWN, RIGHT, DOWN, RIGHT, DOWN, RIGHT,
-            BIG, DOWN,
+            BIG,
         ],
     );
     let t = *recorder(&a).settings();
@@ -65,6 +67,26 @@ fn every_item_changes_in_the_settings_window_while_the_pads_play() {
     // C# minor pentatonic above C#4, then the natural minor degree above C#3 and an octave.
     assert_eq!(t.note_base, 64);
     assert_eq!(t.chord_base, 51 + 12);
+    // From the 80-127 sweep and the CC1 sweep to the next choices, and back.
+    press(&mut a, &ctx, &[DOWN, RIGHT, DOWN, RIGHT]);
+    let t = *recorder(&a).settings();
+    assert_eq!(session(&a).item, Item::Modulation);
+    assert_eq!(
+        (t.velocity, t.modulation),
+        (Velocity::V100, Modulation::Off)
+    );
+    press(&mut a, &ctx, &[back(Key::V), back(Key::W)]);
+    let t = *recorder(&a).settings();
+    assert_eq!(
+        (t.velocity, t.modulation),
+        (Velocity::Range80To127, Modulation::Sweep)
+    );
+    press(&mut a, &ctx, &[DOWN, RIGHT]);
+    assert_eq!(session(&a).item, Item::Quantize);
+    assert!(recorder(&a).settings().quantize);
+    press(&mut a, &ctx, &[(Key::Q, Modifiers::CTRL)]);
+    assert!(!recorder(&a).settings().quantize);
+    press(&mut a, &ctx, &[UP, UP, UP]);
     press(&mut a, &ctx, &[(Key::Escape, Modifiers::NONE)]);
     assert!(!session(&a).settings_open && a.patterns.recording.is_open());
     let press = |a: &mut App, ctx: &egui::Context, keys: &[(Key, Modifiers)]| {

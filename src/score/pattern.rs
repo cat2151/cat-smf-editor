@@ -28,6 +28,8 @@ pub enum Kind {
     Normal,
     /// Collects what was played on the virtual keyboard.
     Capture,
+    /// The phrase the virtual keyboard repeats, one per container; never placed.
+    Loop,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -140,6 +142,7 @@ impl Kind {
         match self {
             Kind::Normal => "Normal",
             Kind::Capture => "Capture",
+            Kind::Loop => "Loop",
         }
     }
 }

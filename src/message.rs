@@ -18,6 +18,7 @@ pub const INVALID_SCENE_MEASURE: &str = "sceneの小節が不正です";
 pub const INVALID_TRACK: &str = "trackが不正です";
 pub const INVALID_TRACK_VOLUME: &str = "trackの音量が不正です";
 pub const LAYER_WAS_REMOVED: &str = "layerが削除されました";
+pub const LOOP_IS_NOT_PLACED: &str = "Loopは配置できません";
 pub const MASTER_EFFECTS_REQUIRE_SMF_FORMAT_1: &str =
     "Master effectsの編集にはSMF format 1が必要です";
 pub const MEASURE_OVERFLOW: &str = "小節が上限を超えました";

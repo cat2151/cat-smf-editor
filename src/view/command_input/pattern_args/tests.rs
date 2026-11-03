@@ -248,7 +248,11 @@ fn the_pattern_library_picker_still_lists_the_keyboard_capture() {
         .track;
     let mut capture = None;
     a.edit_tracks(|m| {
-        capture = Some(pattern::operations::create_capture(m, source)?);
+        capture = Some(pattern::operations::create_as(
+            m,
+            source,
+            pattern::Kind::Capture,
+        )?);
         Ok(())
     })
     .unwrap();

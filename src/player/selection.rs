@@ -214,6 +214,7 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
         &old,
         settings,
     )?;
+    follow_name(&mut music, track, &old, settings)?;
     cat_smf_editor::score::same_measure::validate(&music)?;
     crate::view::parameter_editor::pattern_targets::sound(app, &music, track, settings)?;
     app.saved.remember(&original, &music)?;
@@ -240,6 +241,34 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
         crate::play::selection_playback::restore(app, resume);
     }
     Ok(())
+}
+
+/// A one-layer track still named after its sound, numbered or not as a new container is,
+/// takes the name of its new sound; a name the user gave stays.
+fn follow_name(
+    music: &mut cat_smf_editor::model::Music,
+    track: usize,
+    old: &Settings,
+    new: &Settings,
+) -> Result<(), String> {
+    let ([old], [new]) = (old.layers.as_slice(), new.layers.as_slice()) else {
+        return Ok(());
+    };
+    let (old, new) = (old.name(), new.name());
+    let Some(current) = music.tracks[track].name() else {
+        return Ok(());
+    };
+    let named_after = current.strip_prefix(old.as_str()).is_some_and(|rest| {
+        rest.is_empty()
+            || rest
+                .strip_prefix(' ')
+                .is_some_and(|n| n.parse::<u32>().is_ok())
+    });
+    if old == new || !named_after {
+        return Ok(());
+    }
+    let name = crate::view::patterns::library::numbered(music, &new, Some(track));
+    cat_smf_editor::edit::tracks::rename(&mut music.tracks[track], &name)
 }
 
 #[path = "selection_ui.rs"]

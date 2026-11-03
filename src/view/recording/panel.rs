@@ -6,9 +6,11 @@ use super::*;
 const LED_ON: egui::Color32 = egui::Color32::from_rgb(0xff, 0x40, 0x20);
 const LED_BACK: egui::Color32 = egui::Color32::from_rgb(0x1a, 0x06, 0x04);
 const WAITING: egui::Color32 = egui::Color32::from_rgb(0xe6, 0xdb, 0x74);
-const LOOPING: egui::Color32 = egui::Color32::from_rgb(0xa6, 0xe2, 0x2e);
+/// The repeating phrase, on the switch and on its pattern card.
+pub(crate) const LOOPING: egui::Color32 = egui::Color32::from_rgb(0xa6, 0xe2, 0x2e);
 const LED_SIZE: egui::Vec2 = egui::vec2(220.0, 26.0);
 const BROWSE: egui::Vec2 = egui::vec2(64.0, 26.0);
+const TO_SONG: &str = "鳴っているLoopをSongの末尾に並べてA-B repeat  Ctrl+Enter";
 
 /// The arrow head on the ring at `angle` clockwise from the right, pointing clockwise.
 fn arrow(center: egui::Pos2, radius: f32, angle: f32) -> Vec<egui::Pos2> {
@@ -29,16 +31,16 @@ pub(super) fn switch(ui: &mut egui::Ui, s: &mut Session) {
     let response = response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text("Phrase loop  Ctrl+E");
-    let (back, fill) = match s.looper {
+    let (back, fill) = match s.sound().looper {
         Looper::Off => (egui::Color32::from_gray(75), egui::Color32::from_gray(150)),
         Looper::Waiting | Looper::Capturing { .. } => (egui::Color32::from_gray(210), WAITING),
-        Looper::Looping => (egui::Color32::from_gray(210), LOOPING),
+        Looper::Looping { .. } => (egui::Color32::from_gray(210), LOOPING),
     };
     let p = ui.painter();
     p.rect_filled(rect.shrink(1.0), 3.0, back);
     let center = rect.center();
     let radius = BUTTON * 0.28;
-    if !matches!(s.looper, Looper::Off) {
+    if !matches!(s.sound().looper, Looper::Off) {
         p.circle_filled(center, radius + 2.5, egui::Color32::from_gray(40));
     }
     p.circle_stroke(center, radius, egui::Stroke::new(3.0_f32, fill));
@@ -53,15 +55,27 @@ pub(super) fn switch(ui: &mut egui::Ui, s: &mut Session) {
     }
 }
 
+/// Takes the repeating phrases to the Song; dim until a phrase repeats.
+pub(super) fn to_song(ui: &mut egui::Ui, s: &mut Session) {
+    let button = egui::Button::new("to song");
+    let response = ui
+        .add_enabled(phrase::any_looping(s), button)
+        .on_hover_text(TO_SONG)
+        .on_disabled_hover_text(TO_SONG);
+    if response.clicked() {
+        s.clicked = Some(Button::ToSong);
+    }
+}
+
 /// Centered in `row`; nothing while the phrase is not repeating.
 pub(super) fn led(ui: &mut egui::Ui, row: egui::Rect, s: &mut Session) {
     if !phrase::looping(s) {
         return;
     }
     let (text, layered) = phrase::display(s);
-    let browse = !layered && s.sounds[s.selected].container.is_some();
+    let browse = !layered && s.sound().container.is_some();
     let rect = egui::Rect::from_center_size(row.center(), LED_SIZE);
-    let sense = if layered && s.sounds[s.selected].container.is_some() {
+    let sense = if layered && s.sound().container.is_some() {
         egui::Sense::click()
     } else {
         egui::Sense::hover()

@@ -200,10 +200,7 @@ fn layer_names(ui: &egui::Ui, layers: &[ResolvedLayer]) -> egui::text::LayoutJob
                 egui::TextFormat::simple(font.clone(), normal.gamma_multiply(0.5)),
             );
         }
-        let label = layer.label();
-        let stem = std::path::Path::new(label)
-            .file_stem()
-            .map_or(label.into(), |s| s.to_string_lossy());
+        let stem = layer.name();
         let color = if layers.len() == 1 {
             normal
         } else {

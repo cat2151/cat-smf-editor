@@ -74,10 +74,13 @@ fn keys_played_without_rec_are_kept_listed_newest_first_and_taken_as_a_pattern()
     let b = body::extract(&music.tracks[p.track].events, p.range().unwrap()).unwrap();
     assert_eq!(
         b.iter()
+            .filter(|e| e.status != 0xb0)
             .map(|e| (e.tick - p.tick == 0, e.status, e.data[0]))
             .collect::<Vec<_>>(),
         vec![(true, 0x90, 60), (false, 0x80, 60)]
     );
+    // The CC1 the keyboard played comes along, starting with the note.
+    assert_eq!(b[0].status, 0xb0);
     assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
     assert!(a.undo.available());
     assert!(a.patterns.recording.is_open());
@@ -88,7 +91,7 @@ fn keys_played_without_rec_are_kept_listed_newest_first_and_taken_as_a_pattern()
     assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
 }
 
-/// Body events of the only Capture pattern as `(bar, status, first data byte)`.
+/// Body events but CC1 of the only Capture pattern as `(bar, status, first data byte)`.
 fn captured(a: &App) -> Vec<(u64, u8, u8)> {
     let music = &a.loaded.as_ref().unwrap().music;
     let c = Catalog::read(music).unwrap();
@@ -99,6 +102,7 @@ fn captured(a: &App) -> Vec<(u64, u8, u8)> {
     body::extract(&music.tracks[p.track].events, p.range().unwrap())
         .unwrap()
         .iter()
+        .filter(|e| e.status != 0xb0)
         .map(|e| {
             let byte = if e.status == 0xff {
                 e.meta_type
@@ -231,6 +235,7 @@ fn a_click_auditions_its_row_and_the_rows_button_takes_it() {
     let listed = &listed(&a)[0];
     assert_eq!(
         b.iter()
+            .filter(|e| e.status != 0xb0)
             .map(|e| (e.tick - p.tick, e.status, e.data[0]))
             .collect::<Vec<_>>(),
         listed
@@ -402,4 +407,23 @@ fn each_undo_before_the_keys_still_takes_one_step_and_keeps_the_capture() {
     assert_eq!(c.sources.len(), 1);
     assert_eq!(captured(&a), played);
     assert!(!a.undo.available());
+}
+
+#[test]
+fn a_phrase_added_to_an_existing_capture_keeps_the_song_and_is_listed() {
+    let mut a = app();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    let ms = Duration::from_millis;
+    tap(&mut a, &ctx, Key::Z, ms(500), ms(3000));
+    frame(&mut a, &ctx, vec![], true);
+    ctrl_j(&mut a, &ctx);
+    assert_eq!(listed(&a).len(), 1);
+    let song = a.song_id;
+    tap(&mut a, &ctx, Key::C, ms(250), ms(3000));
+    frame(&mut a, &ctx, vec![], true);
+    frame(&mut a, &ctx, vec![], true);
+    // A browser opened on a track before the phrase still applies there.
+    assert_eq!(a.song_id, song);
+    assert_eq!(listed(&a).len(), 2, "{:?}", session(&a).error);
 }

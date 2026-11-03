@@ -59,7 +59,9 @@ pub struct Store {
     pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
     pub keyboard_windows: std::collections::BTreeMap<String, [f32; 2]>,
     pub phrase_loop: bool,
+    pub keyboard_focused: bool,
     pub keyboard_settings: Option<(recording::Settings, u16)>,
+    pub keyboard_voicings: std::collections::BTreeMap<u64, recording::Voicing>,
     pub voicevox_engine: Option<PathBuf>,
     pub mascot_enabled: bool,
     pub error: Option<String>,
@@ -90,7 +92,9 @@ impl Default for Store {
             pattern_windows: Default::default(),
             keyboard_windows: Default::default(),
             phrase_loop: false,
+            keyboard_focused: false,
             keyboard_settings: None,
+            keyboard_voicings: Default::default(),
             voicevox_engine: None,
             mascot_enabled: false,
             error: None,
@@ -152,7 +156,9 @@ impl Store {
                     pattern_windows,
                     keyboard_windows,
                     phrase_loop,
+                    keyboard_focused,
                     keyboard_settings,
+                    keyboard_voicings,
                     voicevox_engine,
                     mascot_enabled,
                 }) => {
@@ -185,7 +191,9 @@ impl Store {
                         .filter(|(_, at)| at.iter().all(|v| v.is_finite()))
                         .collect();
                     store.phrase_loop = phrase_loop;
+                    store.keyboard_focused = keyboard_focused;
                     store.keyboard_settings = keyboard_settings;
+                    store.keyboard_voicings = keyboard_voicings;
                     store.voicevox_engine = voicevox_engine;
                     store.mascot_enabled = mascot_enabled;
                 }
@@ -300,9 +308,24 @@ impl Store {
         }
     }
 
+    pub fn select_keyboard_focused(&mut self, focused: bool) {
+        if self.keyboard_focused != focused {
+            self.keyboard_focused = focused;
+            self.persist();
+        }
+    }
+
     pub fn select_keyboard_settings(&mut self, kept: (recording::Settings, u16)) {
         if self.keyboard_settings != Some(kept) {
             self.keyboard_settings = Some(kept);
+            self.persist();
+        }
+    }
+
+    /// What the pads of `container` played when the keyboard last left it.
+    pub fn select_keyboard_voicing(&mut self, container: u64, kept: recording::Voicing) {
+        if self.keyboard_voicings.get(&container) != Some(&kept) {
+            self.keyboard_voicings.insert(container, kept);
             self.persist();
         }
     }
@@ -354,7 +377,9 @@ impl Store {
                 pattern_windows: self.pattern_windows.clone(),
                 keyboard_windows: self.keyboard_windows.clone(),
                 phrase_loop: self.phrase_loop,
+                keyboard_focused: self.keyboard_focused,
                 keyboard_settings: self.keyboard_settings,
+                keyboard_voicings: self.keyboard_voicings.clone(),
                 voicevox_engine: self.voicevox_engine.clone(),
                 mascot_enabled: self.mascot_enabled,
             })?;

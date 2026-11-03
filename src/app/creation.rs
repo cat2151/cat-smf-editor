@@ -82,6 +82,23 @@ impl App {
         &mut self,
         edit: impl FnOnce(&mut cat_smf_editor::model::Music) -> Result<(), String>,
     ) -> Result<cat_smf_editor::model::Music, String> {
+        self.install_tracks(edit, true)
+    }
+
+    /// `replace_tracks` for an addition that keeps the song while the tracks and their
+    /// sounds stay, so a browser opened on a track still applies there.
+    pub(crate) fn append_tracks(
+        &mut self,
+        edit: impl FnOnce(&mut cat_smf_editor::model::Music) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.install_tracks(edit, false).map(drop)
+    }
+
+    fn install_tracks(
+        &mut self,
+        edit: impl FnOnce(&mut cat_smf_editor::model::Music) -> Result<(), String>,
+        new_song: bool,
+    ) -> Result<cat_smf_editor::model::Music, String> {
         let editor = crate::view::patterns::navigation::snapshot(self);
         let before = self
             .loaded
@@ -109,6 +126,9 @@ impl App {
             &music,
             &sound.patches,
         )?;
+        let new_song = new_song
+            || before.tracks.len() != music.tracks.len()
+            || self.loaded.as_ref().unwrap().patches != sound.patches;
         self.saved
             .remember(&self.loaded.as_ref().unwrap().original, &music)?;
         crate::play::transport::stop(self);
@@ -124,7 +144,9 @@ impl App {
             .playback
             .mixer_track
             .min(self.loaded.as_ref().unwrap().music.tracks.len() - 1);
-        self.song_id = self.song_id.wrapping_add(1);
+        if new_song {
+            self.song_id = self.song_id.wrapping_add(1);
+        }
         crate::view::patterns::navigation::restore(self, editor);
         Ok(before)
     }

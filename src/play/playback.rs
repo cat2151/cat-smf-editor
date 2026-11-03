@@ -115,7 +115,11 @@ pub fn start(app: &mut App, mode: Mode) {
     if let Some(id) = pattern {
         if matches!(
             mode,
-            Mode::Pattern(_) | Mode::Track | Mode::AllTracks | Mode::AllTracksFromMeasure
+            Mode::Pattern(_)
+                | Mode::Track
+                | Mode::AllTracks
+                | Mode::AllTracksFromMeasure
+                | Mode::Arrangement(_)
         ) {
             app.playback.open = false;
             if let Err(error) = crate::view::patterns::preview::start(app, id) {

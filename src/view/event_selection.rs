@@ -104,6 +104,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
             let mut choices = vec![
                 (actions::Action::Repeat, "a: A-B repeat"),
                 (actions::Action::DeleteEvents, "d: Delete events"),
+                (actions::Action::Quantize, "q: Quantize 1/16"),
             ];
             if whole(app) {
                 choices.extend([

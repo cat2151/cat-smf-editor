@@ -98,3 +98,18 @@ fn pattern_edit_piano_drag_rejects_boundary_and_drops_old_gesture_after_take_swi
         switched
     );
 }
+
+#[test]
+fn pattern_edit_space_after_song_playback_plays_only_the_pattern() {
+    let (mut a, _, id) = fixture();
+    crate::view::patterns::library::edit(&mut a, id).unwrap();
+    a.playback.last = crate::play::playback::Mode::Arrangement(None);
+    let (c, _) = opened_in(&mut a);
+    press(&mut a, &c, egui::Key::Space);
+    let mode = a.playback.pending.as_ref().map(|p| p.active.mode).or(a
+        .playback
+        .active
+        .as_ref()
+        .map(|p| p.mode));
+    assert_eq!(mode, Some(crate::play::playback::Mode::Pattern(id)));
+}

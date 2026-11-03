@@ -169,3 +169,57 @@ fn init_keeps_shared_d_minor_and_clears_differing_sound_settings() {
         before
     );
 }
+
+#[test]
+fn menu_quantize_moves_the_selected_notes_onto_sixteenths_in_one_undo_step() {
+    use cat_smf_editor::score::note_view::{note_off, note_on};
+    let mut music = new_song();
+    let grid = u64::from(music.division) / 4;
+    let track = &mut music.tracks[0];
+    for e in track.events.iter_mut() {
+        if note_on(e) {
+            e.tick += grid / 3;
+        } else if note_off(e) {
+            e.tick += grid / 3 + 1;
+        } else if e.status == 0xff && e.meta_type == 0x2f {
+            e.tick += grid;
+        }
+    }
+    cat_smf_editor::edit::refresh_deltas(track).unwrap();
+    let played: Vec<u64> = track
+        .events
+        .iter()
+        .filter(|e| note_on(e) || note_off(e))
+        .map(|e| e.tick)
+        .collect();
+    for notes in [true, false] {
+        let mut app = crate::view::tests::app(music.clone());
+        app.note_mode = notes;
+        let ctx = egui::Context::default();
+        for key in [
+            egui::Key::Home,
+            egui::Key::S,
+            egui::Key::End,
+            egui::Key::S,
+            egui::Key::Q,
+        ] {
+            frame(&mut app, &ctx, key);
+        }
+        assert!(app.load_error.is_none(), "{:?}", app.load_error);
+        assert!(range(&app).is_none());
+        let ticks: Vec<u64> = app.loaded.as_ref().unwrap().music.tracks[0]
+            .events
+            .iter()
+            .filter(|e| note_on(e) || note_off(e))
+            .map(|e| e.tick)
+            .collect();
+        let snapped: Vec<u64> = played
+            .iter()
+            .map(|t| (t + grid / 2) / grid * grid)
+            .collect();
+        assert_eq!(ticks, snapped);
+        assert_ne!(ticks, played);
+        app.undo_music().unwrap();
+        assert!(!app.undo.available());
+    }
+}

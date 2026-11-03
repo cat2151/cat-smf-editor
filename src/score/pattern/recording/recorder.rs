@@ -1,5 +1,5 @@
 //! Pads pressed during a session, split into one take per loop lap.
-use super::{note, operations, pitches, ticks, write, Pad, Range, Settings, Start};
+use super::{control, note, operations, pitches, ticks, write, Pad, Range, Settings, Start};
 use crate::message;
 use crate::model::Music;
 use std::time::Duration;
@@ -15,6 +15,12 @@ pub struct Recorder {
     held: Vec<(Pad, Vec<u8>)>,
     /// Free keeps one lap; Loop keeps one per lap number, empty ones included.
     laps: Vec<Lap>,
+    /// Presses that sounded, which step the velocity sweep.
+    presses: usize,
+    /// The velocity of the last sounding press.
+    velocity: u8,
+    /// The velocity each sounding pitch started with.
+    velocities: [u8; 128],
 }
 
 #[derive(Clone)]
@@ -22,7 +28,6 @@ struct Lap {
     events: Vec<crate::model::Event>,
     on: [Option<u64>; 128],
     released: [u64; 128],
-    end: u64,
 }
 
 impl Lap {
@@ -31,7 +36,6 @@ impl Lap {
             events: vec![],
             on: [None; 128],
             released: [0; 128],
-            end: 0,
         }
     }
 }
@@ -54,7 +58,14 @@ impl Recorder {
             sounding: [0; 128],
             held: vec![],
             laps: vec![],
+            presses: 0,
+            velocity: 0,
+            velocities: [0; 128],
         })
+    }
+    /// The velocity of the last press that sounded; 0 before the first.
+    pub fn velocity(&self) -> u8 {
+        self.velocity
     }
     pub fn settings(&self) -> &Settings {
         &self.settings
@@ -88,7 +99,7 @@ impl Recorder {
             .get(usize::from(pitch))
             .is_some_and(|&n| n > 0)
     }
-    /// Pitches that start sounding.
+    /// Pitches that start sounding, all at [`Self::velocity`].
     pub fn press(&mut self, pad: Pad, at: Duration) -> Result<Vec<u8>, String> {
         if self.held(pad) {
             return Ok(vec![]);
@@ -100,12 +111,15 @@ impl Recorder {
         if self.settings.range == Range::Free && self.settings.start == Start::Key {
             self.origin.get_or_insert(at);
         }
+        self.velocity = self.settings.velocity.of_press(self.presses);
+        self.presses += 1;
         let mut started = vec![];
         for &pitch in &notes {
             self.sounding[usize::from(pitch)] += 1;
             if self.sounding[usize::from(pitch)] == 1 {
                 started.push(pitch);
-                self.record(pitch, true, at)?;
+                self.velocities[usize::from(pitch)] = self.velocity;
+                self.record(pitch, self.velocity, at)?;
             }
         }
         self.held.push((pad, notes));
@@ -122,7 +136,7 @@ impl Recorder {
             self.sounding[usize::from(pitch)] -= 1;
             if self.sounding[usize::from(pitch)] == 0 {
                 stopped.push(pitch);
-                self.record(pitch, false, at)?;
+                self.record(pitch, 0, at)?;
             }
         }
         Ok(stopped)
@@ -140,7 +154,9 @@ impl Recorder {
             Range::Loop { measures } => Some(u64::from(measures) * 4 * u64::from(self.division)),
         }
     }
-    fn record(&mut self, pitch: u8, on: bool, at: Duration) -> Result<(), String> {
+    /// A Note On of `velocity`, or a Note Off for 0.
+    fn record(&mut self, pitch: u8, velocity: u8, at: Duration) -> Result<(), String> {
+        let on = velocity > 0;
         let Some(origin) = self.origin else {
             return Ok(());
         };
@@ -165,7 +181,7 @@ impl Recorder {
                 return Ok(());
             }
             lap.on[p] = Some(tick);
-            lap.events.push(note(tick, true, pitch));
+            lap.events.push(note(tick, pitch, velocity));
         } else if let Some(start) = lap.on[p].take() {
             let tick = local.max(
                 start
@@ -173,14 +189,14 @@ impl Recorder {
                     .ok_or(message::RECORDING_TIME_OVERFLOW)?,
             );
             lap.released[p] = tick;
-            lap.end = lap.end.max(tick);
-            lap.events.push(note(tick, false, pitch));
+            lap.events.push(note(tick, pitch, 0));
         }
         Ok(())
     }
     /// Notes sounding across a lap boundary end with the lap and restart at the next lap's 0.
     fn advance(&mut self, lap: u64) {
         let length = self.length().unwrap_or(0);
+        let velocities = self.velocities;
         while self.laps.len() as u64 <= lap {
             let mut next = Lap::new();
             if let Some(last) = self.laps.last_mut() {
@@ -188,10 +204,9 @@ impl Recorder {
                     let p = usize::from(pitch);
                     if last.on[p].take().is_some() {
                         last.released[p] = length;
-                        last.end = length;
-                        last.events.push(note(length, false, pitch));
+                        last.events.push(note(length, pitch, 0));
                         next.on[p] = Some(0);
-                        next.events.push(note(0, true, pitch));
+                        next.events.push(note(0, pitch, velocities[p]));
                     }
                 }
             }
@@ -206,7 +221,11 @@ impl Recorder {
         if music.division != self.division {
             return Err("録音の分割が変わりました".into());
         }
-        let laps = self.laps.iter().filter(|l| !l.events.is_empty());
+        let laps = self
+            .laps
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| !l.events.is_empty());
         if laps.clone().next().is_none() {
             return Err(message::RECORDING_IS_EMPTY.into());
         }
@@ -215,14 +234,50 @@ impl Recorder {
             None => operations::create_source(music)?,
         };
         let measure = u64::from(self.division) * 4;
-        laps.map(|lap| {
+        let grid = if self.settings.quantize {
+            Some(crate::edit::quantize::sixteenth(self.division)?)
+        } else {
+            None
+        };
+        laps.map(|(i, lap)| {
+            let notes = match grid {
+                Some(grid) => super::quantize::events(lap.events.clone(), grid, self.length()),
+                None => lap.events.clone(),
+            };
+            let end = notes.iter().map(|e| e.tick).max().unwrap_or(0);
             let count = match self.settings.range {
-                Range::Free => lap.end.div_ceil(measure).max(1),
+                Range::Free => end.div_ceil(measure).max(1),
                 Range::Loop { measures } => u64::from(measures),
             };
-            write(music, source, count, lap.events.clone())
+            let start = self.length().map_or(0, |l| i as u64 * l);
+            // CC1 first, so a value on a note's tick reaches the note.
+            let mut events = self.controls(start, start + count * measure)?;
+            events.extend(notes);
+            write(music, source, count, events)
         })
         .collect()
+    }
+    /// CC1 from tick `start` to `end` after the origin, at ticks from `start`.
+    fn controls(&self, start: u64, end: u64) -> Result<Vec<crate::model::Event>, String> {
+        let Some(origin) = self.origin else {
+            return Ok(vec![]);
+        };
+        let time = |tick: u64| {
+            origin
+                + Duration::from_nanos(
+                    (u128::from(tick) * u128::from(self.settings.tempo) * 1000
+                        / u128::from(self.division))
+                    .min(u128::from(u64::MAX)) as u64,
+                )
+        };
+        let mut events = vec![];
+        for (at, value) in self.settings.modulation.changes(time(start), time(end)) {
+            let tick = ticks(self.division, self.settings.tempo, origin, at)?.unwrap_or(0);
+            if (start..end).contains(&tick) {
+                control(&mut events, tick - start, value);
+            }
+        }
+        Ok(events)
     }
 }
 

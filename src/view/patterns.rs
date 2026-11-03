@@ -200,6 +200,8 @@ mod acceptance_tests;
 #[cfg(test)]
 mod beacon_tests;
 #[cfg(test)]
+mod crop_tests;
+#[cfg(test)]
 mod e2e_tests;
 #[cfg(test)]
 mod feedback_tests;

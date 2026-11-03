@@ -1,6 +1,6 @@
 //! Every key the virtual keyboard sounds, grouped into phrases and appended to its
 //! container's Capture pattern.
-use super::{fill, note, operations};
+use super::{control, fill, note, operations};
 use crate::edit;
 use crate::message;
 use crate::model::{Event, Music, Track};
@@ -15,6 +15,18 @@ pub struct Note {
     pub start: u64,
     pub length: u64,
     pub pitch: u8,
+    pub velocity: u8,
+}
+
+impl Phrase {
+    /// Milliseconds from the phrase start to the end of its last note.
+    pub fn end(&self) -> u64 {
+        self.notes
+            .iter()
+            .map(|n| n.start + n.length)
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 /// Keys played on one container without a silence of the gap between them.
@@ -31,17 +43,19 @@ pub struct Phrase {
 #[derive(Clone)]
 struct Open {
     phrase: Phrase,
-    sounding: [Option<u64>; 128],
+    /// Start and velocity of each sounding pitch.
+    sounding: [Option<(u64, u8)>; 128],
     last: u64,
 }
 
 impl Open {
     fn stop(&mut self, pitch: u8, at: u64) {
-        if let Some(start) = self.sounding[usize::from(pitch)].take() {
+        if let Some((start, velocity)) = self.sounding[usize::from(pitch)].take() {
             self.phrase.notes.push(Note {
                 start: start - self.phrase.start,
                 length: at - start,
                 pitch,
+                velocity,
             });
         }
     }
@@ -67,8 +81,10 @@ pub struct Keys {
 }
 
 impl Keys {
-    /// `at` is wall-clock milliseconds, never earlier than the previous key.
-    pub fn key(&mut self, at: u64, pitch: u8, on: bool, container: Option<u64>, gap: u64) {
+    /// `at` is wall-clock milliseconds, never earlier than the previous key; a `velocity` of 0
+    /// releases the key.
+    pub fn key(&mut self, at: u64, pitch: u8, velocity: u8, container: Option<u64>, gap: u64) {
+        let on = velocity > 0;
         if let Some(o) = &self.open
             && (o.phrase.container != container || (o.silent() && on && at - o.last >= gap))
         {
@@ -91,7 +107,7 @@ impl Keys {
         };
         o.stop(pitch, at);
         if on {
-            o.sounding[usize::from(pitch)] = Some(at);
+            o.sounding[usize::from(pitch)] = Some((at, velocity));
         }
         o.last = at;
     }
@@ -121,9 +137,14 @@ impl Keys {
     }
 }
 
-/// Pattern-relative note events of `phrase` from tick 0 at `tempo` microseconds per quarter,
-/// and the tick after its last note.
-fn events(division: u16, tempo: u32, phrase: &Phrase) -> Result<(Vec<Event>, u64), String> {
+/// Pattern-relative CC1 `controls` and note events of `phrase` from tick 0 at `tempo`
+/// microseconds per quarter, and the tick after its last note.
+fn events(
+    division: u16,
+    tempo: u32,
+    phrase: &Phrase,
+    controls: &[(u64, u8)],
+) -> Result<(Vec<Event>, u64), String> {
     if division == 0 || division & 0x8000 != 0 {
         return Err(message::RECORDING_REQUIRES_PPQN_TIMING.into());
     }
@@ -149,11 +170,17 @@ fn events(division: u16, tempo: u32, phrase: &Phrase) -> Result<(Vec<Event>, u64
         let off = tick(n.start + n.length)?.max(on + 1);
         released[p] = off;
         end = end.max(off);
-        events.push(note(on, true, n.pitch));
-        events.push(note(off, false, n.pitch));
+        events.push(note(on, n.pitch, n.velocity.max(1)));
+        events.push(note(off, n.pitch, 0));
     }
-    // A Note Off and the next Note On of its pitch on one tick keep that order.
-    events.sort_by_key(|e| (e.tick, e.status == 0x90));
+    for &(at, value) in controls {
+        let at = tick(at)?;
+        if at < end {
+            control(&mut events, at, value);
+        }
+    }
+    // CC1 leads its tick; a Note Off and the next Note On of its pitch on one tick keep that order.
+    events.sort_by_key(|e| (e.tick, e.status != 0xb0, e.status == 0x90));
     Ok((events, end))
 }
 
@@ -164,18 +191,23 @@ fn source(music: &mut Music, source: Option<usize>) -> Result<usize, String> {
     }
 }
 
-/// Appends `phrase` to the Capture pattern of the container on `source`, creating the pattern
-/// (and, for a `None` source, the container). The phrase starts at a bar, one empty bar after
-/// the previous one, behind a marker of `stamp`. Returns the Capture pattern.
+/// Appends `phrase` and its CC1 `controls` (milliseconds from the phrase start) to the Capture
+/// pattern of the container on `source`, creating the pattern (and, for a `None` source, the
+/// container). The phrase starts at a bar, one empty bar after the previous one, behind a
+/// marker of `stamp`. Returns the Capture pattern.
 pub fn append(
     music: &mut Music,
     source: Option<usize>,
     tempo: u32,
     phrase: &Phrase,
+    controls: &[(u64, u8)],
     stamp: &str,
 ) -> Result<u64, String> {
-    let (notes, end) = events(music.division, tempo, phrase)?;
+    let (notes, end) = events(music.division, tempo, phrase, controls)?;
     let source = self::source(music, source)?;
+    if notes.iter().any(|e| e.status == 0xb0) {
+        super::cc1_baseline(music, source)?;
+    }
     let measure = u64::from(music.division) * 4;
     let bar = Meter {
         numerator: 4,
@@ -193,7 +225,11 @@ pub fn append(
             meters.push(bar.clone());
             (id, meters, length + measure)
         }
-        None => (operations::create_capture(music, source)?, vec![], 0),
+        None => (
+            operations::create_as(music, source, Kind::Capture)?,
+            vec![],
+            0,
+        ),
     };
     let count = end.div_ceil(measure).max(1);
     if meters.len() as u64 + count > 100_000 {

@@ -3,7 +3,7 @@ use crate::{
     edit,
     score::pattern::{
         body,
-        recording::{Key, Mode},
+        recording::{Key, Mode, Modulation, Velocity},
         Catalog,
     },
 };
@@ -15,6 +15,8 @@ fn settings(range: Range) -> Settings {
     let mut s = Settings::new(Key::from_signature(None), 500_000);
     s.range = range;
     s.start = Start::Key;
+    // CC1 has its own test; these compare notes only.
+    s.modulation = Modulation::Off;
     s
 }
 fn z(column: u8) -> Pad {
@@ -197,6 +199,54 @@ fn free_take_is_measured_from_the_first_press_and_held_notes_block_commit() {
 }
 
 #[test]
+fn takes_hold_each_press_velocity_and_the_cc1_played_over_each_lap() {
+    // 1 bar at 120 BPM = 2 s = 1920 ticks per lap.
+    let mut s = settings(Range::Loop { measures: 1 });
+    s.velocity = Velocity::Range80To127;
+    s.modulation = Modulation::Sweep;
+    let mut r = Recorder::new(480, s).unwrap();
+    r.start(ms(1000));
+    r.press(z(0), ms(1000)).unwrap();
+    assert_eq!(r.velocity(), 80);
+    r.release(z(0), ms(1500)).unwrap();
+    r.press(z(1), ms(2500)).unwrap(); // held into lap 1
+    assert_eq!(r.velocity(), 86);
+    r.release_all(ms(3500)).unwrap();
+    let mut m = edit::tracks::new_song();
+    m.division = 480;
+    let ids = r.commit(&mut m, None).unwrap();
+    let c = Catalog::read(&m).unwrap();
+    for (lap, id) in ids.iter().enumerate() {
+        let p = &c.patterns[id];
+        let b = body::extract(&m.tracks[p.track].events, p.range().unwrap()).unwrap();
+        let notes: Vec<_> = b
+            .iter()
+            .filter(|e| e.status == 0x90)
+            .map(|e| (e.data[0], e.data[1]))
+            .collect();
+        let controls: Vec<_> = b.iter().filter(|e| e.status == 0xb0).collect();
+        // The lap restart of the held note keeps its velocity.
+        let expected = if lap == 0 {
+            vec![(60, 80), (62, 86)]
+        } else {
+            vec![(62, 86)]
+        };
+        assert_eq!(notes, expected);
+        // The session-clock value at the lap start, then one per sweep step, inside the lap.
+        let start = ms(1000 + 2000 * lap as u64);
+        assert_eq!(controls[0].tick, p.tick);
+        assert_eq!(
+            controls[0].data,
+            vec![1, Modulation::Sweep.value(start).unwrap()]
+        );
+        // A step a tick apart from the last still gets its own tick.
+        assert!(controls.len() > 120, "lap {lap}");
+        assert!(controls.windows(2).all(|w| w[0].tick < w[1].tick));
+        assert!(controls.iter().all(|e| e.tick < p.tick + 1920));
+    }
+}
+
+#[test]
 fn bpm_90_puts_one_beat_on_division_ticks() {
     let mut s = settings(Range::Free);
     s.tempo = 60_000_000 / 90;
@@ -210,4 +260,31 @@ fn bpm_90_puts_one_beat_on_division_ticks() {
     let ids = r.commit(&mut m, None).unwrap();
     let notes = bodies(&m, &ids).remove(0).1;
     assert!(notes.contains(&(480, 0x90, 62)), "{notes:?}");
+}
+
+#[test]
+fn a_quantized_take_starts_and_ends_its_notes_on_sixteenths() {
+    let mut s = settings(Range::Free);
+    s.quantize = true;
+    let mut r = Recorder::new(480, s).unwrap();
+    // 10 ms is 10 ticks and 260 ms is 250 ticks at 120 BPM.
+    r.press(z(0), ms(0)).unwrap();
+    r.release(z(0), ms(10)).unwrap();
+    r.press(z(1), ms(140)).unwrap();
+    r.release(z(1), ms(260)).unwrap();
+    let mut m = edit::tracks::new_song();
+    m.division = 480;
+    let ids = r.commit(&mut m, None).unwrap();
+    assert_eq!(
+        bodies(&m, &ids),
+        vec![(
+            1,
+            vec![
+                (0, 0x90, 60),
+                (120, 0x80, 60),
+                (120, 0x90, 62),
+                (240, 0x80, 62)
+            ]
+        )]
+    );
 }

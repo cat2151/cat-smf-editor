@@ -162,6 +162,9 @@ pub fn validate(music: &Music, catalog: &Catalog) -> Result<(), String> {
                 .patterns
                 .get(&cell.pattern)
                 .ok_or(message::MISSING_SCENE_PATTERN)?;
+            if p.kind == crate::score::pattern::Kind::Loop {
+                return Err(message::LOOP_IS_NOT_PLACED.into());
+            }
             cells.push((
                 cell.lane,
                 cell.measure,

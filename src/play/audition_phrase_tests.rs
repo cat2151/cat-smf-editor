@@ -15,7 +15,7 @@ fn phrase(start: Instant) -> Phrase {
     p.play(
         start,
         1000 * MS,
-        vec![(600 * MS, 60, false), (100 * MS, 60, true)],
+        vec![(600 * MS, 60, 0), (100 * MS, 60, 80)],
     );
     p
 }
@@ -25,12 +25,12 @@ fn every_lap_replays_the_phrase_once() {
     let start = Instant::now();
     let p = phrase(start);
     assert!(due(&p, start).is_empty());
-    assert_eq!(due(&p, start + 101 * MS), vec![word(60, true)]);
+    assert_eq!(due(&p, start + 101 * MS), vec![word(60, 80)]);
     assert!(due(&p, start + 500 * MS).is_empty());
-    assert_eq!(due(&p, start + 700 * MS), vec![word(60, false)]);
+    assert_eq!(due(&p, start + 700 * MS), vec![word(60, 0)]);
     assert_eq!(
         due(&p, start + 2200 * MS),
-        vec![word(60, true), word(60, false), word(60, true)]
+        vec![word(60, 80), word(60, 0), word(60, 80)]
     );
 }
 
@@ -41,20 +41,17 @@ fn an_off_at_the_lap_end_precedes_the_next_laps_on() {
     p.play(
         start,
         1000 * MS,
-        vec![(Duration::ZERO, 60, true), (1000 * MS, 60, false)],
+        vec![(Duration::ZERO, 60, 80), (1000 * MS, 60, 0)],
     );
-    assert_eq!(due(&p, start + 500 * MS), vec![word(60, true)]);
-    assert_eq!(
-        due(&p, start + 1500 * MS),
-        vec![word(60, false), word(60, true)]
-    );
+    assert_eq!(due(&p, start + 500 * MS), vec![word(60, 80)]);
+    assert_eq!(due(&p, start + 1500 * MS), vec![word(60, 0), word(60, 80)]);
 }
 
 #[test]
 fn a_late_start_catches_up_without_repeating() {
     let start = Instant::now();
     let p = phrase(start);
-    assert_eq!(due(&p, start + 300 * MS), vec![word(60, true)]);
+    assert_eq!(due(&p, start + 300 * MS), vec![word(60, 80)]);
     assert!(due(&p, start + 300 * MS).is_empty());
 }
 
@@ -79,9 +76,55 @@ fn a_full_block_resumes_where_it_stopped() {
     p.play(
         start,
         1000 * MS,
-        (0..3).map(|i| (i * 10 * MS, 60 + i as u8, true)).collect(),
+        (0..3).map(|i| (i * 10 * MS, 60 + i as u8, 80)).collect(),
     );
     let mut out = [0; 2];
     assert_eq!(p.due(start + 100 * MS, &mut out), 2);
-    assert_eq!(due(&p, start + 100 * MS), vec![word(62, true)]);
+    assert_eq!(due(&p, start + 100 * MS), vec![word(62, 80)]);
+}
+
+#[test]
+fn a_replaced_phrase_starts_at_the_next_lap() {
+    let start = Instant::now();
+    let p = Phrase::default();
+    // Held across the lap end, so the old phrase leaves 60 sounding there.
+    p.play(
+        start,
+        1000 * MS,
+        vec![(100 * MS, 60, 80), (1000 * MS, 60, 0)],
+    );
+    assert_eq!(due(&p, start + 200 * MS), vec![word(60, 80)]);
+    p.replace(vec![(300 * MS, 64, 0), (Duration::ZERO, 64, 90)]);
+    assert!(due(&p, start + 900 * MS).is_empty(), "the lap plays out");
+    assert_eq!(due(&p, start + 1100 * MS), vec![word(60, 0), word(64, 90)]);
+    assert_eq!(due(&p, start + 2100 * MS), vec![word(64, 0), word(64, 90)]);
+}
+
+#[test]
+fn a_replacement_waits_for_room_in_the_block() {
+    let start = Instant::now();
+    let p = Phrase::default();
+    p.play(
+        start,
+        1000 * MS,
+        vec![(Duration::ZERO, 60, 80), (Duration::ZERO, 62, 80)],
+    );
+    assert_eq!(due(&p, start + 100 * MS).len(), 2);
+    p.replace(vec![(Duration::ZERO, 64, 90)]);
+    let mut out = [0; 1];
+    assert_eq!(p.due(start + 1100 * MS, &mut out), 0);
+    assert_eq!(
+        due(&p, start + 1100 * MS),
+        vec![word(60, 0), word(62, 0), word(64, 90)]
+    );
+}
+
+#[test]
+fn a_replacement_from_a_later_lap_lets_the_laps_before_it_play() {
+    let start = Instant::now();
+    let p = Phrase::default();
+    p.play(start, 1000 * MS, vec![(Duration::ZERO, 60, 80)]);
+    p.replace_from(2000 * MS, vec![(Duration::ZERO, 64, 90)]);
+    assert_eq!(due(&p, start + 1100 * MS), vec![word(60, 80), word(60, 80)]);
+    assert_eq!(due(&p, start + 2100 * MS), vec![word(60, 0), word(64, 90)]);
 }

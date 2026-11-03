@@ -18,9 +18,10 @@ pub(super) fn recording(ui: &mut egui::Ui) {
                         ("Space", "録音開始"),
                         ("↑ ↓", "Octave"),
                         ("Ctrl+E", "Phrase loop"),
+                        ("Ctrl+Enter", "to song"),
                     ],
                 ),
-                (SOUND, &[("Ctrl+T", "音色選択")]),
+                (SOUND, &[("← →", "Container"), ("Ctrl+T", "音色選択")]),
                 (
                     EDIT,
                     &[

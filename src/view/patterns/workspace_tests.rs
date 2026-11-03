@@ -16,6 +16,7 @@ mod input;
 mod keyboard;
 mod minimap;
 mod recording;
+mod resume;
 mod scrolling;
 mod single_cursor;
 mod timeline;
@@ -44,6 +45,7 @@ pub(super) fn context() -> egui::Context {
         let mut input = egui::RawInput {
             viewport_id: id,
             events,
+            focused: focused(ctx, id),
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
                 viewport

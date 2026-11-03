@@ -3,10 +3,18 @@ use super::*;
 use crate::play::audition::click::Click;
 use cat_smf_editor::score::pattern::recording::{Layout, Mode, Pad, Range, Start};
 
-/// Opens the instrument and starts playing; errors keep the session preparing.
+/// Every container as the audio thread plays it.
+pub(super) fn sounds(s: &Session) -> Vec<(usize, Patch, live::Live)> {
+    s.sounds
+        .iter()
+        .map(|x| (x.track, x.patch.clone(), x.live.clone()))
+        .collect()
+}
+
+/// Opens the instruments of every container once, so that another container plays without
+/// cutting the phrases, and starts playing the selected one; errors keep the session preparing.
 pub(super) fn start(a: &mut App, s: &mut Session) -> bool {
-    let sound = &s.sounds[s.selected];
-    s.settings.drums = sound.patch.drums.is_some();
+    s.settings.drums = s.sound().patch.drums.is_some();
     let recorder = match Recorder::new(s.division, s.settings) {
         Ok(r) => r,
         Err(error) => {
@@ -14,44 +22,45 @@ pub(super) fn start(a: &mut App, s: &mut Session) -> bool {
             return false;
         }
     };
-    (s.queue, s.click, s.phrase) = match a.audition.start_live(sound.track, &sound.patch) {
-        Some(live) => (Some(live.queue), Some(live.click), Some(live.phrase)),
-        None => (None, None, None),
-    };
-    s.error = s.queue.is_none().then(|| {
+    if s.click.is_none() {
+        let click = std::sync::Arc::new(Click::new());
+        s.click = a.audition.start_live(&sounds(s), &click).then_some(click);
+    }
+    s.error = s.click.is_none().then(|| {
         a.audition
             .error()
             .unwrap_or(message::CANNOT_OPEN_RECORDING_INSTRUMENT)
             .to_owned()
     });
-    if s.queue.is_some() {
+    if s.click.is_some() {
         s.recorder = Some(recorder);
     }
     s.recorder.is_some()
 }
 
-/// Closes the instrument before another container, keeping changes made while playing.
-pub(super) fn stop(a: &mut App, s: &mut Session) {
+/// Leaves the playing container with its keys released, keeping changes made while playing;
+/// its phrase goes on.
+pub(super) fn leave(s: &mut Session) {
+    let at = s.clock.elapsed();
+    if let Some(r) = s.recorder.as_mut() {
+        let released = r.release_all(at);
+        send(s, released, 0, at);
+    }
+    s.mouse = [None; 2];
     if let Some(r) = s.recorder.take() {
         s.settings = *r.settings();
     }
-    super::phrase::restart(s);
-    a.audition.stop_live();
-    s.queue = None;
-    s.click = None;
-    s.phrase = None;
 }
 
-fn send(s: &mut Session, result: Result<Vec<u8>, String>, on: bool, at: std::time::Duration) {
+/// Pitches that started at `velocity`, or stopped for 0.
+fn send(s: &mut Session, result: Result<Vec<u8>, String>, velocity: u8, at: std::time::Duration) {
     match result {
         Ok(pitches) => {
             // Before the keys, so a replaced phrase's Note Off cannot cut a key of its pitch.
-            super::phrase::heard(s, &pitches, on, at);
-            super::capture::record(s, &pitches, on, at);
-            if let Some(q) = &s.queue {
-                for &pitch in &pitches {
-                    live::push(q, pitch, on);
-                }
+            super::phrase::heard(s, &pitches, velocity, at);
+            super::capture::record(s, &pitches, velocity, at);
+            if let Some(q) = s.queue() {
+                live::push(q, &pitches, velocity);
             }
         }
         Err(error) => s.error = Some(error),
@@ -95,6 +104,12 @@ pub(super) fn button(a: &mut App, s: &mut Session, button: window::Button) -> bo
         }
         window::Button::Capture => {
             super::capture::toggle(a, s);
+            false
+        }
+        window::Button::ToSong => {
+            if let Err(error) = super::phrase::to_song(a, s) {
+                s.error = Some(error);
+            }
             false
         }
         _ => false,
@@ -141,12 +156,13 @@ fn sound(s: &mut Session, pad: Pad, pressed: bool, at: std::time::Duration) {
     {
         arm(r, s.click.as_deref(), at);
     }
-    let result = if pressed {
-        r.press(pad, at)
+    let (result, velocity) = if pressed {
+        let result = r.press(pad, at);
+        (result, r.velocity())
     } else {
-        r.release(pad, at)
+        (r.release(pad, at), 0)
     };
-    send(s, result, pressed, at);
+    send(s, result, velocity, at);
 }
 
 /// Moves the mouse of one window onto `target`, releasing the pad it left.
@@ -171,7 +187,7 @@ pub(super) fn close(a: &mut App, s: &mut Session, at: std::time::Duration) -> bo
     };
     let released = r.release_all(at);
     let recorded = r.recorded();
-    send(s, released, false, at);
+    send(s, released, 0, at);
     // Before the take, so undoing the take keeps the keys.
     if let Err(error) = super::capture::flush(a, s, true) {
         a.load_error = Some(error);
@@ -198,6 +214,7 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
         Key::E if ctrl => super::phrase::toggle(a, s),
         Key::T if ctrl => s.clicked = Some(window::Button::Browse),
         Key::J if ctrl => super::capture::toggle(a, s),
+        Key::Enter if ctrl => s.clicked = Some(window::Button::ToSong),
         _ => return setup::shortcut(a, s, key, modifiers),
     }
     true
@@ -205,8 +222,11 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
 
 /// `true` closes the window.
 pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool {
+    if let Some(q) = s.queue() {
+        q.lock().unwrap().modulate(s.clock, s.settings().modulation);
+    }
     follow_click(s);
-    super::phrase::follow(s);
+    super::phrase::follow(a, s);
     super::phrase::follow_patch(a, s);
     let at = s.clock.elapsed();
     let focused = ctx.input(|i| {
@@ -258,6 +278,10 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
                     if let Some(r) = s.recorder.as_mut() {
                         octave(r, key == Key::ArrowUp);
                     }
+                }
+                Key::ArrowLeft | Key::ArrowRight if plain => {
+                    let step = if key == Key::ArrowLeft { -1 } else { 1 };
+                    setup::change(a, s, setup::Item::Sound, step, false);
                 }
                 _ if window_key(a, s, key, modifiers) => continue,
                 _ => {}

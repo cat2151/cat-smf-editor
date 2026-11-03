@@ -91,7 +91,15 @@ pub(super) fn pointed(ui: &egui::Ui, keys: &[(Pad, egui::Response)]) -> Option<P
 
 fn pad(ui: &mut egui::Ui, s: &Session, pad: Pad, label: &str) -> egui::Response {
     let (caption, tonic) = caption(s.settings(), pad);
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(PAD, PAD), egui::Sense::drag());
+    // A fixed id, so a held press survives the LED appearing or going above the pads.
+    let rect = ui
+        .allocate_exact_size(egui::vec2(PAD, PAD), egui::Sense::hover())
+        .0;
+    let id = egui::Id::new(("virtual-midi-keyboard-pad", pad));
+    let response = ui.interact(rect, id, egui::Sense::drag());
+    #[cfg(test)]
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(egui::Id::new(("pad-rect", pad)), rect));
     let fill = if s.recorder.as_ref().is_some_and(|r| r.held(pad)) {
         RECORDING
     } else if tonic {
@@ -170,6 +178,8 @@ pub(super) enum Button {
     Browse,
     /// The Capture window's menu item.
     Capture,
+    /// Takes the repeating phrase to the Song.
+    ToSong,
 }
 
 /// Rec lights while counting in or recording; Stop is dim until then.
@@ -260,14 +270,30 @@ fn container(ui: &mut egui::Ui, s: &mut Session) {
     }
 }
 
+/// Provisional: the last press's velocity and the CC1 sent now.
+fn expression(ui: &mut egui::Ui, s: &Session) {
+    let now = s.clock.elapsed();
+    let velocity = super::phrase::replayed(s, now).or_else(|| {
+        s.recorder
+            .as_ref()
+            .map(Recorder::velocity)
+            .filter(|&v| v > 0)
+    });
+    let cc1 = s.settings().modulation.value(now);
+    let shown = |v: Option<u8>| v.map_or("-".into(), |v| v.to_string());
+    ui.monospace(format!("vel {:>3}  mod {:>3}", shown(velocity), shown(cc1)));
+}
+
 fn playing(ui: &mut egui::Ui, s: &mut Session) {
     let row = ui
         .horizontal(|ui| {
             transport(ui, s);
             super::panel::switch(ui, s);
+            super::panel::to_song(ui, s);
             container(ui, s);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                menu(ui, s)
+                menu(ui, s);
+                expression(ui, s);
             });
         })
         .response

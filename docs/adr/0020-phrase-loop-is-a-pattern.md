@@ -1,0 +1,35 @@
+# ADR 0020: Phrase loopの中身はcontainerのLoop patternとして文書に置く
+
+- 状態: 採用
+- 決定者: user（loopを文書のpatternにする、新しいloopは同じpatternを上書きする、上書きはundo stepにする、event listでの編集は次の周回の頭から鳴りに反映する、1小節の外のnoteは鳴らさない、loopが始まったら背景の画面をLoop patternへ切り替える、Song画面のpattern欄に出すがSongには置けない、pattern欄ではcontainerの先頭に並べる、起動時は鍵を押すまで鳴らさない、別のcontainerへ切り替えても他のLoopを鳴らし続ける、後から始めるLoopを鳴っているLoopの小節線に揃える、Ctrl+Eは選択中のcontainerのLoopだけを止める、to songは鳴っているLoopを全部Songの末尾へ別々のレーンで置き、Loopを止めてその小節をSongの全trackでA-B repeatする、同じ中身の通常patternがあれば複製せずにそれを置く、ModeとbaseをContainerごとに覚える、←/→でcontainerを切り替える、drumのcontainerではnote numberごとに上書きする、drumのcontainerだけ録っている間もLoopを鳴らし続ける）
+- 関連: [0018: Pattern／Scene／Song](0018-pattern-scene-references.md)
+
+## 鳴っているものを文書の外に持たない
+
+Phrase loopの中身をkeyboardのメモリだけに持つ方式は採らない。event list・五線譜・Song画面は文書を映すので、文書の外で鳴っているものはどの画面にも映らず、keyboardを開いた時点の文書を映し続けることになるためである。keyboard窓に専用の小さなpiano rollを描く案も採らない。表示を既存の画面と揃えるために描画経路が1本増え、背景の画面に何を映すかの曖昧さも残るためである。
+
+loopが1小節分そろうと、その小節をcontainerの`Kind::Loop`のpatternへ書き、audio threadはそのpatternから作った音を繰り返す。鳴りの正はpatternの1本で、文書が変わるたびにpatternから作り直した音を、次の周回の頭から差し替える。周回の途中で差し替えないのは、鳴っている音が途中で切れ、Note Offの後始末が要るためである。
+
+## Loopはcontainerに1つで、上書きする
+
+新しいloopは同じLoop patternを上書きし、数を増やさない（user）。過去に弾いたものを残す役はCaptureが持つためである。上書きはundo stepにする（user）。Captureに残るのは弾いた音だけで、event listで直した内容は残らないので、上書きで失われた編集をundoで戻せるようにするためである。
+
+## LoopはSong・sceneに置けない
+
+LoopをSongやsceneに置けると、keyboardで鍵を1回押しただけで曲の中身が書き換わる。そのため配置の検証で拒否し、Songへはto songで通常のpatternに複製してから置く（user）。Loopの複製はcontainerに1つという条件を保つため、常に`Kind::Normal`になる。
+
+to songはSongが空でなくても、Songの末尾の次の小節へ置く（user）。Songが空のときだけ置く方式は採らない。既存の曲で押すと、配置されないpatternだけが押した回数分増え、音も画面も変わらないためである。押すとLoopを止め、置いた小節をSongの全trackでA-B repeatする（user）。採用した結果を、曲の中で他のtrackと合わせて聴けるようにするためである。同じtrackに同じ拍子と中身の通常patternがあれば、複製せずにそれを置く（user）。pattern欄には出し、色の帯で見分ける。選択と編集は欄から行える。
+
+## containerごとのLoopを重ねて鳴らす
+
+kickやbassを、鳴っているchordのLoopに少ない操作で重ねたい、というuserの要求から、containerを切り替えても他のcontainerのLoopを鳴らし続ける（user）。段ごとにcontainerを割り当てる配列（z=kick、a=bass、q=chord）は、1つの楽器が使える段が1つに減るため先に作らない。重ねて鳴らす仕組みはこの配列でも同じものが要るので、切り替えの手間が問題になったら、その上に配列として足す。
+
+keyboardを開いた時点で、全containerの音源をaudio threadへ一度に渡す。containerを切り替えても、鍵の送り先が変わるだけである。切り替えのたびに音源を渡し直す方式は採らない。渡し直すと発音中の音にNote Offが送られ、伸ばしている和音が次の周回まで途切れるためである。
+
+後から始めるLoopは、同じtempoで鳴っているLoopの、鍵の直前の小節線から1小節を取り込む。小節線より16分音符以内早い鍵は次の小節線から取る（user）。鍵を押した瞬間を起点にすると、周回が先のLoopとずれるためである。
+
+## drumのcontainerはnote numberごとに上書きする
+
+drumのcontainerでは、新しいloopが置き換えるのは、そのloopでNote Onのあるnote numberだけで、他のnote numberのnoteはLoop patternに残す（user）。kick・snare・hi-hatを1つずつ重ねるためである。drumではnote numberが楽器を表すので、置き換えの単位として意味を持つ。旋律で同じことをすると、弾き直した和音に前の和音の音が混ざるので、旋律のcontainerは全体を上書きする。1つの楽器だけを消す操作は作らない。弾かないことは入力にならず、undoとdrum画面・event listで消せるためである。
+
+重ねる音に合わせて叩けるよう、drumのcontainerでは録っている間も、そのcontainerのLoopを止めない（user）。取り込む小節は鳴っているLoopの小節線に揃え、録った分は取り込みの終わりの周回から鳴らす。旋律のcontainerでは、鍵でLoopを止める。

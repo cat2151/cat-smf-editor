@@ -192,7 +192,9 @@ fn session_json_is_renamed_and_existing_status_takes_priority() {
         pattern_windows: Default::default(),
         keyboard_windows: Default::default(),
         phrase_loop: false,
+        keyboard_focused: false,
         keyboard_settings: None,
+        keyboard_voicings: Default::default(),
         voicevox_engine: None,
         mascot_enabled: false,
     })

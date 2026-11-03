@@ -57,8 +57,7 @@ fn registered_stopped_click_policies_are_explicit_and_do_not_edit() {
 fn every_registered_ui_drag_during_playback_preserves_position_scope_and_repeat() {
     for screen in Screen::ALL {
         let mut f = Fixture::new(screen);
-        let mode = f.expected_mode();
-        crate::play::playback::start(&mut f.app, mode);
+        let mode = f.start_playback();
         transport::advance(&mut f.app);
         assert!(
             f.app.playback.active.is_some(),
@@ -97,8 +96,7 @@ fn every_registered_ui_drag_during_playback_preserves_position_scope_and_repeat(
 fn probe_follow() {
     for screen in Screen::ALL {
         let mut f = Fixture::new(screen);
-        let mode = f.expected_mode();
-        crate::play::playback::start(&mut f.app, mode);
+        f.start_playback();
         transport::advance(&mut f.app);
         f.app.audition.set_test_seconds(1.0);
         f.app.playback.follow = false;

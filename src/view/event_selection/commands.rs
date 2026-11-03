@@ -71,7 +71,21 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 egui::Key::D,
                 actions::Action::DeleteEvents,
             ),
+            (
+                "selection-quantize",
+                "16分quantize",
+                egui::Key::Q,
+                actions::Action::Quantize,
+            ),
         ];
+        if crate::view::patterns::mode::editing(a, a.track).is_some() {
+            choices.push((
+                "selection-crop",
+                "Crop",
+                egui::Key::C,
+                actions::Action::Crop,
+            ));
+        }
         if whole(a) {
             choices.extend([
                 (

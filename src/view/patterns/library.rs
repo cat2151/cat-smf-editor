@@ -105,18 +105,32 @@ pub(super) fn add_container_with(
     let track = source(a, &mut music, drums.as_ref())?;
     commit(a, music, track)
 }
-/// Same-kind containers get numbered names so the chooser can tell them apart.
+/// `base`, numbered when another track than `except` has it, so the chooser can tell
+/// containers apart.
+pub(crate) fn numbered(
+    music: &cat_smf_editor::model::Music,
+    base: &str,
+    except: Option<usize>,
+) -> String {
+    let taken = |n: &str| {
+        music
+            .tracks
+            .iter()
+            .enumerate()
+            .any(|(i, t)| Some(i) != except && t.name().as_deref() == Some(n))
+    };
+    std::iter::once(base.to_owned())
+        .chain((2..).map(|i| format!("{base} {i}")))
+        .find(|n| !taken(n))
+        .unwrap()
+}
 fn source(
     a: &mut App,
     music: &mut cat_smf_editor::model::Music,
     drums: Option<&cat_smf_editor::score::instrument::Patch>,
 ) -> Result<usize, String> {
     let base = if drums.is_some() { "Drums" } else { "Init Saw" };
-    let taken = |n: &str| music.tracks.iter().any(|t| t.name().as_deref() == Some(n));
-    let name = std::iter::once(base.to_owned())
-        .chain((2..).map(|i| format!("{base} {i}")))
-        .find(|n| !taken(n))
-        .unwrap();
+    let name = numbered(music, base, None);
     let track = operations::create_source(music)?;
     music.tracks[track]
         .events

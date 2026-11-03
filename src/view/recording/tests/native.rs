@@ -33,7 +33,7 @@ fn recording_keyboard_reaches_the_real_audio_callback_and_creates_a_pattern() {
             std::thread::sleep(Duration::from_millis(10));
         }
         let s = a.patterns.recording.session.as_ref().unwrap();
-        assert!(s.queue.as_ref().unwrap().lock().unwrap().is_empty());
+        assert!(s.queue().unwrap().lock().unwrap().words.is_empty());
     }
     assert!(peak > 0.0001, "audio callback stayed silent: {peak}");
     frame(

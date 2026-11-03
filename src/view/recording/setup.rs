@@ -1,6 +1,8 @@
 //! Session settings: one value per item, changed from the settings window or by shortcut.
 use super::*;
-use cat_smf_editor::score::pattern::recording::{Layout, Mode, Range, Scale, Start};
+use cat_smf_editor::score::pattern::recording::{
+    Layout, Mode, Modulation, Range, Scale, Start, Velocity,
+};
 
 const BPM: std::ops::RangeInclusive<i32> = 20..=300;
 const MEASURES: std::ops::RangeInclusive<i32> = 1..=64;
@@ -18,8 +20,11 @@ pub(super) enum Item {
     Scale,
     NoteBase,
     ChordBase,
+    Velocity,
+    Modulation,
+    Quantize,
 }
-pub(super) const ITEMS: [Item; 11] = [
+pub(super) const ITEMS: [Item; 14] = [
     Item::Sound,
     Item::Range,
     Item::Start,
@@ -31,10 +36,13 @@ pub(super) const ITEMS: [Item; 11] = [
     Item::Scale,
     Item::NoteBase,
     Item::ChordBase,
+    Item::Velocity,
+    Item::Modulation,
+    Item::Quantize,
 ];
 
 /// Ctrl+key steps forward and Ctrl+Shift+key back; plain keys are pads.
-const SHORTCUTS: [(Item, Key); 10] = [
+const SHORTCUTS: [(Item, Key); 13] = [
     (Item::Sound, Key::P),
     (Item::Range, Key::R),
     (Item::Start, Key::S),
@@ -45,6 +53,9 @@ const SHORTCUTS: [(Item, Key); 10] = [
     (Item::Scale, Key::M),
     (Item::NoteBase, Key::N),
     (Item::ChordBase, Key::H),
+    (Item::Velocity, Key::V),
+    (Item::Modulation, Key::W),
+    (Item::Quantize, Key::Q),
 ];
 
 impl Item {
@@ -61,6 +72,9 @@ impl Item {
             Self::Scale => "Scale",
             Self::NoteBase => "Note base",
             Self::ChordBase => "Chord base",
+            Self::Velocity => "Velocity",
+            Self::Modulation => "Modulation",
+            Self::Quantize => "Quantize",
         }
     }
     /// Two-valued items toggle; the others also step back with Shift.
@@ -76,7 +90,9 @@ impl Item {
             | Self::Bpm
             | Self::Tonic
             | Self::NoteBase
-            | Self::ChordBase => {
+            | Self::ChordBase
+            | Self::Velocity
+            | Self::Modulation => {
                 format!("Ctrl+{name} / Ctrl+Shift+{name}")
             }
             _ => format!("Ctrl+{name}"),
@@ -102,11 +118,12 @@ pub(super) fn enabled(s: &Session, item: Item) -> bool {
     match item {
         Item::Sound => s.sounds.len() > 1 && !fixed,
         Item::Measures => matches!(t.range, Range::Loop { .. }) && !fixed,
-        Item::Range | Item::Start | Item::Bpm => !fixed,
+        // A take writes CC1 from one choice.
+        Item::Range | Item::Start | Item::Bpm | Item::Modulation => !fixed,
         Item::Mode | Item::Tonic | Item::Scale => pitched,
         Item::ChordBase => pitched,
         Item::NoteBase => !t.drums,
-        Item::Layout => true,
+        Item::Layout | Item::Velocity | Item::Quantize => true,
     }
 }
 
@@ -151,7 +168,16 @@ pub(super) fn value(s: &Session, item: Item) -> String {
         },
         Item::NoteBase => cat_smf_editor::score::note_view::note_name(t.note_base),
         Item::ChordBase => cat_smf_editor::score::note_view::note_name(t.chord_base),
+        Item::Velocity => t.velocity.label().into(),
+        Item::Modulation => t.modulation.label(),
+        Item::Quantize => if t.quantize { "1/16" } else { "Off" }.into(),
     }
+}
+
+/// The choice `step` places from `current` in `all`, wrapping around.
+fn cycle<T: Copy + PartialEq>(all: &[T], current: T, step: i32) -> T {
+    let i = all.iter().position(|&v| v == current).unwrap_or(0) as i32;
+    all[(i + step).rem_euclid(all.len() as i32) as usize]
 }
 
 /// The nearest pitch from `base` by `step` octaves (`big`) or scale notes.
@@ -198,6 +224,14 @@ pub(super) fn change(a: &mut App, s: &mut Session, item: Item, step: i32, big: b
                 Range::Loop { .. } => Range::Free,
             }
         }
+        Item::Modulation => {
+            // The keys captured so far keep the CC1 they were played with.
+            if let Err(error) = super::capture::flush(a, s, true) {
+                s.error = Some(error);
+            }
+            let t = s.settings_mut();
+            t.modulation = cycle(&Modulation::ALL, t.modulation, step);
+        }
         _ => edit(s.settings_mut(), item, step, big),
     }
     if !enabled(s, s.item) {
@@ -205,22 +239,41 @@ pub(super) fn change(a: &mut App, s: &mut Session, item: Item, step: i32, big: b
     }
 }
 
-/// Plays another container; one that cannot play opens the settings beside the error.
+/// Plays another container while the phrases go on; one that cannot play opens the settings
+/// beside the error.
 pub(super) fn select(a: &mut App, s: &mut Session, index: usize) {
-    play::stop(a, s);
+    play::leave(s);
+    keep_voicing(a, s);
     s.selected = index;
+    if let Some(v) = s
+        .sound()
+        .container
+        .and_then(|id| a.config.keyboard_voicings.get(&id))
+    {
+        s.settings.set_voicing(*v);
+    }
     if !play::start(a, s) {
         s.settings_open = true;
     }
     if !enabled(s, s.item) {
         s.item = first(s);
     }
+    super::phrase::reveal(a, s);
+}
+
+/// Remembers what the pads of the playing container play, for its next selection.
+pub(super) fn keep_voicing(a: &mut App, s: &Session) {
+    if let Some(id) = s.sound().container {
+        a.config.select_keyboard_voicing(id, s.settings().voicing());
+    }
 }
 
 fn edit(t: &mut Settings, item: Item, step: i32, big: bool) {
     let key = t.key();
     match item {
-        Item::Sound | Item::Measures | Item::Range => unreachable!(),
+        Item::Sound | Item::Measures | Item::Range | Item::Modulation => unreachable!(),
+        Item::Velocity => t.velocity = cycle(&Velocity::ALL, t.velocity, step),
+        Item::Quantize => t.quantize = !t.quantize,
         Item::Start => {
             t.start = match t.start {
                 Start::Button => Start::Key,

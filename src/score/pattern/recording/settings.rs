@@ -1,4 +1,5 @@
 //! What a recording session plays and how long a take lasts; kept in the app status, never in SMF.
+use super::{Modulation, Velocity};
 use crate::score::key_signature::KeySignature;
 use serde::{Deserialize, Serialize};
 
@@ -133,9 +134,32 @@ pub struct Settings {
     pub chord_base: u8,
     /// Pads play the drum lanes; follows the container, never chosen.
     pub drums: bool,
+    pub velocity: Velocity,
+    pub modulation: Modulation,
+    /// Takes and phrase loops start and end their notes on sixteenths.
+    #[serde(default)]
+    pub quantize: bool,
+}
+
+/// What the pads of one container play, kept per container.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Voicing {
+    pub mode: Mode,
+    pub note_base: u8,
+    pub chord_base: u8,
 }
 
 impl Settings {
+    pub fn voicing(&self) -> Voicing {
+        Voicing {
+            mode: self.mode,
+            note_base: self.note_base,
+            chord_base: self.chord_base,
+        }
+    }
+    pub fn set_voicing(&mut self, v: Voicing) {
+        (self.mode, self.note_base, self.chord_base) = (v.mode, v.note_base, v.chord_base);
+    }
     /// Bases start on the tonic of octave 4 (notes) and octave 3 (chords).
     pub fn new(key: Key, tempo: u32) -> Self {
         let tonic = key.tonic % 12;
@@ -149,6 +173,9 @@ impl Settings {
             drums: false,
             note_base: 60 + tonic,
             chord_base: 48 + tonic,
+            velocity: Velocity::Range80To127,
+            modulation: Modulation::Sweep,
+            quantize: false,
         }
     }
     pub fn key(&self) -> Key {

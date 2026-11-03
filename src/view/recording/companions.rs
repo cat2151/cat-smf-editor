@@ -43,7 +43,7 @@ pub(crate) fn piano_viewport() -> egui::ViewportId {
     egui::ViewportId::from_hash_of("virtual-midi-keyboard-piano")
 }
 
-pub(super) const SETTINGS_SIZE: egui::Vec2 = egui::vec2(420.0, 330.0);
+pub(super) const SETTINGS_SIZE: egui::Vec2 = egui::vec2(420.0, 380.0);
 
 /// Beside the keyboard and the other companion, overlapping the pattern windows least.
 pub(super) fn place(
@@ -211,4 +211,33 @@ fn settings(ui: &mut egui::Ui, s: &mut Session) {
             ui.end_row();
         }
     });
+}
+
+/// Gives each open keyboard window to the editor once its native window exists.
+pub(super) fn adopt(ctx: &egui::Context, s: &mut Session) {
+    let open = [
+        (window::TITLE, true),
+        (companions::SETTINGS_TITLE, s.settings_open),
+        (companions::PIANO_TITLE, s.piano_open),
+        (capture::TITLE, s.capture.is_some()),
+    ];
+    // A closed companion gets a new native window when it reopens.
+    s.owned
+        .retain(|t| open.iter().any(|(title, shown)| title == t && *shown));
+    // Reopened at startup, the keyboard opens before `origin` is the foreground window.
+    #[cfg(windows)]
+    if s.owner.is_none() && ctx.input_for(s.origin, |i| i.focused) {
+        s.owner = super::super::analysis::owner::editor();
+    }
+    #[cfg(windows)]
+    if let Some(owner) = s.owner {
+        for (title, shown) in open {
+            if shown
+                && !s.owned.contains(&title)
+                && super::super::analysis::owner::adopt_by(owner, title)
+            {
+                s.owned.push(title);
+            }
+        }
+    }
 }
