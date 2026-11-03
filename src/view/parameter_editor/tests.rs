@@ -183,6 +183,13 @@ fn layer_palette_contains_targeted_automation_and_picker_owns_text() {
     assert_eq!(commands::owner(&a, &ctx), Screen::Timeline);
 }
 
+/// `a` の今の曲に向けた `picker()` を開く。
+pub(crate) fn open_picker(a: &mut App) {
+    let mut p = picker();
+    p.song = a.song_id;
+    p.generation = a.generation;
+    a.parameter_editor.picker = Some(p);
+}
 pub(super) fn picker() -> Picker {
     Picker {
         history: Default::default(),

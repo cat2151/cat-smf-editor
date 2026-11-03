@@ -6,7 +6,7 @@ use std::ops::Range;
 mod actions;
 pub(crate) mod commands;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 #[derive(Default)]
 pub struct State {

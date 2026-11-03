@@ -1,5 +1,12 @@
 use super::*;
 use crate::view::palette::tests::{frame, open as palette, press, query};
+/// 選んだ track の数値欄を入力中にする。
+pub(crate) fn begin_input(a: &mut App) {
+    open(a);
+    a.layer_editor.field = 1;
+    a.layer_editor
+        .begin(&a.loaded.as_ref().unwrap().patches[a.track]);
+}
 #[test]
 fn numeric_layer_buffer_survives_and_context_confirm_cancel_preserve_target() {
     let mut a = crate::view::tests::app(cat_smf_editor::model::Music {

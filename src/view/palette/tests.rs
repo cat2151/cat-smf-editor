@@ -5,6 +5,7 @@ mod feedback;
 mod migemo;
 mod navigation;
 mod ranking;
+mod windows;
 pub(crate) fn app() -> App {
     crate::view::tests::app(Music {
         format: 1,

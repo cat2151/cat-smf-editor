@@ -85,6 +85,10 @@ pub fn event(tick: u64, r: &Record) -> Event {
         data: [prefix, json.unwrap().as_slice()].concat(),
     }
 }
+/// The Song window exists exactly while this holds.
+pub fn has_containers(music: &Music) -> bool {
+    (0..music.tracks.len()).any(|track| is_source(music, track))
+}
 pub fn is_source(music: &Music, track: usize) -> bool {
     music.tracks.get(track).is_some_and(|t| {
         t.events

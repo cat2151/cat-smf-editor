@@ -9,7 +9,7 @@ pub(crate) mod keyboard;
 #[cfg(test)]
 mod keyboard_tests;
 #[cfg(test)]
-mod palette_tests;
+pub(crate) mod palette_tests;
 #[cfg(test)]
 mod shortcut_tests;
 #[cfg(test)]

@@ -18,7 +18,7 @@ fn focused_viewport_wins_and_help_focus_keeps_last_live_target() {
     let _ = c.run(Default::default(), |c| observe(&mut a, c));
     assert_eq!(a.help.target, Target::Piano);
     let song = crate::view::patterns::workspace::Pane::Song.viewport();
-    a.patterns.workspace_open = true;
+    crate::view::patterns::edit_tests::add_container(&mut a);
     let _ = c.run(viewport_input(song), |c| {
         observe(&mut a, c);
         assert_eq!(owner(&a, c), Screen::Song);
@@ -29,7 +29,11 @@ fn focused_viewport_wins_and_help_focus_keeps_last_live_target() {
         assert_eq!(owner(&a, c), Screen::Help);
     });
     assert_eq!(a.help.target, Target::Song);
-    a.patterns.workspace_open = false;
+    a.edit_tracks(|m| {
+        m.tracks.truncate(1);
+        Ok(())
+    })
+    .unwrap();
     let _ = c.run(
         egui::RawInput {
             focused: false,

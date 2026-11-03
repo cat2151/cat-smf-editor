@@ -252,10 +252,38 @@ fn hamburger_opens_the_same_help_settings_as_comma() {
     }
     assert!(app.comma_menu.open);
     let output = render(&mut app, vec![]);
-    assert!(output
-        .shapes
-        .iter()
-        .any(|s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text() == "help")));
+    assert!(output.shapes.iter().any(
+        |s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text() == "Settings")
+    ));
     press(&mut app, &ctx, egui::Key::Escape);
     assert!(!app.comma_menu.open);
+}
+
+#[test]
+fn settings_is_not_hidden_under_the_keyboard_windows() {
+    use crate::view::patterns::{workspace::Pane, workspace_tests as harness};
+    use egui::{Key, Modifiers};
+    let (mut a, c, _, _, _) = harness::verification_song();
+    harness::key(&mut a, &c, Pane::Song.viewport(), Key::R, Modifiers::SHIFT);
+    let keyboard = crate::view::recording::window::viewport();
+    let visible = |c: &egui::Context| {
+        c.data(|d| d.get_temp::<bool>(egui::Id::new(("workspace-visible", keyboard))))
+    };
+    assert_eq!(visible(&c), Some(true));
+    harness::command(&mut a, &c, keyboard, "Tempo curve always maximized");
+    harness::frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert!(a.comma_menu.open);
+    // egui reports the modal layer one frame later.
+    harness::frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert_eq!(visible(&c), Some(false));
+    harness::key(
+        &mut a,
+        &c,
+        egui::ViewportId::ROOT,
+        Key::Escape,
+        Modifiers::NONE,
+    );
+    harness::frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert!(!a.comma_menu.open);
+    assert_eq!(visible(&c), Some(true));
 }

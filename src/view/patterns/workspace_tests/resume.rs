@@ -76,3 +76,31 @@ fn the_app_closes_remembering_whether_the_keyboard_had_the_focus_last() {
     assert!(close_for_exit(&mut a));
     assert!(!a.config.keyboard_focused);
 }
+
+#[test]
+fn the_keyboard_stays_closed_while_the_exit_confirmation_waits() {
+    let (mut a, c) = start(false);
+    a.config.phrase_loop = false;
+    resume(&mut a);
+    focus(&c, Pane::Song.viewport());
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
+    crate::play::mixer::volume::set(&mut a, 0, 0.5).unwrap();
+    let mut close = egui::RawInput::default();
+    close
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .events
+        .push(egui::ViewportEvent::Close);
+    let _ = c.run(close, |ctx| {
+        crate::view::show(&mut a, ctx);
+        a.close(ctx);
+    });
+    assert!(a.config.navigation.departure.is_some());
+    // A reopened keyboard would take the focus and the keys that answer the confirmation.
+    for _ in 0..3 {
+        frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    }
+    assert!(!a.patterns.recording.is_open());
+}

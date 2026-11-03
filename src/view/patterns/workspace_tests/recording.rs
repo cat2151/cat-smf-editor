@@ -49,7 +49,7 @@ fn song_and_scene_record_into_new_unplaced_patterns_and_keep_the_origin_window()
         pad(&mut a, &c, keyboard, Key::Z);
         pad(&mut a, &c, keyboard, Key::C);
         key(&mut a, &c, keyboard, Key::Escape, Modifiers::NONE);
-        assert!(!a.patterns.recording.is_open());
+        assert!(a.patterns.recording.is_open());
         assert!(mode::workspace_open(&a));
         assert_eq!(a.track, track);
         let id = a.patterns.selected.unwrap();
@@ -88,7 +88,6 @@ fn song_loop_laps_become_candidates_and_the_last_take_is_chosen() {
     let settings = crate::view::recording::settings_viewport();
     key(&mut a, &c, settings, Key::ArrowRight, Modifiers::NONE);
     key(&mut a, &c, settings, Key::ArrowDown, Modifiers::NONE);
-    key(&mut a, &c, settings, Key::ArrowDown, Modifiers::NONE);
     for _ in 0..3 {
         key(&mut a, &c, settings, Key::ArrowLeft, Modifiers::NONE);
     }
@@ -106,7 +105,7 @@ fn song_loop_laps_become_candidates_and_the_last_take_is_chosen() {
     crate::view::recording::rewind(&mut a, measure);
     pad(&mut a, &c, id, Key::C);
     key(&mut a, &c, id, Key::Escape, Modifiers::NONE);
-    assert!(!a.patterns.recording.is_open(), "{:?}", a.load_error);
+    assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
     let after = choices(&a, Pane::Song);
     // Two laps; the Capture of their keys is not a candidate.
     assert_eq!(after.len(), before + 2);
@@ -143,7 +142,7 @@ fn keys_played_into_the_capture_leave_it_out_of_the_song_and_scene_candidates() 
     pad(&mut a, &c, keyboard, Key::Z);
     pad(&mut a, &c, keyboard, Key::C);
     key(&mut a, &c, keyboard, Key::Escape, Modifiers::NONE);
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
     let music = &a.loaded.as_ref().unwrap().music;
     let catalog = Catalog::read(music).unwrap();
     let capture = catalog
@@ -185,7 +184,7 @@ fn keys_played_into_the_capture_leave_it_out_of_the_song_and_scene_candidates() 
 }
 
 #[test]
-fn the_keyboard_window_opens_clear_of_the_song_window_and_reopens_where_it_was_left() {
+fn the_keyboard_window_opens_clear_of_the_song_window() {
     let (mut a, c, _, _, _) = verification_song();
     // The default Pattern / Song window, which covers the middle of the editor.
     let song = [460.0, 520.0, 760.0, 520.0];
@@ -212,14 +211,6 @@ fn the_keyboard_window_opens_clear_of_the_song_window_and_reopens_where_it_was_l
     let [x, y, w, h] = song;
     let song = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w + 16.0, h + 40.0));
     assert!(!opened.intersects(song), "{opened:?} {song:?}");
-    // A window the user moved reopens there.
-    let moved: [f32; 4] = [40.0, 30.0, 700.0, 300.0];
-    c.data_mut(|d| d.insert_temp(egui::Id::new(("window-geometry", keyboard)), moved));
-    key(&mut a, &c, keyboard, Key::Escape, Modifiers::NONE);
-    assert!(!a.patterns.recording.is_open());
-    key(&mut a, &c, egui::ViewportId::ROOT, Key::R, Modifiers::SHIFT);
-    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
-    assert_eq!(builder(&c).position, Some(egui::pos2(40.0, 30.0)));
 }
 
 #[test]
@@ -259,7 +250,7 @@ fn keyboard_windows_reopen_where_moved_after_exit_until_reset() {
     assert_eq!(a.config.keyboard_windows["Keyboard"], [-900.0, 30.0]);
     assert_eq!(a.config.keyboard_windows["Piano"], [300.0, 700.0]);
     key(&mut a, &c, keyboard, Key::Escape, Modifiers::NONE);
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
     eframe::App::on_exit(&mut a, None);
 
     let (mut reopened, fresh, _, _, _) = verification_song();
@@ -297,18 +288,6 @@ fn keyboard_windows_reopen_where_moved_after_exit_until_reset() {
     assert!(crate::store::config::Store::open(path)
         .keyboard_windows
         .is_empty());
-    reopened.comma_menu.open = false;
-    key(
-        &mut reopened,
-        &fresh,
-        Pane::Song.viewport(),
-        Key::R,
-        Modifiers::SHIFT,
-    );
-    assert!(reopened.patterns.recording.is_open());
-    frame(&mut reopened, &fresh, keyboard, vec![]);
-    assert_ne!(position(&fresh, keyboard), Some(egui::pos2(-900.0, 30.0)));
-    assert_ne!(position(&fresh, piano), Some(egui::pos2(300.0, 700.0)));
 }
 
 #[test]
@@ -364,7 +343,7 @@ fn the_editor_windows_stay_usable_while_the_keyboard_is_open() {
     pad(&mut a, &c, keyboard, Key::Space);
     pad(&mut a, &c, keyboard, Key::Z);
     key(&mut a, &c, keyboard, Key::Escape, Modifiers::SHIFT);
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
     assert_eq!(normal(&a), before);
 }
 
@@ -397,12 +376,8 @@ fn a_resumed_phrase_loop_opens_the_keyboard_once_the_song_window_has_its_place()
     let [x, y, w, h] = song;
     let song = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w + 16.0, h + 40.0));
     assert!(!opened.intersects(song), "{opened:?} {song:?}");
-    // Closing returns the focus to the Song window, as Shift+R there does.
     key(&mut a, &c, keyboard, Key::Escape, Modifiers::NONE);
-    assert!(!a.patterns.recording.is_open());
-    assert!(c.data(|d| d
-        .get_temp::<bool>(egui::Id::new(("workspace-focus", Pane::Song.viewport())))
-        .unwrap_or(false)));
+    assert!(a.patterns.recording.is_open());
 }
 
 #[test]
@@ -449,4 +424,49 @@ fn clicking_a_capture_note_only_auditions_it() {
     assert_eq!(a.load_error, None);
     assert!(a.note_edit.is_none());
     assert_eq!(a.audition.auditioned, vec![60]);
+}
+
+#[test]
+fn keyboard_windows_hide_while_the_editor_asks_and_return_after() {
+    use crate::view::recording::{capture_viewport, piano_viewport, settings_viewport};
+    let (mut a, c, _, _, _) = verification_song();
+    key(&mut a, &c, Pane::Song.viewport(), Key::R, Modifiers::SHIFT);
+    assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
+    let keyboard = crate::view::recording::window::viewport();
+    key(&mut a, &c, keyboard, Key::Comma, Modifiers::CTRL);
+    key(&mut a, &c, keyboard, Key::J, Modifiers::CTRL);
+    let windows = [
+        keyboard,
+        settings_viewport(),
+        piano_viewport(),
+        capture_viewport(),
+    ];
+    let shown = |c: &egui::Context| {
+        windows.map(|id| {
+            c.data(|d| d.get_temp::<egui::ViewportBuilder>(egui::Id::new(("window-builder", id))))
+                .unwrap_or_else(|| panic!("{id:?} not opened"))
+                .visible
+                .unwrap_or(true)
+        })
+    };
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert_eq!(shown(&c), [true; 4]);
+    // Owned windows sit above the editor, so its confirmation would be under them.
+    a.toggle_auto_save();
+    assert!(a.config.navigation.departure.is_some());
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert_eq!(shown(&c), [false; 4]);
+    key(
+        &mut a,
+        &c,
+        egui::ViewportId::ROOT,
+        Key::Escape,
+        Modifiers::NONE,
+    );
+    assert!(a.config.navigation.departure.is_none());
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert_eq!(shown(&c), [true; 4]);
+    assert!(a.patterns.recording.is_open());
 }

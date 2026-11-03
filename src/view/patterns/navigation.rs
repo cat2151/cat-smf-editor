@@ -102,7 +102,6 @@ pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
     a.patterns.navigation.last.insert(container, id);
     a.patterns.editing = Some(context);
     a.patterns.edit_song = a.song_id;
-    a.patterns.workspace_open = true;
     a.generation = a.generation.wrapping_add(1);
     refresh(a);
     crate::cursor::moves::at_tick(a, tick);

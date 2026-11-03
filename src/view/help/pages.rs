@@ -16,6 +16,8 @@ pub(super) fn drums(ui: &mut egui::Ui) {
                     ("PageUp / PageDown", "小節"),
                     ("[ / ]", "A小節"),
                     ("Shift+[ / ]", "B小節"),
+                    ("R", "Loop"),
+                    ("S", "Loop Solo"),
                     ("Shift+Space", "停止"),
                     ("Ctrl+Z", "元に戻す"),
                     ("Esc", "閉じる"),
@@ -86,9 +88,9 @@ pub(super) fn arrangement(ui: &mut egui::Ui, p: Pane) {
         );
         ui.end_row();
         let windows: &[(&str, &str)] = if p == Pane::Song {
-            &[("S", "Scene window"), ("Esc", "閉じる")]
+            &[("S", "Scene window"), ("Esc", "Event list")]
         } else {
-            &[("Esc", "閉じる")]
+            &[("Esc", "Event list")]
         };
         super::key_groups(ui, &[(Color32::from_rgb(0xae, 0x81, 0xff), windows)]);
     });

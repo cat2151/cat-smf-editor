@@ -143,7 +143,7 @@ pub(crate) fn companion_visible(app: &App, ctx: &egui::Context) -> bool {
         )
 }
 
-fn viewport(placement: u64) -> egui::ViewportId {
+pub(crate) fn viewport(placement: u64) -> egui::ViewportId {
     egui::ViewportId::from_hash_of(("output-analysis", placement))
 }
 

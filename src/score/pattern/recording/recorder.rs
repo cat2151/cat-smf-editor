@@ -1,5 +1,5 @@
 //! Pads pressed during a session, split into one take per loop lap.
-use super::{control, note, operations, pitches, ticks, write, Pad, Range, Settings, Start};
+use super::{control, note, operations, pitches, ticks, write, Pad, Range, Settings};
 use crate::message;
 use crate::model::Music;
 use std::time::Duration;
@@ -7,7 +7,7 @@ use std::time::Duration;
 pub struct Recorder {
     division: u16,
     settings: Settings,
-    /// Free: Rec, or the first sounding press with `Start::Key`. Loop: the end of the count-in.
+    /// Free: Rec. Loop: the end of the count-in.
     origin: Option<Duration>,
     /// How many held pads sound each pitch.
     sounding: [u8; 128],
@@ -107,9 +107,6 @@ impl Recorder {
         let notes = pitches(&self.settings, pad);
         if notes.is_empty() {
             return Ok(vec![]);
-        }
-        if self.settings.range == Range::Free && self.settings.start == Start::Key {
-            self.origin.get_or_insert(at);
         }
         self.velocity = self.settings.velocity.of_press(self.presses);
         self.presses += 1;

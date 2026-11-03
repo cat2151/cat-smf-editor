@@ -64,6 +64,21 @@ pub fn same_normal(music: &Music, id: u64) -> Result<Option<u64>, String> {
     }
     Ok(None)
 }
+/// What places for pattern `id`: itself, or for a Loop an ordinary pattern of its body, made
+/// when there is none.
+pub fn placeable(music: &mut Music, id: u64) -> Result<u64, String> {
+    let p = Catalog::read(music)?
+        .patterns
+        .remove(&id)
+        .ok_or(message::MISSING_PATTERN)?;
+    if p.kind != Kind::Loop {
+        return Ok(id);
+    }
+    match same_normal(music, id)? {
+        Some(normal) => Ok(normal),
+        None => create(music, p.track, Some(id)),
+    }
+}
 fn commit(music: &mut Music, next: Music) -> Result<(), String> {
     Catalog::read(&next)?;
     *music = next;

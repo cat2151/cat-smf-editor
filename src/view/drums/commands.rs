@@ -89,7 +89,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
                 Op::Activate,
             );
             add("drum-toggle", "Step", &[Key::F, Key::Space], Op::Toggle);
-            add("drum-scope", "Solo / All", &[Key::S], Op::Scope);
+            add("drum-scope", "Loop Solo", &[Key::S], Op::Scope);
             add("drum-loop", "Loop", &[Key::R], Op::Loop);
             add(
                 "drum-a-prev",
@@ -175,6 +175,7 @@ pub(super) fn apply(app: &mut App, op: Op) {
             app.drum_editor.field = app.drum_editor.field.max(2);
             activate(app)
         }
+        Op::Scope if !playback::soloable(app) => Ok(()),
         Op::Scope => {
             app.drum_editor.all_tracks = !app.drum_editor.all_tracks;
             playback::restart(app)

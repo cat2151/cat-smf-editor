@@ -200,7 +200,6 @@ impl App {
     /// Rebind the current track without performing a user navigation.
     pub(crate) fn set_track(&mut self, track: usize) {
         if self.track != track {
-            self.patterns.workspace_open = false;
             self.note_edit = None;
             self.note_edit_request = None;
             self.patterns.raw_context = None;
@@ -306,6 +305,7 @@ impl eframe::App for App {
         }
         #[cfg(windows)]
         let started = std::time::Instant::now();
+        crate::view::analysis::owner::remember(frame);
         self.log_errors();
         if !crate::view::opening::pending(self) {
             crate::view::recent::prefetch(self, ctx);

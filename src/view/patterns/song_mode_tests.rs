@@ -10,7 +10,7 @@ fn bytes(a: &App) -> Vec<u8> {
 }
 
 #[test]
-fn source_frame_precedes_edit_target_and_close_revokes_both_projection_and_authority() {
+fn source_frame_precedes_edit_target() {
     let (mut a, source, id) = edit_tests::fixture();
     let c = egui::Context::default();
     let before = bytes(&a);
@@ -35,14 +35,8 @@ fn source_frame_precedes_edit_target_and_close_revokes_both_projection_and_autho
     assert!(mode::workspace_open(&a) && framed(&a, source));
     press(&mut a, &c, Key::Escape);
     assert!(mode::workspace_open(&a) && framed(&a, source));
-    mode::close_workspace(&mut a);
-    assert!(!mode::workspace_open(&a) && !framed(&a, source));
-    assert!(a.note_mode, "closing Song must preserve Notes");
-    assert_eq!(a.track, 0);
-    assert!(a.patterns.editing.is_none());
-    assert!(a.loaded.as_ref().unwrap().display_music.is_none());
-    assert!(!a.can_edit_notes(source));
     assert_eq!(bytes(&a), before);
+    a.select_track(0);
     a.select_track(source);
     track_selected(&mut a);
     assert!(framed(&a, source));
@@ -68,11 +62,11 @@ fn losing_a_target_never_changes_song_lifetime_or_its_source_frame() {
     assert!(framed(&a, source));
     a.select_track(0);
     assert!(!framed(&a, 0) && !framed(&a, source));
-    assert!(!mode::workspace_open(&a));
+    assert!(mode::workspace_open(&a));
 }
 
 #[test]
-fn raw_closes_song_and_actual_source_edits_do_not_depend_on_a_frame() {
+fn raw_ends_the_projection_and_actual_source_edits_do_not_depend_on_a_frame() {
     let (mut a, source, id) = edit_tests::fixture();
     library::edit(&mut a, id).unwrap();
     let c = egui::Context::default();

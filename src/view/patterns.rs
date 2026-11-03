@@ -34,8 +34,6 @@ pub struct State {
     pub edit_song: u64,
     pub preview: Option<u64>,
     pub error: Option<String>,
-    /// Explicit Scene / Song request for song destinations; Notes sources always open them.
-    pub workspace_open: bool,
     pub root_focus: bool,
 }
 

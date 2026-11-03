@@ -9,7 +9,7 @@ use cat_smf_editor::{
     score::note_view::note_on,
 };
 
-fn song() -> Music {
+pub(crate) fn song() -> Music {
     let mut music = Music {
         format: 1,
         division: 384,

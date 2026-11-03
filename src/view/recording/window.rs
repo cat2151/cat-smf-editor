@@ -344,7 +344,7 @@ pub(super) fn covers(a: &App, ctx: &egui::Context) -> Vec<egui::Rect> {
     [Pane::Scene, Pane::Song]
         .into_iter()
         .filter(|&p| {
-            super::super::patterns::mode::workspace_open(a)
+            super::super::patterns::mode::song_window(a)
                 && (p == Pane::Song || a.patterns.workspace.scene_window)
         })
         .filter_map(|p| ctx.input_for(p.viewport(), |i| i.viewport().outer_rect))
@@ -381,6 +381,12 @@ pub(super) fn place(screen: egui::Rect, covers: &[egui::Rect], size: egui::Vec2)
                 .then(far(p).total_cmp(&far(q)))
         })
         .unwrap()
+}
+
+/// The keyboard windows are owned by the editor, so they sit above its modal and are hidden
+/// while one is open. `ctx` is the editor's.
+pub(super) fn shown(ctx: &egui::Context) -> bool {
+    ctx.memory(|m| m.top_modal_layer()).is_none()
 }
 
 pub(super) fn show(ctx: &egui::Context, class: egui::ViewportClass, s: &mut Session) {

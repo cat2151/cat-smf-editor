@@ -2,6 +2,9 @@ use super::commands::Op;
 use super::*;
 use egui::Color32;
 
+const LOOP_HOVER: &str = "A-B間をLoop  R";
+const SOLO_HOVER: &str = "Loopでこのtrackだけを鳴らす  S";
+
 pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) {
     if app.drum_editor.confirm_create {
         let response = egui::Modal::new(egui::Id::new("drum-create")).show(ctx, |ui| {
@@ -24,6 +27,11 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
         return;
     }
     let measure = playback::measure(app);
+    let soloable = playback::soloable(app);
+    let sounding = measure
+        .as_ref()
+        .ok()
+        .and_then(|m| playback::sounding(app, m));
     let Some(loaded) = &app.loaded else {
         return;
     };
@@ -85,17 +93,19 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
                         }
                     }
                     if ui
-                        .selectable_label(state.loop_enabled, "Loop · r")
+                        .selectable_label(state.loop_enabled, "Loop")
+                        .on_hover_text(LOOP_HOVER)
                         .clicked()
                     {
                         *action = Some(Op::Loop);
                     }
                     if ui
-                        .button(if state.all_tracks {
-                            "All · s"
-                        } else {
-                            "Solo · s"
-                        })
+                        .add_enabled(
+                            soloable,
+                            egui::SelectableLabel::new(!state.all_tracks, "Solo"),
+                        )
+                        .on_hover_text(SOLO_HOVER)
+                        .on_disabled_hover_text(SOLO_HOVER)
                         .clicked()
                     {
                         *action = Some(Op::Scope);
@@ -110,6 +120,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
                             patch,
                             state,
                             measure,
+                            sounding,
                             beacon,
                             action,
                         );

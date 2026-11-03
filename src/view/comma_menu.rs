@@ -35,13 +35,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     if !app.comma_menu.open {
         return;
     }
-    let mut open = true;
-    egui::Window::new("help")
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
+    // A modal, so the keyboard windows above the editor step aside (`recording::window::shown`).
+    let modal = egui::Modal::new(egui::Id::new("settings")).show(ctx, |ui| {
+            ui.heading("Settings");
             if app.comma_menu.program {
                 let current = app.config.program_target;
                 for (target, label, description) in [
@@ -152,7 +148,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 }
             }
         });
-    if !open {
+    if modal.backdrop_response.clicked() {
         app.comma_menu.open = false;
     }
 }

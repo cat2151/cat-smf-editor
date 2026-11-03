@@ -1,7 +1,7 @@
 //! Playing a session: pads sound and record, Esc commits or closes.
 use super::*;
 use crate::play::audition::click::Click;
-use cat_smf_editor::score::pattern::recording::{Layout, Mode, Pad, Range, Start};
+use cat_smf_editor::score::pattern::recording::{Layout, Mode, Pad, Range};
 
 /// Every container as the audio thread plays it.
 pub(super) fn sounds(s: &Session) -> Vec<(usize, Patch, live::Live)> {
@@ -93,7 +93,7 @@ pub(super) fn button(a: &mut App, s: &mut Session, button: window::Button) -> bo
             }
             false
         }
-        window::Button::Stop if armed(s) => close(a, s, at),
+        window::Button::Stop if armed(s) => end(a, s, at),
         window::Button::Sound(i) if !armed(s) => {
             setup::select(a, s, i);
             false
@@ -144,18 +144,11 @@ fn octave(r: &mut Recorder, up: bool) {
     *base = moved.unwrap_or(*base);
 }
 
-/// Sounds or stops a pad; with `Start::Key`, a loop's first press asks for the count-in.
+/// Sounds or stops a pad.
 fn sound(s: &mut Session, pad: Pad, pressed: bool, at: std::time::Duration) {
     let Some(r) = s.recorder.as_mut() else {
         return;
     };
-    // Free starts inside the recorder; a loop needs the metronome's count-in.
-    if pressed
-        && r.settings().start == Start::Key
-        && matches!(r.settings().range, Range::Loop { .. })
-    {
-        arm(r, s.click.as_deref(), at);
-    }
     let (result, velocity) = if pressed {
         let result = r.press(pad, at);
         (result, r.velocity())
@@ -178,6 +171,38 @@ pub(super) fn point(s: &mut Session, from: window::Pointer, target: Option<Pad>)
     if let Some(pad) = target {
         sound(s, pad, true, at);
     }
+}
+
+/// The Song window keeps the keyboard; only a song without patterns lets it close.
+pub(super) fn kept(a: &App) -> bool {
+    crate::view::patterns::mode::song_window(a)
+}
+
+/// Commits what was recorded, then records anew while the keyboard is `kept`; `true` closes
+/// the window.
+pub(super) fn end(a: &mut App, s: &mut Session, at: std::time::Duration) -> bool {
+    if !close(a, s, at) {
+        return false;
+    }
+    if !kept(a) {
+        return true;
+    }
+    leave(s);
+    start(a, s);
+    false
+}
+
+/// Drops the take and records anew; the keys played so far stay in the Capture.
+fn discard(a: &mut App, s: &mut Session, at: std::time::Duration) {
+    if let Some(r) = s.recorder.as_mut() {
+        let released = r.release_all(at);
+        send(s, released, 0, at);
+    }
+    if let Err(error) = super::capture::flush(a, s, true) {
+        a.load_error = Some(error);
+    }
+    leave(s);
+    start(a, s);
 }
 
 /// Commits what was recorded; `true` closes the window.
@@ -227,7 +252,9 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
     }
     follow_click(s);
     super::phrase::follow(a, s);
-    super::phrase::follow_patch(a, s);
+    if super::phrase::follow_patch(a, s) {
+        return true;
+    }
     let at = s.clock.elapsed();
     let focused = ctx.input(|i| {
         i.focused
@@ -267,8 +294,13 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
         let plain = commands::matches(modifiers, Modifiers::NONE);
         if pressed && !repeat {
             match key {
-                Key::Escape if commands::matches(modifiers, Modifiers::SHIFT) => return true,
-                Key::Escape => return close(a, s, at),
+                Key::Escape if commands::matches(modifiers, Modifiers::SHIFT) => {
+                    if !kept(a) {
+                        return true;
+                    }
+                    discard(a, s, at);
+                }
+                Key::Escape => return end(a, s, at),
                 Key::Space if plain => {
                     if let Some(r) = s.recorder.as_mut().filter(|r| !r.started()) {
                         arm(r, s.click.as_deref(), at);

@@ -193,8 +193,8 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         ));
         out.push(Command::plain(
             s,
-            "arrangement-close",
-            "Close",
+            "arrangement-event-list",
+            "Event list",
             &[Key::Escape],
             move |a, c| {
                 if p == Pane::Song && a.patterns.workspace.song_cell.placing {
@@ -202,8 +202,6 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                     a.patterns.workspace.song_cell.reveal_choice = true;
                     return;
                 }
-                crate::play::transport::stop(a);
-                mode::close_workspace(a);
                 presentation::focus_root(a, c);
             },
         ));

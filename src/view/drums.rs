@@ -23,7 +23,7 @@ mod presentation;
 pub(crate) use presentation::{close, dismiss, display, is_open, open, reconcile};
 pub(crate) mod playback;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 mod widgets;
 
 #[derive(Default)]
@@ -140,7 +140,7 @@ pub(crate) fn prepare(app: &mut App) -> Result<(Patch, Catalog), String> {
     };
     let explicit = app.player_selection.executable.clone();
     for (i, entries) in catalog.iter().enumerate() {
-        let reference = &entries[0];
+        let reference = catalog::default_of(i, entries);
         let instrument = app.state_cache.resolve(reference, |r| {
             crate::player::state_request::generate(r, explicit.clone())
         })?;

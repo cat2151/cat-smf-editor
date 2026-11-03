@@ -2,12 +2,16 @@ use super::*;
 use crate::store::config::Store;
 use crate::view::patterns::{workspace::Pane, workspace_tests as harness};
 
-fn app() -> App {
-    let mut a = crate::view::palette::tests::app();
+fn shown(mut a: App) -> App {
     a.note_mode = true;
-    a.patterns.workspace_open = true;
     a.patterns.workspace.scene_window = true;
     a
+}
+
+fn app() -> App {
+    let mut a = crate::view::palette::tests::app();
+    crate::view::patterns::edit_tests::add_container(&mut a);
+    shown(a)
 }
 
 fn ids() -> [egui::ViewportId; 2] {
@@ -34,7 +38,9 @@ fn native_geometry_survives_exit_reopen_and_reset_without_touching_score_or_spec
     // Merely moving a native window does not write status during a drag.
     assert!(Store::open(path.clone()).pattern_windows.is_empty());
     eframe::App::on_exit(&mut a, None);
-    let mut reopened = app();
+    let mut reopened = shown(crate::view::tests::app(
+        a.loaded.as_ref().unwrap().music.clone(),
+    ));
     reopened.config = Store::open(path.clone());
     let fresh = harness::context();
     harness::frame(&mut reopened, &fresh, egui::ViewportId::ROOT, vec![]);

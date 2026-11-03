@@ -155,11 +155,11 @@ pub fn choices(a: &App, p: Pane) -> Vec<(PatternOrScene, String)> {
     }
     out
 }
+/// Pattern work happens in Notes.
 pub fn enable(a: &mut App) {
     if !a.note_mode {
         mode::toggle(a);
     }
-    a.patterns.workspace_open = true;
 }
 pub fn focus(a: &mut App, ctx: &egui::Context, p: Pane) {
     ctx.memory_mut(|m| {
@@ -167,7 +167,6 @@ pub fn focus(a: &mut App, ctx: &egui::Context, p: Pane) {
             m.surrender_focus(id);
         }
     });
-    enable(a);
     a.patterns.workspace.selection_mut(p).focus = true;
     ctx.send_viewport_cmd_to(p.viewport(), egui::ViewportCommand::Focus);
     ctx.request_repaint();
@@ -213,6 +212,12 @@ pub fn place(a: &mut App, p: Pane, part: Option<PatternOrScene>) -> Result<(), S
     }
     mutate(a, |m| {
         let lane = materialize(m, id, row)?;
+        let part = match part {
+            Some(PatternOrScene::Pattern(p)) => Some(PatternOrScene::Pattern(
+                cat_smf_editor::score::pattern::operations::placeable(m, p)?,
+            )),
+            part => part,
+        };
         model::place(m, id, lane, measure, part)
     })
 }
@@ -354,12 +359,12 @@ pub fn root_dialog(a: &mut App, ctx: &egui::Context) {
     }
 }
 pub fn show(a: &mut App, ctx: &egui::Context) {
-    if !mode::workspace_open(a) {
+    if !mode::song_window(a) {
         reset_windows(a);
         return;
     }
     for p in [Pane::Scene, Pane::Song] {
-        if !mode::workspace_open(a) {
+        if !mode::song_window(a) {
             break;
         }
         let visible = if let Some(d) = &a.patterns.workspace.dialog {
@@ -411,17 +416,15 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
                 }
                 crate::play::playback::show(a, ctx);
                 crate::view::modal::end(a, ctx, input);
+                // The song's patterns keep this window; nothing closes it.
                 if ctx.input(|i| i.viewport().close_requested()) {
-                    crate::play::transport::stop(a);
-                    mode::close_workspace(a);
-                    presentation::focus_root(a, ctx);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 }
             },
         );
+        // Restored at startup, this window is under the editor until it is owned.
         #[cfg(windows)]
-        if !a.patterns.workspace.selection(p).owned
-            && ctx.input(|i| i.viewport().focused.unwrap_or(false))
-        {
+        if !a.patterns.workspace.selection(p).owned {
             a.patterns.workspace.selection_mut(p).owned =
                 crate::view::analysis::owner::adopt(p.title());
         }

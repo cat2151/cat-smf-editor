@@ -184,7 +184,7 @@ fn both_pattern_entries_confirm_a_saw_container_into_mml_and_reopen_existing_wor
         // Once a body exists both entries should open Song, without creating another.
         open(&mut app);
         enter_pattern(&mut app, &ctx, palette);
-        assert!(app.patterns.workspace_open);
+        assert!(crate::view::patterns::mode::song_window(&app));
         assert!(!app.patterns.confirming_creation() && !app.mml_input.open);
         assert_eq!(bytes(&app), before);
     }
@@ -201,7 +201,7 @@ fn keyboard_selection_opens_direct_without_leaking_enter_or_text() {
     frame(&mut app, &ctx, &[]);
     assert!(app.edit_style.is_none() && app.mml_input.open);
     assert!(app.mml_input.buffer.is_empty());
-    assert!(!app.patterns.workspace_open);
+    assert!(!crate::view::patterns::mode::song_window(&app));
     frame(&mut app, &ctx, &[Key::Escape]);
     assert!(!app.mml_input.open);
 }

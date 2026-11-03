@@ -1,5 +1,10 @@
 use super::*;
 use cat_smf_editor::edit::tracks::new_song;
+/// 範囲選択を始め、範囲menuを開く。
+pub(crate) fn open_menu(app: &mut App) {
+    begin(app);
+    app.event_selection.menu = true;
+}
 fn frame(app: &mut App, ctx: &egui::Context, key: egui::Key) {
     for pressed in [true, false] {
         let _ = ctx.run(

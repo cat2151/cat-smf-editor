@@ -23,7 +23,7 @@ pub(crate) use commands::collect;
 mod playback;
 pub(crate) use playback::{live, plans};
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 #[derive(Default)]
 pub struct State {

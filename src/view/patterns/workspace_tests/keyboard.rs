@@ -65,9 +65,8 @@ fn workspace_keyboard_reorders_scene_blocks_via_independent_lane_and_undo() {
     key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
     assert!(mode::workspace_open(&a));
     key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
-    assert!(a.note_mode && !mode::workspace_open(&a));
-    assert!(a.playback.pending.is_none() && a.playback.active.is_none());
-    assert!(!mode::actual_source(&a, a.track));
+    assert!(a.note_mode && mode::workspace_open(&a));
+    assert!(a.patterns.root_focus);
 }
 #[test]
 fn workspace_edit_body_returns_to_original_cell_and_rebuilds_shared_occurrences() {

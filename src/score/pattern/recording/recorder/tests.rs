@@ -14,7 +14,6 @@ fn ms(n: u64) -> Duration {
 fn settings(range: Range) -> Settings {
     let mut s = Settings::new(Key::from_signature(None), 500_000);
     s.range = range;
-    s.start = Start::Key;
     // CC1 has its own test; these compare notes only.
     s.modulation = Modulation::Off;
     s
@@ -48,6 +47,7 @@ fn shared_chord_notes_sound_until_the_last_pad_releases() {
     s.mode = Mode::Triad;
     let mut r = Recorder::new(480, s).unwrap();
     // C major triads from 48: column 0 = C E G, column 2 = E G B.
+    r.start(ms(0));
     assert_eq!(r.press(z(0), ms(0)).unwrap(), vec![48, 52, 55]);
     assert_eq!(r.press(z(2), ms(500)).unwrap(), vec![59]);
     assert_eq!(r.release(z(0), ms(1000)).unwrap(), vec![48]);
@@ -182,8 +182,9 @@ fn a_release_on_the_lap_boundary_ends_the_earlier_lap() {
 }
 
 #[test]
-fn free_take_is_measured_from_the_first_press_and_held_notes_block_commit() {
+fn free_take_is_measured_from_rec_and_held_notes_block_commit() {
     let mut r = Recorder::new(480, settings(Range::Free)).unwrap();
+    r.start(ms(9000));
     r.press(z(0), ms(9000)).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
@@ -251,6 +252,7 @@ fn bpm_90_puts_one_beat_on_division_ticks() {
     let mut s = settings(Range::Free);
     s.tempo = 60_000_000 / 90;
     let mut r = Recorder::new(480, s).unwrap();
+    r.start(ms(0));
     r.press(z(0), ms(0)).unwrap();
     let beat = Duration::from_secs(60) / 90;
     r.press(z(1), beat).unwrap();
@@ -268,6 +270,7 @@ fn a_quantized_take_starts_and_ends_its_notes_on_sixteenths() {
     s.quantize = true;
     let mut r = Recorder::new(480, s).unwrap();
     // 10 ms is 10 ticks and 260 ms is 250 ticks at 120 BPM.
+    r.start(ms(0));
     r.press(z(0), ms(0)).unwrap();
     r.release(z(0), ms(10)).unwrap();
     r.press(z(1), ms(140)).unwrap();

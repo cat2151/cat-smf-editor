@@ -25,7 +25,7 @@ fn cursor_count(a: &mut App, c: &egui::Context) -> usize {
 }
 
 #[test]
-fn song_single_cursor_select_place_repeat_return_and_close_with_only_keys() {
+fn song_single_cursor_select_place_repeat_return_and_return_with_only_keys() {
     let (mut a, c, first, _, _) = verification_song();
     press(&mut a, &c, Key::Escape);
     assert!(!a.patterns.workspace.song_cell.placing);
@@ -93,7 +93,7 @@ fn song_single_cursor_select_place_repeat_return_and_close_with_only_keys() {
     assert_eq!(bytes(&a), placed);
     press(&mut a, &c, Key::Escape);
     press(&mut a, &c, Key::Escape);
-    assert!(!mode::workspace_open(&a));
+    assert!(mode::workspace_open(&a) && a.patterns.root_focus);
 }
 
 #[test]

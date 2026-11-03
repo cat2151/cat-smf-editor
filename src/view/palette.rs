@@ -26,6 +26,10 @@ impl State {
     pub fn is_open(&self) -> bool {
         self.origin.is_some()
     }
+    #[cfg(test)]
+    pub(crate) fn origin(&self) -> Option<(egui::ViewportId, commands::Screen)> {
+        self.origin.as_ref().map(|o| (o.viewport, o.screen()))
+    }
     pub(crate) fn owns_root(&self) -> bool {
         self.origin
             .as_ref()

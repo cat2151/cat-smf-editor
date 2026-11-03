@@ -28,7 +28,7 @@ pub(super) fn recording(ui: &mut egui::Ui) {
                         ("Ctrl+,", "設定"),
                         ("Ctrl+.", "Piano"),
                         ("Ctrl+J", "Capture"),
-                        ("Esc", "pattern確定・閉じる"),
+                        ("Esc", "pattern確定"),
                         ("Shift+Esc", "録音破棄"),
                     ],
                 ),

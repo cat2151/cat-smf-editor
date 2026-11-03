@@ -8,7 +8,6 @@ fn ms(n: u64) -> Duration {
 fn free(division: u16, tempo: u32) -> Recorder {
     let mut s = Settings::new(Key::from_signature(None), tempo);
     s.layout = Layout::Letters;
-    s.start = Start::Key;
     // CC1 has its own test; these compare notes only.
     s.modulation = Modulation::Off;
     Recorder::new(division, s).unwrap()
@@ -18,8 +17,9 @@ const E: Pad = Pad::Letter(2);
 const B: Pad = Pad::Letter(6);
 
 #[test]
-fn first_key_origin_polyphony_fixed_tempo_and_round_trip() {
+fn rec_origin_polyphony_fixed_tempo_and_round_trip() {
     let mut take = free(480, 500_000);
+    take.start(ms(9000));
     take.press(C, ms(9000)).unwrap();
     assert!(take.press(C, ms(9100)).unwrap().is_empty());
     take.press(E, ms(9250)).unwrap();
@@ -61,6 +61,7 @@ fn first_key_origin_polyphony_fixed_tempo_and_round_trip() {
 #[test]
 fn short_retrigger_is_ordered_and_never_overlaps_itself() {
     let mut take = free(480, 500_000);
+    take.start(ms(0));
     take.press(C, ms(0)).unwrap();
     take.release(C, ms(0)).unwrap();
     take.press(C, ms(0)).unwrap();
@@ -85,6 +86,7 @@ fn existing_container_and_pattern_bytes_survive_long_recording() {
     let existing = operations::create(&mut m, t, None).unwrap();
     let original = m.tracks[t].events.clone();
     let mut take = free(480, 500_000);
+    take.start(ms(0));
     take.press(B, ms(0)).unwrap();
     take.release_all(ms(4000)).unwrap();
     let id = take.commit(&mut m, Some(t)).unwrap()[0];
@@ -110,6 +112,7 @@ fn empty_unfinished_and_smpte_takes_are_rejected() {
     let mut take = free(m.division, 500_000);
     assert!(!take.recorded());
     assert!(take.commit(&mut m, None).is_err());
+    take.start(ms(0));
     take.press(C, ms(0)).unwrap();
     assert!(take.recorded());
     assert!(take.commit(&mut m, None).is_err());
@@ -119,6 +122,7 @@ fn empty_unfinished_and_smpte_takes_are_rejected() {
 #[test]
 fn tempo_sets_the_tick_scale() {
     let mut take = free(480, 1_000_000);
+    take.start(ms(100));
     take.press(C, ms(100)).unwrap();
     take.release(C, ms(1100)).unwrap();
     let mut m = edit::tracks::new_song();

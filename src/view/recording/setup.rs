@@ -1,8 +1,6 @@
 //! Session settings: one value per item, changed from the settings window or by shortcut.
 use super::*;
-use cat_smf_editor::score::pattern::recording::{
-    Layout, Mode, Modulation, Range, Scale, Start, Velocity,
-};
+use cat_smf_editor::score::pattern::recording::{Layout, Mode, Modulation, Range, Scale, Velocity};
 
 const BPM: std::ops::RangeInclusive<i32> = 20..=300;
 const MEASURES: std::ops::RangeInclusive<i32> = 1..=64;
@@ -11,7 +9,6 @@ const MEASURES: std::ops::RangeInclusive<i32> = 1..=64;
 pub(super) enum Item {
     Sound,
     Range,
-    Start,
     Measures,
     Bpm,
     Layout,
@@ -24,10 +21,9 @@ pub(super) enum Item {
     Modulation,
     Quantize,
 }
-pub(super) const ITEMS: [Item; 14] = [
+pub(super) const ITEMS: [Item; 13] = [
     Item::Sound,
     Item::Range,
-    Item::Start,
     Item::Measures,
     Item::Bpm,
     Item::Layout,
@@ -42,10 +38,9 @@ pub(super) const ITEMS: [Item; 14] = [
 ];
 
 /// Ctrl+key steps forward and Ctrl+Shift+key back; plain keys are pads.
-const SHORTCUTS: [(Item, Key); 13] = [
+const SHORTCUTS: [(Item, Key); 12] = [
     (Item::Sound, Key::P),
     (Item::Range, Key::R),
-    (Item::Start, Key::S),
     (Item::Measures, Key::D),
     (Item::Bpm, Key::B),
     (Item::Layout, Key::L),
@@ -63,7 +58,6 @@ impl Item {
         match self {
             Self::Sound => "Container",
             Self::Range => "録音範囲",
-            Self::Start => "録音開始",
             Self::Measures => "小節数",
             Self::Bpm => "BPM",
             Self::Layout => "配列",
@@ -119,7 +113,7 @@ pub(super) fn enabled(s: &Session, item: Item) -> bool {
         Item::Sound => s.sounds.len() > 1 && !fixed,
         Item::Measures => matches!(t.range, Range::Loop { .. }) && !fixed,
         // A take writes CC1 from one choice.
-        Item::Range | Item::Start | Item::Bpm | Item::Modulation => !fixed,
+        Item::Range | Item::Bpm | Item::Modulation => !fixed,
         Item::Mode | Item::Tonic | Item::Scale => pitched,
         Item::ChordBase => pitched,
         Item::NoteBase => !t.drums,
@@ -149,10 +143,6 @@ pub(super) fn value(s: &Session, item: Item) -> String {
         Item::Range => match t.range {
             Range::Free => "Free".into(),
             Range::Loop { .. } => "Loop".into(),
-        },
-        Item::Start => match t.start {
-            Start::Button => "Rec".into(),
-            Start::Key => "Key".into(),
         },
         Item::Measures => s.measures.to_string(),
         Item::Bpm => bpm(t.tempo).to_string(),
@@ -274,12 +264,6 @@ fn edit(t: &mut Settings, item: Item, step: i32, big: bool) {
         Item::Sound | Item::Measures | Item::Range | Item::Modulation => unreachable!(),
         Item::Velocity => t.velocity = cycle(&Velocity::ALL, t.velocity, step),
         Item::Quantize => t.quantize = !t.quantize,
-        Item::Start => {
-            t.start = match t.start {
-                Start::Button => Start::Key,
-                Start::Key => Start::Button,
-            }
-        }
         Item::Bpm => t.tempo = tempo(bpm(t.tempo) + step * if big { 10 } else { 1 }),
         Item::Layout => {
             t.layout = match t.layout {

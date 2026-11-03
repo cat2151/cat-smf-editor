@@ -28,9 +28,8 @@ pub(super) fn source(a: &App, container: Option<u64>) -> Result<Option<usize>, S
 }
 
 /// After the keyboard's own edit `id` created the song's first container, the fallback sound
-/// plays that container and the keyboard stays open.
+/// plays that container.
 pub(super) fn adopt(a: &App, s: &mut Session, id: u64) -> Result<(), String> {
-    s.song = a.song_id;
     let c = Catalog::read(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
     let container = c.patterns[&id].container;
     for sound in s.sounds.iter_mut().filter(|s| s.container.is_none()) {

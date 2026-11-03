@@ -200,6 +200,7 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     super::effects::commands::collect(app, screen, &mut result);
     super::recent::commands::collect(app, screen, &mut result);
     super::event_selection::commands::collect(app, screen, &mut result);
+    super::piano_roll::chord_timing::collect(app, screen, &mut result);
     super::mml_input::commands::collect(app, screen, &mut result);
     super::voicevox::collect(app, screen, &mut result);
     super::track_overview::collect(app, screen, &mut result);

@@ -10,6 +10,7 @@ use cat_smf_editor::score::{
 };
 use eframe::egui::{self, Key, Modifiers};
 mod arrange;
+mod blocks;
 mod comment_out;
 mod deletion;
 mod input;
@@ -21,7 +22,7 @@ mod scrolling;
 mod single_cursor;
 mod timeline;
 
-pub(super) fn context() -> egui::Context {
+pub(crate) fn context() -> egui::Context {
     let c = egui::Context::default();
     c.set_embed_viewports(false);
     egui::Context::set_immediate_viewport_renderer(|ctx, mut viewport| {
@@ -174,7 +175,7 @@ fn click(a: &mut App, c: &egui::Context, id: egui::ViewportId, rect: egui::Id) {
         );
     }
 }
-fn button(a: &mut App, c: &egui::Context, p: Pane, id: &'static str) {
+pub(crate) fn button(a: &mut App, c: &egui::Context, p: Pane, id: &'static str) {
     click(a, c, p.viewport(), egui::Id::new((p.title(), id)));
 }
 fn cell(a: &mut App, c: &egui::Context, p: Pane, lane: u64, measure: u64) {

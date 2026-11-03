@@ -13,14 +13,6 @@ pub enum Range {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Start {
-    /// Pads only sound until the Rec button.
-    Button,
-    /// The first pad also starts recording.
-    Key,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Layout {
     /// Four keyboard rows `z`, `a`, `q`, `1`.
     Rows,
@@ -122,7 +114,6 @@ impl Key {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub range: Range,
-    pub start: Start,
     /// Microseconds per quarter note, as in an SMF tempo event.
     pub tempo: u32,
     pub layout: Layout,
@@ -165,7 +156,6 @@ impl Settings {
         let tonic = key.tonic % 12;
         Self {
             range: Range::Free,
-            start: Start::Button,
             tempo,
             layout: Layout::Rows,
             mode: Mode::Note,

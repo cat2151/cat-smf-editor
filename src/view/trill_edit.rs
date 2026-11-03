@@ -166,7 +166,7 @@ impl Editing {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub(crate) fn cancel(app: &mut App, _ctx: &egui::Context) {
     if let Some(mut editing) = app.trill_edit.take()

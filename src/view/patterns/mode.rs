@@ -6,8 +6,15 @@ pub fn actual_source(a: &App, track: usize) -> bool {
         .as_ref()
         .is_some_and(|l| cat_smf_editor::score::pattern::is_source(&l.music, track))
 }
+/// Derived from the song alone; no window or command opens or closes it.
+pub fn song_window(a: &App) -> bool {
+    a.loaded
+        .as_ref()
+        .is_some_and(|l| cat_smf_editor::score::pattern::has_containers(&l.music))
+}
+/// Notes projects patterns while the song has them.
 pub fn workspace_open(a: &App) -> bool {
-    a.note_mode && (actual_source(a, a.track) || a.patterns.workspace_open)
+    a.note_mode && song_window(a)
 }
 /// Pattern framing is derived from the real window lifetime and real track role.
 pub fn source(a: &App, track: usize) -> bool {
@@ -35,34 +42,6 @@ fn capture(music: &cat_smf_editor::model::Music, id: u64) -> bool {
         .ok()
         .and_then(|c| c.patterns.get(&id).map(|p| p.kind))
         == Some(cat_smf_editor::score::pattern::Kind::Capture)
-}
-pub fn close_workspace(a: &mut App) {
-    let tick = crate::play::playback::location(a).0;
-    if a.patterns.preview.is_some() || arrangement_playing(a) {
-        crate::play::transport::stop(a);
-    }
-    a.patterns.workspace.dialog = None;
-    a.patterns.workspace.return_to = None;
-    workspace::reset_windows(a);
-    // Leave the source so closing Song never changes Notes / Raw.
-    if a.note_mode && actual_source(a, a.track) {
-        let destination = a.loaded.as_ref().and_then(|l| {
-            (0..l.music.tracks.len())
-                .filter(|&track| !actual_source(a, track))
-                .min_by_key(|&track| (track.abs_diff(a.track), track))
-        });
-        let Some(track) = destination else { return };
-        a.select_track(track);
-    }
-    a.patterns.workspace_open = false;
-    a.patterns.raw_context = None;
-    a.note_edit = None;
-    a.note_edit_request = None;
-    if a.patterns.editing.take().is_some() {
-        a.generation = a.generation.wrapping_add(1);
-    }
-    refresh(a);
-    crate::cursor::moves::at_tick(a, tick);
 }
 /// The same live projection authorizes edits and supplies pattern identity.
 pub fn editing(a: &App, track: usize) -> Option<&cat_smf_editor::score::pattern::editing::Context> {
@@ -144,9 +123,7 @@ pub fn toggle(a: &mut App) {
         }
         a.patterns.workspace.dialog = None;
         a.patterns.workspace.return_to = None;
-        workspace::reset_windows(a);
         a.patterns.raw_context = a.patterns.editing.take();
-        a.patterns.workspace_open = false;
     } else {
         a.patterns.editing = a.patterns.raw_context.take().filter(|c| {
             c.track == a.track
@@ -166,9 +143,6 @@ pub fn toggle(a: &mut App) {
                 })
         });
         a.patterns.edit_song = a.song_id;
-        // Sources derive their lifetime directly; only a placed song destination
-        // needs an explicit companion-window request when its target is restored.
-        a.patterns.workspace_open = a.patterns.editing.as_ref().is_some_and(|c| !c.standalone);
     }
     refresh(a);
     a.generation = a.generation.wrapping_add(1);

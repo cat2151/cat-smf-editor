@@ -1,4 +1,6 @@
 use super::*;
+mod navigation;
+pub use navigation::{destinations, navigate};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Screen {
@@ -23,6 +25,7 @@ pub enum Screen {
     Effects,
     Selection,
     SelectionMenu,
+    ChordTiming,
     Mml,
     Note,
     Lyrics,
@@ -47,6 +50,8 @@ pub enum Screen {
     Scene,
     Song,
     ArrangementInput,
+    /// Virtual MIDI keyboard とその付属窓。
+    Recording,
 }
 impl Screen {
     pub fn label(self) -> &'static str {
@@ -67,6 +72,7 @@ impl Screen {
             Self::Drums | Self::DrumInput | Self::DrumCreate => "Drum sequencer",
             Self::Effects => "Effects",
             Self::Selection | Self::SelectionMenu => "Selection",
+            Self::ChordTiming => "Chord timing",
             Self::Mml => "MML",
             Self::Note => "Note",
             Self::Lyrics => "Lyrics",
@@ -90,6 +96,7 @@ impl Screen {
             Self::Scene => "Scene",
             Self::Song => "Pattern / Song",
             Self::ArrangementInput => "Arrangement",
+            Self::Recording => "Virtual MIDI keyboard",
         }
     }
     pub fn owns_keys(self) -> bool {
@@ -124,6 +131,9 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     }
     if crate::view::patterns::workspace::focused_query(ctx).is_some() {
         return Screen::ArrangementInput;
+    }
+    if crate::view::recording::owns(ctx.viewport_id()) {
+        return Screen::Recording;
     }
     if ctx.viewport_id() != egui::ViewportId::ROOT {
         if let Some(p) = crate::view::patterns::workspace::pane(ctx) {
@@ -250,6 +260,9 @@ fn root_owner(a: &App) -> Screen {
     if super::super::event_selection::valid(a) {
         return a.event_selection.command_screen();
     }
+    if super::super::piano_roll::chord_timing::active(a) {
+        return Screen::ChordTiming;
+    }
     if a.piano_roll.open || a.tempo_curve.open || a.parameter_editor.open {
         return Screen::Timeline;
     }
@@ -268,6 +281,7 @@ impl Screen {
                 | Self::DrumCreate
                 | Self::Selection
                 | Self::SelectionMenu
+                | Self::ChordTiming
                 | Self::Mml
                 | Self::Note
                 | Self::Lyrics
@@ -327,118 +341,4 @@ impl Screen {
             _ => return None,
         })
     }
-}
-
-/// Screens whose commands every non-transient palette offers.
-pub fn destinations(a: &App) -> Vec<Screen> {
-    let mut out = vec![Screen::Settings, Screen::Program, Screen::Recent];
-    if a.loaded.is_some() {
-        out.extend([
-            Screen::Main,
-            Screen::Edit,
-            Screen::Go,
-            Screen::Tracks,
-            Screen::Split,
-            Screen::Play,
-            Screen::Mixer,
-            Screen::Layers,
-            Screen::Effects,
-            Screen::Timeline,
-            Screen::Overview,
-            Screen::Drums,
-        ]);
-        if crate::view::patterns::mode::workspace_open(a) {
-            out.push(Screen::Song);
-            if a.patterns.workspace.scene_window {
-                out.push(Screen::Scene);
-            }
-        }
-    }
-    out
-}
-
-/// Screens that open over `current` instead of first returning to the Event list.
-fn overlays(current: Screen) -> &'static [Screen] {
-    match current {
-        Screen::Timeline | Screen::Overview => &[Screen::Settings, Screen::Program, Screen::Play],
-        Screen::Mixer => &[Screen::Effects],
-        Screen::Scene | Screen::Song => &[Screen::Settings, Screen::Play],
-        Screen::Settings => &[Screen::Program],
-        Screen::Go => &[Screen::Tracks],
-        _ => &[],
-    }
-}
-
-/// Moves to `home` so its command can run; `false` leaves the user where navigation stopped.
-pub fn navigate(a: &mut App, ctx: &egui::Context, current: Screen, home: Screen) -> bool {
-    if current == home || home == Screen::Global {
-        return true;
-    }
-    if let Some(p) = home.pane() {
-        crate::view::patterns::workspace::focus(a, ctx, p);
-        return true;
-    }
-    if overlays(current).contains(&home) {
-        enter(a, ctx, home);
-        return true;
-    }
-    if !leave_to_main(a, ctx) {
-        a.load_error = Some("入力中の編集を確定または取消してから実行してください".into());
-        return false;
-    }
-    if ctx.viewport_id() != egui::ViewportId::ROOT {
-        crate::view::patterns::presentation::focus_root(a, ctx);
-    }
-    enter(a, ctx, home);
-    root_owner(a) == home
-}
-
-fn leave_to_main(a: &mut App, ctx: &egui::Context) -> bool {
-    loop {
-        let screen = root_owner(a);
-        if screen == Screen::Main {
-            return true;
-        }
-        let Some(close) = screen
-            .close()
-            .and_then(|id| definitions(a, screen).into_iter().find(|c| c.id == id))
-        else {
-            return false;
-        };
-        (close.run)(a, ctx);
-        if root_owner(a) == screen {
-            return false;
-        }
-    }
-}
-
-fn enter(a: &mut App, ctx: &egui::Context, screen: Screen) {
-    match screen {
-        Screen::Settings | Screen::Program => {
-            super::super::comma_menu::open(a);
-            a.comma_menu.program = screen == Screen::Program;
-        }
-        Screen::Edit => a.edit_menu.open = true,
-        Screen::Go | Screen::Tracks => {
-            if !a.track_view.go_open {
-                a.track_view.origin_tick = crate::play::playback::location(a).0;
-            }
-            a.track_view.go_open = true;
-            a.track_view.track_list = screen == Screen::Tracks;
-        }
-        Screen::Split => a.track_view.split_open = true,
-        Screen::Play => a.playback.open = true,
-        Screen::Mixer => {
-            crate::play::mixer::open(a);
-            a.playback.mixer_master = false;
-        }
-        Screen::Layers => super::super::layers::open(a),
-        Screen::Effects => crate::play::mixer::open_effects(a, false),
-        Screen::Recent => super::super::recent::commands::open(a),
-        Screen::Timeline => super::super::piano_roll::open(a),
-        Screen::Overview => super::super::track_overview::open(a),
-        Screen::Drums => super::super::drums::open(a),
-        _ => {}
-    }
-    let _ = ctx;
 }

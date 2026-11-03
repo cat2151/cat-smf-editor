@@ -294,7 +294,6 @@ fn song_cell_auditions_and_both_entries_open_the_drum_editor() {
     })
     .unwrap();
     a.select_track(0);
-    super::workspace::enable(&mut a);
     let song = super::workspace::Pane::Song;
     super::workspace_tests::row_cell(&mut a, &c, song, 1, 3);
     assert!(crate::view::drums::is_open(&a));
@@ -303,4 +302,102 @@ fn song_cell_auditions_and_both_entries_open_the_drum_editor() {
     assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
     assert!(crate::view::drums::is_open(&a), "{:?}", a.load_error);
     assert!(!a.mml_input.open);
+}
+#[test]
+fn song_playback_frames_the_sounding_step_and_the_grid_loops_the_drum_pattern_alone() {
+    let (mut a, drum, _) = song();
+    let c = super::workspace_tests::context();
+    a.patterns.container = pattern::Catalog::read(&a.loaded.as_ref().unwrap().music)
+        .unwrap()
+        .tracks
+        .iter()
+        .find_map(|(&id, &t)| (t == drum).then_some(id));
+    library::add(&mut a, &c);
+    press(&mut a, &c, Key::Enter);
+    let id = a.patterns.selected.unwrap();
+    press(&mut a, &c, Key::Escape);
+    a.edit_tracks(|m| {
+        let lane = arrangement::add_lane(m, None)?;
+        arrangement::place(m, None, lane, 3, Some(PatternOrScene::Pattern(id)))
+    })
+    .unwrap();
+    a.select_track(0);
+    super::workspace_tests::row_cell(&mut a, &c, super::workspace::Pane::Song, 1, 3);
+    assert!(crate::view::drums::is_open(&a));
+    let music = a.loaded.as_ref().unwrap().music.clone();
+    let at = arrangement::occurrences(&music, None)
+        .unwrap()
+        .0
+        .into_iter()
+        .find_map(|(p, at)| (p == id).then_some(at))
+        .unwrap();
+    let tempo = cat_smf_editor::score::audition_timing::TempoMap::new(&music, 0);
+    let frame = |a: &mut App| {
+        let ctx = egui::Context::default();
+        let input = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1500.0, 900.0),
+            )),
+            ..Default::default()
+        };
+        for _ in 0..2 {
+            let _ = ctx.run(input(), |c| crate::view::drums::show(a, c));
+        }
+        let cells = ctx
+            .data(|d| {
+                d.get_temp::<(egui::Rect, egui::Rect, Vec<egui::Rect>)>(egui::Id::new(
+                    "drum-grid-bounds",
+                ))
+            })
+            .unwrap()
+            .2;
+        let framed = ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::new("drum-playing")));
+        framed.map(|f| {
+            (0..cells.len())
+                .find(|&i| f.contains_rect(cells[i]))
+                .unwrap()
+                - 2
+        })
+    };
+    let playing = |a: &mut App, tick: u64| {
+        crate::play::arrangement::start(a, None);
+        transport::advance(a);
+        a.audition.set_test_seconds(tempo.seconds_at(tick) + 0.001);
+        assert_eq!(
+            a.playback.active.as_ref().map(|x| x.mode),
+            Some(Mode::Arrangement(None))
+        );
+        frame(a)
+    };
+    // Step 6 of the drum placement; the Saw-only start frames nothing.
+    assert_eq!(playing(&mut a, at + 5 * 120), Some(5));
+    assert_eq!(playing(&mut a, at), Some(0));
+    assert_eq!(playing(&mut a, at - 120), None);
+    // The grid's own Loop clocks the edited body directly.
+    transport::stop(&mut a);
+    press(&mut a, &c, Key::R);
+    transport::advance(&mut a);
+    a.audition
+        .set_test_seconds(tempo.seconds_at(3 * 120) + 0.001);
+    assert_eq!(frame(&mut a), Some(3));
+    // After a Song A-B repeat, the grid's Loop still plays the edited pattern alone, and S,
+    // whose Solo has nothing else to leave out, keeps it so.
+    press(&mut a, &c, Key::R);
+    transport::repeat::start_song(&mut a, (0, at + 480 * 4));
+    press(&mut a, &c, Key::R);
+    let tracks = |a: &mut App| {
+        transport::advance(a);
+        let active = a.playback.active.as_ref().unwrap();
+        (
+            active.mode,
+            active.sources.iter().map(|s| s.0).collect::<Vec<_>>(),
+        )
+    };
+    assert_eq!(tracks(&mut a), (Mode::AllTracks, vec![drum]));
+    a.audition
+        .set_test_seconds(tempo.seconds_at(3 * 120) + 0.001);
+    assert_eq!(frame(&mut a), Some(3));
+    press(&mut a, &c, Key::S);
+    assert_eq!(tracks(&mut a), (Mode::AllTracks, vec![drum]));
 }

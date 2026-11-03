@@ -1,7 +1,7 @@
 //! `performance` borrows what was built with the song, and never draws a stale one.
 use super::{performance, sounding, Mode, EXPANSIONS_BUILT};
 use crate::app::App;
-use crate::view::patterns::{library, mode};
+use crate::view::patterns::library;
 use crate::view::tests::unplaced::{fixture, CONTAINER};
 use cat_smf_editor::{
     edit,
@@ -106,7 +106,7 @@ fn performance_matches_rebuilding_after_edit_undo_pattern_edit_and_reload() {
     assert_eq!(plain(&a), rebuilt(&a), "pattern edit start");
     assert_ne!(plain(&a), before, "pattern edit start");
 
-    mode::close_workspace(&mut a);
+    a.select_track(REFERRING);
     assert!(a.patterns.editing.is_none());
     assert_eq!(plain(&a), rebuilt(&a), "pattern edit end");
     assert_eq!(plain(&a), before, "pattern edit end");

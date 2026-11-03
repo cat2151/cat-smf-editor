@@ -89,17 +89,17 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         builder = builder.with_position([x, y]).with_inner_size([w, h]);
     }
     ctx.show_viewport_immediate(viewport(), builder, |ctx, class| {
-        let close = class != egui::ViewportClass::Embedded
-            && ctx.input(|i| {
-                i.viewport().close_requested()
-                    || i.key_pressed(egui::Key::Escape)
-                    || i.key_pressed(egui::Key::F1)
-            });
-        if close {
-            a.help_open = false;
-        }
         if class == egui::ViewportClass::Embedded {
             return; // This UI requires a native backend; never replace the editor with help.
+        }
+        let input = crate::view::modal::begin(a, ctx);
+        let close = ctx.input(|i| {
+            i.viewport().close_requested()
+                || i.key_pressed(egui::Key::Escape)
+                || i.key_pressed(egui::Key::F1)
+        });
+        if close {
+            a.help_open = false;
         }
         if std::mem::take(&mut a.help.raise) {
             lift(ctx);
@@ -113,6 +113,7 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
             egui::ScrollArea::both().show(ui, |ui| super::body(a, ui));
         });
         flash(a, ctx);
+        crate::view::modal::end(a, ctx, input);
         ctx.request_repaint_after_for(
             std::time::Duration::from_millis(100),
             egui::ViewportId::ROOT,

@@ -750,6 +750,7 @@ dependencies = [
  "mascot-render-protocol",
  "mmlabc-to-smf",
  "quick-xml 0.41.0",
+ "raw-window-handle",
  "regex",
  "rfd",
  "rustmigemo",

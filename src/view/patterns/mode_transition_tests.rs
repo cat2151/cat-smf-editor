@@ -62,7 +62,6 @@ fn selecting_and_restoring_a_notes_source_never_need_an_edit_context_or_open_fla
     let (mut a, source, _) = edit_tests::fixture();
     a.select_track(source);
     assert!(mode::source(&a, source));
-    assert!(!a.patterns.workspace_open);
     assert!(!a.can_edit_notes(source));
     let session = a.session().unwrap();
     let music = a.loaded.as_ref().unwrap().music.clone();
@@ -70,11 +69,10 @@ fn selecting_and_restoring_a_notes_source_never_need_an_edit_context_or_open_fla
     restarted.restore_position(&session);
     assert_eq!(restarted.track, source);
     assert!(restarted.note_mode && mode::source(&restarted, source));
-    assert!(!restarted.patterns.workspace_open);
     assert!(restarted.patterns.editing.is_none());
     assert!(!restarted.can_edit_notes(source));
     restarted.select_track(0);
-    assert!(!mode::workspace_open(&restarted));
+    assert!(!mode::source(&restarted, 0));
     restarted.select_track(source);
     assert!(mode::source(&restarted, source));
 }
@@ -97,44 +95,4 @@ fn undo_restoring_a_different_real_source_keeps_notes_in_pattern_mode() {
     assert!(a.note_mode && mode::source(&a, source));
     assert!(a.patterns.editing.is_none());
     assert!(!a.can_edit_notes(source));
-}
-
-#[test]
-fn closing_song_on_a_song_destination_keeps_notes_and_saved_music() {
-    let (mut a, _, _) = edit_tests::fixture();
-    let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
-    mode::close_workspace(&mut a);
-    assert_eq!(a.track, 0);
-    assert!(a.note_mode && !mode::workspace_open(&a));
-    assert!(a.patterns.editing.is_none());
-    assert_eq!(
-        cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap(),
-        before
-    );
-    assert!(!a.undo.available());
-}
-
-#[test]
-fn closing_source_song_skips_other_sources_without_changing_notes_music_or_undo() {
-    let (a, source, _) = edit_tests::fixture();
-    let mut music = a.loaded.as_ref().unwrap().music.clone();
-    let second = cat_smf_editor::score::pattern::operations::create_source(&mut music).unwrap();
-    let mut a = crate::view::tests::app(music);
-    a.select_track(second);
-    crate::cursor::moves::at_tick(&mut a, 120);
-    let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
-    let generation = a.generation;
-    assert!(mode::actual_source(&a, source) && mode::source(&a, second));
-    mode::close_workspace(&mut a);
-    assert_eq!(a.track, 0, "skip every source, not just the current track");
-    assert!(a.note_mode && !mode::workspace_open(&a));
-    assert_eq!(crate::play::playback::location(&a).0, 120);
-    assert!(a.patterns.editing.is_none() && a.patterns.raw_context.is_none());
-    assert!(a.loaded.as_ref().unwrap().display_music.is_none());
-    assert_eq!(a.generation, generation);
-    assert!(!a.undo.available());
-    assert_eq!(
-        cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap(),
-        before
-    );
 }

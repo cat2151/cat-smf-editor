@@ -10,6 +10,7 @@ const LIMIT: usize = 100;
 pub struct History {
     entries: VecDeque<Music>,
     volume_gesture: Option<usize>,
+    pushes: u64,
 }
 
 impl History {
@@ -24,6 +25,7 @@ impl History {
 
     pub(crate) fn push(&mut self, music: Music) {
         self.volume_gesture = None;
+        self.pushes += 1;
         if self.entries.len() == LIMIT {
             self.entries.pop_front();
         }
@@ -35,6 +37,16 @@ impl History {
             self.push(before);
         }
         self.volume_gesture = dragging.then_some(track);
+    }
+
+    /// Counts every push, so a caller can tell whether its edit added a step.
+    pub(crate) fn pushes(&self) -> u64 {
+        self.pushes
+    }
+
+    /// Drops the newest step, folding it into the one before.
+    pub(crate) fn discard_newest(&mut self) {
+        self.entries.pop_back();
     }
 
     pub(crate) fn end_volume_gesture(&mut self) {

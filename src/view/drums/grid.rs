@@ -9,6 +9,7 @@ pub(super) fn show(
     patch: &Patch,
     state: &mut State,
     measure: &drums::Measure,
+    sounding: Option<usize>,
     beacon: bool,
     action: &mut Option<Op>,
 ) {
@@ -46,6 +47,7 @@ pub(super) fn show(
         }
     }
     let mut beat = Rect::NOTHING;
+    let mut playing = Rect::NOTHING;
     #[cfg(test)]
     let mut cells = Vec::new();
     for (visual, row) in (0..4).rev().enumerate() {
@@ -91,6 +93,9 @@ pub(super) fn show(
             if (2..6).contains(&field) {
                 beat = beat.union(response.rect);
             }
+            if sounding.is_some_and(|step| field == step + 2) {
+                playing = playing.union(response.rect);
+            }
             #[cfg(test)]
             cells.push(response.rect);
             if response.clicked() {
@@ -99,6 +104,17 @@ pub(super) fn show(
                 *action = Some(Op::Activate);
             }
         }
+    }
+    if playing.is_positive() {
+        ui.painter().rect_stroke(
+            playing.expand(2.0),
+            2.0,
+            Stroke::new(2.0_f32, crate::view::timeline_repeat::PLAYHEAD),
+            egui::StrokeKind::Outside,
+        );
+        #[cfg(test)]
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(egui::Id::new("drum-playing"), playing));
     }
     // The first beat of an empty pattern is where input starts.
     if beacon && beat.is_positive() {

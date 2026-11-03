@@ -2,6 +2,7 @@
 //! egui viewports cannot be given an owner, so it is set on the native window.
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
+use std::sync::atomic::{AtomicIsize, Ordering};
 
 type Hwnd = *mut c_void;
 
@@ -10,10 +11,11 @@ const SWP_NOSIZE: u32 = 0x0001;
 const SWP_NOMOVE: u32 = 0x0002;
 const SWP_NOACTIVATE: u32 = 0x0010;
 
+/// The root viewport's native window; 0 until the first frame.
+static EDITOR: AtomicIsize = AtomicIsize::new(0);
+
 #[link(name = "user32")]
 unsafe extern "system" {
-    fn GetForegroundWindow() -> Hwnd;
-    fn GetAncestor(window: Hwnd, flags: u32) -> Hwnd;
     fn FindWindowExW(parent: Hwnd, after: Hwnd, class: *const u16, title: *const u16) -> Hwnd;
     fn GetWindowThreadProcessId(window: Hwnd, process: *mut u32) -> u32;
     fn SetWindowLongPtrW(window: Hwnd, index: i32, value: isize) -> isize;
@@ -28,23 +30,25 @@ fn ours(window: Hwnd) -> bool {
     process == std::process::id()
 }
 
-/// Makes the editor, which must be the foreground window, own our window titled
-/// `title`; false while either is not found.
-pub fn adopt(title: &str) -> bool {
-    // SAFETY: a null or foreign handle is rejected before use.
-    let editor = unsafe { GetForegroundWindow() };
-    !editor.is_null() && ours(editor) && adopt_by(editor as isize, title)
+/// Records the root viewport's window. Windows destroys owned windows with their
+/// owner, so only this window, which lives as long as the app, may own others.
+pub fn remember(frame: &eframe::Frame) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    if let Ok(handle) = frame.window_handle()
+        && let RawWindowHandle::Win32(window) = handle.as_raw()
+    {
+        EDITOR.store(window.hwnd.get(), Ordering::Relaxed);
+    }
 }
 
-/// The window that owns our foreground window, or that window itself; it outlives the
-/// windows it owns.
+/// Makes the editor own our window titled `title`; false while either is not found.
+pub fn adopt(title: &str) -> bool {
+    editor().is_some_and(|editor| adopt_by(editor, title))
+}
+
+/// The root viewport's window, once [`remember`]ed.
 pub fn editor() -> Option<isize> {
-    const GA_ROOTOWNER: u32 = 3;
-    // SAFETY: the handles come from the window manager and are only passed back to it.
-    unsafe {
-        let window = GetForegroundWindow();
-        (!window.is_null() && ours(window)).then(|| GetAncestor(window, GA_ROOTOWNER) as isize)
-    }
+    Some(EDITOR.load(Ordering::Relaxed)).filter(|&window| window != 0)
 }
 
 /// Makes `editor` own our window titled `title`; false while it is not found.

@@ -87,6 +87,109 @@ pub(super) fn trash(ui: &mut egui::Ui, p: Pane) -> Option<Discard> {
         None
     }
 }
+/// One placement across its shown measures: a single frame over its bar lines, so a long
+/// pattern reads apart from repeats of a short one. The cursor anywhere inside selects
+/// the frame.
+pub(super) struct Block<'l> {
+    pub start: u64,
+    rect: egui::Rect,
+    bars: Vec<f32>,
+    background: egui::layers::ShapeIdx,
+    selected: bool,
+    faded: bool,
+    label: &'l str,
+}
+impl<'l> Block<'l> {
+    /// Reserves the background below the measures painted next.
+    pub fn begin(ui: &egui::Ui, start: u64, rect: egui::Rect, label: &'l str, faded: bool) -> Self {
+        Self {
+            start,
+            rect,
+            bars: Vec::new(),
+            background: ui.painter().add(egui::Shape::Noop),
+            selected: false,
+            faded,
+            label,
+        }
+    }
+    pub fn extend(&mut self, rect: egui::Rect, cursor: bool) {
+        if rect.center().x > self.rect.right() {
+            self.bars.push((self.rect.right() + rect.left()) / 2.0);
+        }
+        self.rect = self.rect.union(rect);
+        self.selected |= cursor;
+    }
+    pub fn finish(self, ui: &egui::Ui) {
+        let v = ui.visuals();
+        let painter = ui
+            .painter()
+            .with_clip_rect(ui.clip_rect().intersect(self.rect));
+        painter.set(
+            self.background,
+            egui::Shape::rect_filled(self.rect, 3.0, v.faint_bg_color),
+        );
+        let bar = v.widgets.noninteractive.bg_stroke.color.gamma_multiply(0.5);
+        for x in self.bars {
+            painter.vline(
+                x,
+                self.rect.y_range().shrink(4.0),
+                egui::Stroke::new(1.0_f32, bar),
+            );
+        }
+        painter.rect_stroke(
+            self.rect,
+            3.0,
+            if self.selected {
+                egui::Stroke::new(2.0_f32, v.selection.stroke.color)
+            } else {
+                egui::Stroke::new(1.0_f32, v.widgets.noninteractive.bg_stroke.color)
+            },
+            egui::StrokeKind::Inside,
+        );
+        let text = v.text_color();
+        painter.text(
+            self.rect.min + egui::vec2(4.0, 2.0),
+            egui::Align2::LEFT_TOP,
+            self.label,
+            egui::TextStyle::Small.resolve(ui.style()),
+            if self.faded {
+                text.gamma_multiply(0.3)
+            } else {
+                text
+            },
+        );
+    }
+}
+/// One measure inside a [`Block`]: the cursor's measure is tinted, a drop target framed.
+pub(super) fn measure_in_block(
+    ui: &egui::Ui,
+    rect: egui::Rect,
+    cursor: bool,
+    target: bool,
+    faded: bool,
+    notes: impl FnOnce(&egui::Painter, egui::Rect),
+) {
+    let v = ui.visuals();
+    let mut painter = ui.painter_at(rect);
+    if cursor {
+        painter.rect_filled(rect, 3.0, v.selection.bg_fill.gamma_multiply(0.35));
+    }
+    if target {
+        painter.rect_stroke(
+            rect,
+            3.0,
+            egui::Stroke::new(2.0_f32, v.selection.stroke.color),
+            egui::StrokeKind::Inside,
+        );
+    }
+    if faded {
+        painter.multiply_opacity(0.3);
+    }
+    if rect.width() > 6.0 && rect.height() > 6.0 {
+        // No side inset: an inset would read as a rest at every bar line.
+        notes(&painter, rect.shrink2(egui::vec2(0.0, 3.0)));
+    }
+}
 /// A part's name over its notes; selection is the frame and commenting out is faded
 /// contents, not text.
 pub(super) fn cell(

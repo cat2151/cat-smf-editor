@@ -11,6 +11,8 @@ mmlabc-to-smf = { git = "https://github.com/cat2151/mmlabc-to-smf-rust.git", pac
 cmrt-chord = { path = "../clap-mml-render-tui/chord" }
 cmrt-patches = { path = "../clap-mml-render-tui/patches" }
 eframe = "0.31"
+# The editor window's native handle, which owns the companion windows.
+raw-window-handle = "0.6"
 cpal = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

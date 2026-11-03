@@ -24,15 +24,15 @@ impl Matrix {
         position: (usize, u64),
         end: u64,
         cell_width: f32,
-        gap: f32,
     ) -> Self {
         let id = ui.id().with((pane.title(), "matrix-position"));
         let mut state = ui
             .ctx()
             .data(|d| d.get_temp::<State>(id))
             .unwrap_or_default();
-        let stride = cell_width + gap;
-        let label = 24.0 + gap;
+        // Measures abut so a pattern's notes run on across bar lines; only the row label keeps a gap.
+        let stride = cell_width;
+        let label = 24.0 + ui.spacing().item_spacing.x;
         let mut offset = state.offset;
         // Reveal a changed selection once. Manual scrolling must remain independent
         // of the selected cell, including when returning to measure one.
@@ -120,7 +120,7 @@ impl Matrix {
     }
     pub fn row_label(&self, ui: &mut egui::Ui, text: &str) {
         ui.add_sized(
-            [24.0, ui.text_style_height(&egui::TextStyle::Body)],
+            [self.label, ui.text_style_height(&egui::TextStyle::Body)],
             egui::Label::new(text),
         );
     }

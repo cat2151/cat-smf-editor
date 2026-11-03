@@ -1,7 +1,7 @@
 use super::*;
 use crate::view::commands::{self, Screen};
 
-pub(super) fn fixture() -> App {
+pub(crate) fn fixture() -> App {
     let mut app = crate::view::tests::app(cat_smf_editor::model::Music {
         format: 1,
         division: 480,

@@ -14,6 +14,7 @@ pub(super) fn show(
     layout: &Layout,
     state: &mut State,
     slot: usize,
+    chord: &[usize],
 ) -> Action {
     let mut action = Action::default();
     // A fixed id keeps the drag alive when the error line above appears or goes.
@@ -97,7 +98,14 @@ pub(super) fn show(
         (drag.note, drag.moved(note, shift, layout.scale))
     });
     let lit = hover::lit(ui.input(|i| i.time));
-    draw(ui.painter(), rect, layout, moved, hover.filter(|_| lit));
+    draw(
+        ui.painter(),
+        rect,
+        layout,
+        moved,
+        hover.filter(|_| lit),
+        chord,
+    );
     action.navigated |= navigation::adjust_edge(ui, rect, layout.scale, &response, state, slot);
     if response.clicked()
         && action.edit.is_none()

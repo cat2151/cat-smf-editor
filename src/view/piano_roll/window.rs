@@ -9,6 +9,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         app.piano_roll.range_drag = None;
         app.piano_roll.generation = app.generation;
     }
+    chord_timing::validate(app);
     if !app.piano_roll.open {
         app.piano_roll.viewport.suspend();
         app.piano_roll.repeat_drag = Default::default();
@@ -52,6 +53,10 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
         minimap.extend_timeline(loaded, track, layout);
     }
     let range = app.playback.repeat;
+    let chords: Vec<_> = tracks
+        .iter()
+        .map(|&track| chord_timing::highlight(app, track))
+        .collect();
     let state = &mut app.piano_roll;
     state
         .viewport
@@ -178,7 +183,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         ));
                         ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                             ui.set_clip_rect(ui.clip_rect().intersect(clip));
-                            let action = canvas::show(ui, rect, layout, state, slot);
+                            let action = canvas::show(ui, rect, layout, state, slot, &chords[slot]);
                             trill_click = crate::view::meta_text::show(
                                 ui,
                                 loaded,
@@ -291,6 +296,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     if let Some((track, event)) = trill_click {
         app.piano_roll.error = crate::view::trill_edit::begin(app, track, event).err();
     }
+    chord_timing::show(app, ctx);
 }
 
 fn placement(ctx: &egui::Context, maximized: bool) -> egui::Window<'static> {

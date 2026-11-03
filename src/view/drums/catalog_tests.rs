@@ -130,4 +130,12 @@ fn installed_tracking_percussion_leaves_the_percussion_row() {
     assert!(after[3].is_disjoint(&tracking));
     assert_eq!(before[..3], after[..3]);
     println!("first percussion patch: {:?}", after[3].first());
+    for (row, default) in super::catalog::DEFAULTS.iter().enumerate() {
+        if let Some(default) = default {
+            assert!(
+                after[row].contains(*default),
+                "{default} is not on row {row}"
+            );
+        }
+    }
 }

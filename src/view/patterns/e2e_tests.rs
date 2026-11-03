@@ -59,7 +59,7 @@ fn root_pattern_input_cancel_invalid_and_ime_keep_context_and_song() {
     assert!(mode::workspace_open(&a));
     a.select_track(0);
     frame(&mut a, &c, vec![]);
-    assert!(!mode::workspace_open(&a));
+    assert!(mode::workspace_open(&a));
 }
 
 fn labels(a: &mut App, c: &egui::Context) -> Vec<String> {
@@ -160,9 +160,6 @@ fn full_measure_mml_keeps_independent_body_open_and_cursor_auditions_its_notes()
     assert_eq!(a.audition.auditioned, vec![p.parts[0].2.notes[0].pitch]);
     command(&mut a, &c, "pattern song");
     assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
-    mode::close_workspace(&mut a);
-    assert!(a.patterns.editing.is_none());
-    assert!(!mode::workspace_open(&a));
 }
 
 #[test]

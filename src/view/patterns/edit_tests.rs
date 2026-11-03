@@ -10,6 +10,11 @@ use cat_smf_editor::{
 };
 use eframe::egui::{self, Key};
 
+/// Gives the song a container, which brings up the Song window.
+pub(crate) fn add_container(a: &mut App) {
+    a.edit_tracks(|m| operations::create_source(m).map(|_| ()))
+        .unwrap();
+}
 pub(crate) fn fixture() -> (App, usize, u64) {
     let mut m = Music {
         format: 1,

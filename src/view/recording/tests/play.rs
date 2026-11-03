@@ -62,7 +62,7 @@ fn rows_keys_easily_confused_on_a_japanese_keyboard_record_their_own_pitches() {
         vec![key(Key::Escape, true, Modifiers::NONE)],
         true,
     );
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
     let mut expected: Vec<u8> = [(0, 0), (1, 11), (2, 10), (2, 11), (0, 10), (3, 12)]
         .into_iter()
         .flat_map(|(row, column)| pitches(&settings, Pad::Row { row, column }))

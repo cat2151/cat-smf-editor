@@ -1,6 +1,9 @@
 use super::*;
 use cat_smf_editor::edit::tracks;
 use cat_smf_editor::score::macro_values::Values;
+pub(crate) fn open(app: &mut App) {
+    app.macro_editor.session = Some(session(app));
+}
 fn session(app: &App) -> Session {
     let curve = Curve {
         version: 1,

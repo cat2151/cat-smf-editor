@@ -102,7 +102,7 @@ pub(crate) fn observe_recording(a: &mut App, ctx: &egui::Context) {
 }
 
 fn resolve(a: &App, ctx: &egui::Context) -> Target {
-    if a.patterns.recording.owns(ctx.viewport_id()) {
+    if crate::view::recording::owns(ctx.viewport_id()) {
         return Target::Recording;
     }
     if a.palette.is_open() {
@@ -141,6 +141,7 @@ fn resolve_root(a: &App, ctx: &egui::Context) -> Target {
         Screen::ParameterPicker => Target::Picker,
         Screen::Overview => Target::Overview,
         Screen::Timeline | Screen::ParameterInput => timeline(a, ctx),
+        Screen::ChordTiming => Target::Piano,
         _ => Target::Main,
     }
 }
@@ -184,9 +185,9 @@ fn valid(a: &App, target: Target) -> bool {
         Target::Macro => a.macro_editor.open(),
         Target::Picker => a.parameter_editor.picker_open(),
         Target::Scene => {
-            crate::view::patterns::mode::workspace_open(a) && a.patterns.workspace.scene_window
+            crate::view::patterns::mode::song_window(a) && a.patterns.workspace.scene_window
         }
-        Target::Song => crate::view::patterns::mode::workspace_open(a),
+        Target::Song => crate::view::patterns::mode::song_window(a),
         Target::Views => a.command_input.views_open(),
         Target::Mml => a.mml_input.open,
         Target::Palette => a.palette.is_open(),

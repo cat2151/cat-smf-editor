@@ -31,6 +31,7 @@ pub(super) enum Looper {
 
 #[derive(Debug)]
 pub(super) struct Under {
+    pattern: u64,
     notes: Vec<(Duration, u8, u8)>,
     tempo: u32,
     start: Duration,
@@ -136,16 +137,17 @@ pub(super) fn heard(s: &mut Session, pitches: &[u8], velocity: u8, at: Duration)
         let drums = s.settings().drums;
         match std::mem::take(&mut s.sounds[i].looper) {
             Looper::Looping {
+                pattern,
                 notes,
                 tempo: t,
                 start,
-                ..
             } if drums && t == tempo => {
                 // On the bar lines of the phrase it goes on under.
                 s.sounds[i].looper = Looper::Capturing {
                     origin: start,
                     notes: vec![],
                     under: Some(Under {
+                        pattern,
                         notes,
                         tempo,
                         start,
@@ -298,6 +300,34 @@ fn follow_capture(a: &mut App, s: &mut Session, i: usize) {
     }
 }
 
+/// Ticks at `division` into Loop pattern `id` that a repeating phrase plays now.
+pub(super) fn tick(s: &Session, id: u64, division: u16) -> Option<u64> {
+    let at = s.clock.elapsed();
+    s.sounds.iter().find_map(|x| {
+        let (tempo, start) = match &x.looper {
+            Looper::Looping {
+                pattern,
+                tempo,
+                start,
+                ..
+            }
+            | Looper::Capturing {
+                under:
+                    Some(Under {
+                        pattern,
+                        tempo,
+                        start,
+                        ..
+                    }),
+                ..
+            } if *pattern == id => (u128::from(*tempo).max(1), *start),
+            _ => return None,
+        };
+        let into = at.checked_sub(start)?.as_micros() % (tempo * 4);
+        u64::try_from(into * u128::from(division) / tempo).ok()
+    })
+}
+
 fn pattern_notes(a: &App, id: u64, tempo: u32) -> Option<Vec<(Duration, u8, u8)>> {
     let music = &a.loaded.as_ref()?.music;
     cat_smf_editor::score::pattern::recording::looped(music, id, tempo).ok()
@@ -374,7 +404,7 @@ pub(super) fn replayed(s: &Session, at: Duration) -> Option<u8> {
 /// after the end of the Song; the phrases stop and those measures of the Song repeat.
 pub(super) fn to_song(a: &mut App, s: &mut Session) -> Result<(), String> {
     use cat_smf_editor::score::{
-        pattern::{operations, Catalog},
+        pattern::operations,
         scene::{self, arrangement},
     };
     let loops: Vec<u64> = s
@@ -392,18 +422,9 @@ pub(super) fn to_song(a: &mut App, s: &mut Session) -> Result<(), String> {
     a.edit_tracks(|music| {
         let mut parts = vec![];
         for &pattern in &loops {
-            let part = match operations::same_normal(music, pattern)? {
-                Some(id) => id,
-                None => {
-                    let track = Catalog::read(music)?
-                        .patterns
-                        .get(&pattern)
-                        .ok_or(message::MISSING_PATTERN)?
-                        .track;
-                    operations::create(music, track, Some(pattern))?
-                }
-            };
-            parts.push(PatternOrScene::Pattern(part));
+            parts.push(PatternOrScene::Pattern(operations::placeable(
+                music, pattern,
+            )?));
         }
         let c = scene::read(music)?;
         let mut at = 1;
@@ -426,8 +447,6 @@ pub(super) fn to_song(a: &mut App, s: &mut Session) -> Result<(), String> {
         );
         Ok(())
     })?;
-    // The keyboard's own edit keeps it open.
-    s.song = a.song_id;
     for i in 0..s.sounds.len() {
         silence(s, i);
         s.sounds[i].looper = Looper::Off;
@@ -444,22 +463,30 @@ pub(super) fn to_song(a: &mut App, s: &mut Session) -> Result<(), String> {
     Ok(())
 }
 
-/// Follows edits of the Loop patterns, and patch edits and renames of the containers, without
-/// stopping the phrases.
-pub(super) fn follow_patch(a: &mut App, s: &mut Session) {
+/// Follows edits of the song without stopping the phrases: the Loop patterns, the containers'
+/// moves, patches and renames. `true` when a container the keyboard plays is gone.
+pub(super) fn follow_patch(a: &mut App, s: &mut Session) -> bool {
     if s.generation == a.generation {
-        return;
+        return false;
     }
     s.generation = a.generation;
     follow_pattern(a, s);
     let Some(loaded) = a.loaded.as_ref() else {
-        return;
+        return true;
+    };
+    let Ok(catalog) = Catalog::read(&loaded.music) else {
+        return true;
     };
     let mut changed = false;
     for sound in s.sounds.iter_mut() {
-        if let Some(id) = sound.container
-            && sound.track < loaded.music.tracks.len()
-        {
+        if let Some(id) = sound.container {
+            let Some(&track) = catalog.tracks.get(&id) else {
+                return true;
+            };
+            if track != sound.track {
+                sound.track = track;
+                changed = true;
+            }
             sound.name = super::container_name(&loaded.music, id, sound.track);
         }
         if let Some(patch) = sound
@@ -472,7 +499,7 @@ pub(super) fn follow_patch(a: &mut App, s: &mut Session) {
         }
     }
     let Some(click) = &s.click else {
-        return;
+        return false;
     };
     if changed && !a.audition.retune_live(&super::play::sounds(s), click) {
         s.error = Some(
@@ -482,6 +509,7 @@ pub(super) fn follow_patch(a: &mut App, s: &mut Session) {
                 .to_owned(),
         );
     }
+    false
 }
 
 /// What the panel shows: the patch name, or the layer count of a layered container.

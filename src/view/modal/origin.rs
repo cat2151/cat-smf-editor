@@ -33,6 +33,10 @@ impl Origin {
             tick: a.track_view.cursor_tick,
         }
     }
+    #[cfg(test)]
+    pub fn screen(&self) -> Screen {
+        self.screen
+    }
     pub fn capture_with_focus(a: &App, ctx: &egui::Context, old: &Self) -> Self {
         let mut new = Self::capture(a, ctx);
         new.focus = old.focus;

@@ -2,7 +2,7 @@ use super::*;
 mod candidates;
 mod drawing;
 mod scrolling;
-use drawing::{cell, paint_part, place_beacon, trash};
+use drawing::{cell, measure_in_block, paint_part, place_beacon, trash, Block};
 /// A placement being dragged: its row and first measure.
 #[derive(Clone, Copy)]
 struct Placed(usize, u64);
@@ -121,6 +121,13 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
         }
         if p == Pane::Song {
             ui.checkbox(&mut a.patterns.workspace.scene_window, "Scene");
+            if a.patterns.recording.minimized()
+                && button(ui, p, "keyboard", "🎹")
+                    .on_hover_text("Virtual MIDI keyboard (Shift+R)")
+                    .clicked()
+            {
+                crate::view::recording::restore(ui.ctx());
+            }
         }
     });
     if let Some(e) = &a.patterns.workspace.error {
@@ -140,8 +147,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
         1.0
     };
     let cell_width = (90.0 * zoom).max(2.0);
-    let gap = ui.spacing().item_spacing.x * zoom.min(1.0);
-    let columns = ((ui.available_width() / (cell_width + gap)).ceil() as u64).max(12);
+    let columns = ((ui.available_width() / cell_width).ceil() as u64).max(12);
     let end = length.map_or_else(
         || {
             c.song
@@ -178,7 +184,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     let mut dropped = None;
     let mut moved = None;
     let mut commented = None;
-    let mut scrolling = scrolling::Matrix::new(ui, p, position, end, cell_width, gap);
+    let mut scrolling = scrolling::Matrix::new(ui, p, position, end, cell_width);
     let timeline = if p == Pane::Song {
         &mut a.patterns.workspace.timeline
     } else {
@@ -210,7 +216,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
             ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
                 egui::Grid::new((p.title(), "cells"))
                     .min_col_width(0.0)
-                    .spacing(egui::vec2(gap, ui.spacing().item_spacing.y))
+                    .spacing(egui::vec2(0.0, ui.spacing().item_spacing.y))
                     .show(ui, |ui| {
                         scrolling.row_label(ui, "");
                         for m in first..end {
@@ -233,21 +239,13 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                         for row in 0..count {
                             let lane = lanes.get(row).copied();
                             scrolling.row_label(ui, &(row + 1).to_string());
+                            let mut block: Option<Block> = None;
                             for measure in first..end {
                                 let covering =
                                     lane.and_then(|l| model::covering(&c, id, l, measure));
                                 let continuation = covering
                                     .filter(|(_, start)| *start < measure)
                                     .map(|(_, start)| start);
-                                let label = covering
-                                    .filter(|_| continuation.is_none())
-                                    .and_then(|(v, _)| {
-                                        choices
-                                            .iter()
-                                            .find(|(p, _)| *p == v)
-                                            .map(|(_, s)| s.as_str())
-                                    })
-                                    .unwrap_or(if continuation.is_some() { "—" } else { "·" });
                                 let (rect, r) = ui.allocate_exact_size(
                                     egui::vec2(cell_width, 30.0),
                                     egui::Sense::click_and_drag(),
@@ -257,31 +255,47 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                                 }
                                 let target = r.dnd_hover_payload::<PatternOrScene>().is_some()
                                     || r.dnd_hover_payload::<Placed>().is_some();
-                                let faded =
-                                    lane.is_some_and(|l| model::commented_out(&c, id, l, measure));
-                                cell(
-                                    ui,
-                                    rect,
-                                    label,
-                                    selected == Some((row, measure)) || target,
-                                    faded,
-                                    |painter, area| {
-                                        let Some((part, start)) = covering else {
-                                            return;
-                                        };
-                                        let k = (measure - start) as usize;
-                                        paint_part(
-                                            painter,
-                                            area,
-                                            music,
-                                            keys,
-                                            &catalog,
-                                            &c,
-                                            part,
-                                            Some((k, k + 1)),
-                                        );
-                                    },
-                                );
+                                let cursor = selected == Some((row, measure));
+                                if block.as_ref().map(|b| b.start)
+                                    != covering.map(|(_, start)| start)
+                                    && let Some(b) = block.take()
+                                {
+                                    b.finish(ui);
+                                }
+                                if let Some((part, start)) = covering {
+                                    let faded = lane
+                                        .is_some_and(|l| model::commented_out(&c, id, l, measure));
+                                    let b = block.get_or_insert_with(|| {
+                                        let label = choices
+                                            .iter()
+                                            .find(|(p, _)| *p == part)
+                                            .map_or("", |(_, s)| s.as_str());
+                                        Block::begin(ui, start, rect, label, faded)
+                                    });
+                                    b.extend(rect, cursor);
+                                    let k = (measure - start) as usize;
+                                    measure_in_block(
+                                        ui,
+                                        rect,
+                                        cursor,
+                                        target,
+                                        faded,
+                                        |painter, area| {
+                                            paint_part(
+                                                painter,
+                                                area,
+                                                music,
+                                                keys,
+                                                &catalog,
+                                                &c,
+                                                part,
+                                                Some((k, k + 1)),
+                                            );
+                                        },
+                                    );
+                                } else {
+                                    cell(ui, rect, "·", cursor || target, false, |_, _| {});
+                                }
                                 if selected == Some((row, measure))
                                     || selected.is_none() && (row, measure) == (0, 1)
                                 {
@@ -307,6 +321,9 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                                 } else if r.secondary_clicked() && covering.is_some() {
                                     commented = Some((row, measure));
                                 }
+                            }
+                            if let Some(b) = block {
+                                b.finish(ui);
                             }
                             ui.end_row();
                         }

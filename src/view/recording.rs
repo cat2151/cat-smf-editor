@@ -30,32 +30,36 @@ mod take;
 #[cfg(test)]
 mod tests;
 pub(crate) mod window;
+#[cfg(test)]
+pub(crate) use capture::viewport as capture_viewport;
 pub(crate) use companions::reset as reset_windows;
 pub(crate) use companions::{piano_viewport, settings_viewport};
 pub(crate) use panel::LOOPING;
 pub(crate) use resume::begin as resume;
+pub(crate) use resume::{close_for_exit, restore};
 use take::{finish, reveal};
+
+/// Ticks into pattern `id` that a Phrase loop repeating it plays now.
+pub(crate) fn phrase_tick(a: &App, id: u64) -> Option<u64> {
+    let s = a.patterns.recording.session.as_ref()?;
+    phrase::tick(s, id, a.loaded.as_ref()?.music.division)
+}
 
 #[derive(Default)]
 pub struct State {
     session: Option<Session>,
     /// The keyboard reopens at startup once the Song window is up.
     resuming: bool,
+    /// The song whose keyboard could not open by itself; it is not retried every frame.
+    failed: Option<u64>,
 }
 impl State {
     pub fn is_open(&self) -> bool {
         self.session.is_some()
     }
-    /// The keyboard or one of its companion windows.
-    pub(crate) fn owns(&self, viewport: egui::ViewportId) -> bool {
-        self.is_open()
-            && [
-                window::viewport(),
-                settings_viewport(),
-                piano_viewport(),
-                capture::viewport(),
-            ]
-            .contains(&viewport)
+    /// Minimized by its own button; the Song window offers it back.
+    pub fn minimized(&self) -> bool {
+        self.session.as_ref().is_some_and(|s| s.minimized)
     }
     #[cfg(test)]
     pub(crate) fn preparing(&self) -> bool {
@@ -78,7 +82,6 @@ struct Session {
     owner: Option<isize>,
     /// Titles of the open windows `owner` already owns.
     owned: Vec<&'static str>,
-    song: u64,
     division: u16,
     clock: Instant,
     sounds: Vec<Sound>,
@@ -95,6 +98,7 @@ struct Session {
     raise: bool,
     /// Of the keyboard and `origin`, the keyboard had the focus last.
     focused: bool,
+    minimized: bool,
     /// Where each open companion window opened, fixed while it is open so it can be moved.
     companions: companions::Places,
     /// The pad the mouse holds in each `window::Pointer` window.
@@ -223,8 +227,9 @@ fn open_from(
     origin: egui::ViewportId,
     pane: Option<Pane>,
 ) -> Result<(), String> {
-    if a.patterns.recording.is_open() {
-        ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
+    if let Some(s) = a.patterns.recording.session.as_mut() {
+        s.origin = origin;
+        restore(ctx);
         return Ok(());
     }
     if modal::is_open(a) {
@@ -304,7 +309,6 @@ fn open_from(
         #[cfg(not(windows))]
         owner: None,
         owned: vec![],
-        song: a.song_id,
         division,
         clock: Instant::now(),
         sounds,
@@ -316,6 +320,7 @@ fn open_from(
         piano_open: true,
         raise: false,
         focused: true,
+        minimized: false,
         companions: companions::Places::default(),
         mouse: [None; 2],
         recorder: None,
@@ -352,6 +357,17 @@ fn open_from(
     Ok(())
 }
 
+/// The keyboard or one of its companion windows. While they draw, the session is out of `App`.
+pub(crate) fn owns(viewport: egui::ViewportId) -> bool {
+    [
+        window::viewport(),
+        settings_viewport(),
+        piano_viewport(),
+        capture::viewport(),
+    ]
+    .contains(&viewport)
+}
+
 /// Shows the keyboard windows; the other windows keep their own input.
 pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
     resume::follow(a, ctx);
@@ -360,25 +376,29 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         a.patterns.recording = state;
         return;
     };
-    let mut done = a.song_id != s.song;
-    if !done {
-        let builder = egui::ViewportBuilder::default()
-            .with_title(window::TITLE)
-            .with_position(s.position)
-            .with_inner_size(window::SIZE);
-        let mut moved = None;
-        done = ctx.show_viewport_immediate(window::viewport(), builder, |ctx, class| {
-            let native = class != egui::ViewportClass::Embedded;
-            if native {
-                moved = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min);
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    return play::close(a, s, s.clock.elapsed());
+    let builder = egui::ViewportBuilder::default()
+        .with_title(window::TITLE)
+        .with_position(s.position)
+        .with_inner_size(window::SIZE)
+        .with_visible(window::shown(ctx));
+    let mut moved = None;
+    let song = a.song_id;
+    let done = ctx.show_viewport_immediate(window::viewport(), builder, |ctx, class| {
+        let native = class != egui::ViewportClass::Embedded;
+        if native {
+            moved = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min);
+            s.minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
+            if ctx.input(|i| i.viewport().close_requested()) {
+                if play::kept(a) {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 }
+                return play::end(a, s, s.clock.elapsed());
             }
-            super::help::observe_recording(a, ctx);
-            if s.first_read(ctx) && play::process(a, ctx, s) {
-                return true;
-            }
+        }
+        super::help::observe_recording(a, ctx);
+        // Embedded, this shares the root input whose modal already ran; a second one eats the palette's keys.
+        let input = native.then(|| modal::begin(a, ctx)).flatten();
+        let done = (s.first_read(ctx) && play::process(a, ctx, s)) || {
             window::show(ctx, class, s);
             match s.clicked.take() {
                 Some(window::Button::Browse) => {
@@ -387,28 +407,32 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
                 }
                 b => b.is_some_and(|b| play::button(a, s, b)),
             }
-        });
-        if let Some(at) = moved {
-            companions::remember(a, companions::KEYBOARD, at);
+        };
+        if native {
+            modal::end(a, ctx, input);
         }
-        if ctx.input_for(window::viewport(), |i| i.focused) {
-            s.focused = true;
-        } else if ctx.input_for(s.origin, |i| i.focused) {
-            s.focused = false;
+        done
+    });
+    if let Some(at) = moved {
+        companions::remember(a, companions::KEYBOARD, at);
+    }
+    if ctx.input_for(window::viewport(), |i| i.focused) {
+        s.focused = true;
+    } else if ctx.input_for(s.origin, |i| i.focused) {
+        s.focused = false;
+    }
+    if !done {
+        if let Err(error) = capture::flush(a, s, false) {
+            s.error = Some(error);
         }
-        if !done {
-            if let Err(error) = capture::flush(a, s, false) {
-                s.error = Some(error);
-            }
-            let keyboard = moved.unwrap_or(s.position);
-            companions::show(a, ctx, s, keyboard);
-            capture::show(a, ctx, s, keyboard);
-            companions::adopt(ctx, s);
-        }
+        let keyboard = moved.unwrap_or(s.position);
+        companions::show(a, ctx, s, keyboard);
+        capture::show(a, ctx, s, keyboard);
+        companions::adopt(ctx, s);
     }
     if done {
         // A closing that commits a take has put the keys in the song already.
-        if a.song_id == s.song {
+        if a.song_id == song {
             if let Err(error) = capture::flush(a, s, true) {
                 a.load_error = Some(error);
             }
@@ -418,34 +442,8 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         ctx.send_viewport_cmd_to(s.origin, egui::ViewportCommand::Focus);
         // Only closing the app leaves the switch on for the next start.
         a.config.select_phrase_loop(false);
-        shut(a, &mut state);
+        resume::shut(a, &mut state);
     }
     a.patterns.recording = state;
     ctx.request_repaint_after(std::time::Duration::from_millis(8));
-}
-
-fn shut(a: &mut App, state: &mut State) {
-    if let Some(s) = state.session.take() {
-        a.audition.stop_live();
-        // Settings and the loop length survive closing and restarts; the key is reread at every open.
-        a.config
-            .select_keyboard_settings((*s.settings(), s.measures));
-        setup::keep_voicing(a, &s);
-    }
-}
-
-/// Closes the keyboard window as its own close button does, so the exit confirmation gets input.
-/// `false` keeps it open with the commit error.
-pub(crate) fn close_for_exit(a: &mut App) -> bool {
-    let mut state = std::mem::take(&mut a.patterns.recording);
-    let done = state.session.as_mut().is_none_or(|s| {
-        // Closing from the editor moves the focus there first, so the last of the two counts.
-        a.config.select_keyboard_focused(s.focused);
-        play::close(a, s, s.clock.elapsed())
-    });
-    if done {
-        shut(a, &mut state);
-    }
-    a.patterns.recording = state;
-    done
 }

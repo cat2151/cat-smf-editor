@@ -1,7 +1,5 @@
 use super::*;
-use cat_smf_editor::score::pattern::recording::{
-    Layout, Mode, Modulation, Range, Scale, Start, Velocity,
-};
+use cat_smf_editor::score::pattern::recording::{Layout, Mode, Modulation, Range, Scale, Velocity};
 use setup::Item;
 
 fn press(a: &mut App, ctx: &egui::Context, keys: &[(Key, Modifiers)]) {
@@ -33,13 +31,11 @@ fn every_item_changes_in_the_settings_window_while_the_pads_play() {
     let press = keys;
     // One container: the container row is skipped, and Free skips the measure count.
     assert_eq!(session(&a).item, Item::Range);
-    press(&mut a, &ctx, &[DOWN, DOWN]);
+    press(&mut a, &ctx, &[DOWN]);
     assert_eq!(session(&a).item, Item::Bpm);
-    press(&mut a, &ctx, &[UP, UP, UP]);
+    press(&mut a, &ctx, &[UP, UP]);
     assert_eq!(session(&a).item, Item::Range);
-    press(&mut a, &ctx, &[DOWN, RIGHT]);
-    assert_eq!(recorder(&a).settings().start, Start::Key);
-    press(&mut a, &ctx, &[UP, RIGHT, DOWN, DOWN, RIGHT, BIG]);
+    press(&mut a, &ctx, &[RIGHT, DOWN, RIGHT, BIG]);
     assert_eq!(recorder(&a).settings().range, Range::Loop { measures: 9 });
     press(&mut a, &ctx, &[DOWN, RIGHT, BIG]);
     assert_eq!(setup::bpm(recorder(&a).settings().tempo), 131);
@@ -105,8 +101,8 @@ fn every_item_changes_in_the_settings_window_while_the_pads_play() {
         (0, Scale::MajorPentatonic)
     );
     assert_eq!(
-        (kept.range, kept.start, kept.tempo, kept.mode),
-        (t.range, Start::Key, t.tempo, t.mode)
+        (kept.range, kept.tempo, kept.mode),
+        (t.range, t.tempo, t.mode)
     );
     assert_eq!((kept.note_base, kept.chord_base), (60, 60));
     assert_eq!(session(&a).measures, 9);
@@ -190,7 +186,7 @@ fn a_drum_container_plays_one_lane_per_row_and_records_into_itself() {
     a.patterns.recording.session.as_mut().unwrap().clock -= Duration::from_millis(500);
     frame(&mut a, &ctx, down(false), true);
     press(&mut a, &ctx, &[(Key::Escape, Modifiers::NONE)]);
-    assert!(!a.patterns.recording.is_open(), "{:?}", a.load_error);
+    assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
     let music = &a.loaded.as_ref().unwrap().music;
     let c = Catalog::read(music).unwrap();
     let p = &c.patterns[&a.patterns.selected.unwrap()];
@@ -223,7 +219,6 @@ fn shortcuts_change_items_from_the_pads_until_a_take_fixes_them() {
             ctrl(Key::R),
             ctrl(Key::D),
             back(Key::B),
-            ctrl(Key::S),
             (Key::Tab, Modifiers::NONE),
         ],
     );
@@ -232,7 +227,7 @@ fn shortcuts_change_items_from_the_pads_until_a_take_fixes_them() {
     assert_eq!(t.range, Range::Loop { measures: 5 });
     assert_eq!(setup::bpm(t.tempo), 119);
     // Shift+Tab twice steps back to Triad inversions, Tab forward to Seventh inversions.
-    assert_eq!((t.start, t.mode), (Start::Key, Mode::SeventhInversions));
+    assert_eq!(t.mode, Mode::SeventhInversions);
     // B minor pentatonic from B4 one step up; the natural minor degree below B3.
     assert_eq!((t.note_base, t.chord_base), (74, 57));
     // Armed, the tempo and range belong to the take.

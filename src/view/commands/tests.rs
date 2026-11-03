@@ -209,7 +209,7 @@ fn global_commands_have_no_screen_label_and_are_offered_everywhere_but_app_dialo
 fn app_quit_is_offered_in_pane_and_help_windows_and_closes_the_app() {
     let mut a = app();
     let c = egui::Context::default();
-    a.patterns.workspace_open = true;
+    crate::view::patterns::edit_tests::add_container(&mut a);
     let song = crate::view::patterns::workspace::Pane::Song.viewport();
     for viewport in [song, crate::view::help::viewport()] {
         let listed = in_window(&mut a, &c, viewport, |a, c| labels(a, c));
@@ -221,14 +221,13 @@ fn app_quit_is_offered_in_pane_and_help_windows_and_closes_the_app() {
     });
     // root から実行したときと同じ保存確認へ進む。
     assert!(!a.config.navigation.close_approved);
-    a.patterns.workspace_open = false;
     assert_eq!(owner(&a, &c), Screen::Confirm);
 }
 #[test]
 fn every_palette_offers_every_screen_once_and_moves_there_to_run() {
     let mut a = app();
     let c = egui::Context::default();
-    a.patterns.workspace_open = true;
+    crate::view::patterns::edit_tests::add_container(&mut a);
     let song = crate::view::patterns::workspace::Pane::Song.viewport();
     let listed = in_window(&mut a, &c, song, |a, c| {
         assert_eq!(owner(a, c), Screen::Song);
@@ -277,7 +276,7 @@ fn input_windows_offer_only_themselves_and_are_not_left_from_a_pane() {
     assert!(candidates(&a, &c)
         .iter()
         .all(|x| matches!(x.screen, Screen::Mml | Screen::Global)));
-    a.patterns.workspace_open = true;
+    crate::view::patterns::edit_tests::add_container(&mut a);
     let song = crate::view::patterns::workspace::Pane::Song.viewport();
     assert!(!in_window(&mut a, &c, song, |a, c| run_label(
         a,

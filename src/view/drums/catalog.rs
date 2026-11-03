@@ -33,6 +33,21 @@ pub(super) struct Reference {
     display: String,
 }
 
+/// Patch each row starts with; a row without one, or whose patch is missing, takes its first.
+pub(super) const DEFAULTS: [Option<&str>; 4] = [
+    None,
+    Some("patches_3rdparty/Cybersoda/Drums/Short Snare.fxp"),
+    Some("patches_3rdparty/Kinsey Dulcet/Percussion/Tasty Hats.fxp"),
+    None,
+];
+
+pub(super) fn default_of(row: usize, entries: &[PatchReference]) -> &PatchReference {
+    entries
+        .iter()
+        .find(|e| Some(e.display.as_str()) == DEFAULTS[row])
+        .unwrap_or(&entries[0])
+}
+
 pub(super) fn load(app: &mut App) -> Result<[Vec<PatchReference>; 4], String> {
     let home = dirs::config_local_dir().ok_or("local applicationフォルダがありません")?;
     let paths = [

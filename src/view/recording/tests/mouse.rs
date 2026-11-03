@@ -115,7 +115,7 @@ fn a_take_records_what_the_mouse_plays() {
         vec![key(Key::Escape, true, Modifiers::NONE)],
         true,
     );
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
     let music = &a.loaded.as_ref().unwrap().music;
     let c = Catalog::read(music).unwrap();
     let p = &c.patterns[&a.patterns.selected.unwrap()];
@@ -129,7 +129,7 @@ fn a_take_records_what_the_mouse_plays() {
 }
 
 #[test]
-fn the_container_menu_switches_to_a_drum_container() {
+fn the_container_menu_switches_to_a_drum_container_after_a_phrase_key() {
     let mut a = app();
     for _ in 0..2 {
         a.edit_tracks(|m| cat_smf_editor::score::pattern::operations::create_source(m).map(|_| ()))
@@ -139,10 +139,14 @@ fn the_container_menu_switches_to_a_drum_container() {
     let drums = melodic - 1;
     a.loaded.as_mut().unwrap().patches[drums].drums = Some(Default::default());
     a.track = melodic;
+    a.config.phrase_loop = true;
     let ctx = egui::Context::default();
     open_key(&mut a, &ctx);
     let mut state = std::mem::take(&mut a.patterns.recording);
     let s = state.session.as_mut().unwrap();
+    playing::point(s, Pointer::Piano, Some(Pad::Pitch(60)));
+    playing::point(s, Pointer::Piano, None);
+    assert!(!playing::armed(s));
     let index = s.sounds.iter().position(|x| x.track == drums).unwrap();
     assert_ne!(s.selected, index);
     assert!(!playing::button(&mut a, s, window::Button::Sound(index)));

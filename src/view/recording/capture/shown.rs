@@ -10,7 +10,6 @@ pub(super) struct Back {
     note_mode: bool,
     editing: Option<Context>,
     raw_context: Option<Context>,
-    workspace_open: bool,
     selected: Option<u64>,
     container: Option<u64>,
     navigation: navigation::State,
@@ -24,7 +23,6 @@ impl Back {
             note_mode: a.note_mode,
             editing: a.patterns.editing.clone(),
             raw_context: a.patterns.raw_context.clone(),
-            workspace_open: a.patterns.workspace_open,
             selected: a.patterns.selected,
             container: a.patterns.container,
             navigation: a.patterns.navigation.clone(),
@@ -39,7 +37,6 @@ impl Back {
         a.set_track(self.track);
         a.patterns.editing = self.editing;
         a.patterns.raw_context = self.raw_context;
-        a.patterns.workspace_open = self.workspace_open;
         a.patterns.edit_song = a.song_id;
         a.patterns.selected = self.selected;
         a.patterns.container = self.container;

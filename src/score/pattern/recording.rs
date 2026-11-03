@@ -14,7 +14,7 @@ mod settings;
 pub use expression::{Modulation, Velocity};
 pub use pitches::{pitches, Pad, ROW_KEYS};
 pub use recorder::Recorder;
-pub use settings::{Key, Layout, Mode, Range, Scale, Settings, Start, Voicing};
+pub use settings::{Key, Layout, Mode, Range, Scale, Settings, Voicing};
 
 /// One new 4/4 pattern of `count` bars holding `events` at pattern-relative ticks.
 fn write(music: &mut Music, source: usize, count: u64, events: Vec<Event>) -> Result<u64, String> {

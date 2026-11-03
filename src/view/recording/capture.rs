@@ -267,34 +267,37 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
     let builder = egui::ViewportBuilder::default()
         .with_title(TITLE)
         .with_position(at)
-        .with_inner_size(SIZE);
+        .with_inner_size(SIZE)
+        .with_visible(window::shown(ctx));
     let mut clicked = None;
     ctx.show_viewport_immediate(viewport(), builder, |ctx, class| {
-        if class != egui::ViewportClass::Embedded {
-            if ctx.input(|i| i.viewport().close_requested()) {
-                close(a, s);
-                return;
-            }
-            if let Some(at) = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min) {
-                companions::remember(a, PLACE, at);
-            }
-            super::super::help::observe_recording(a, ctx);
-            if s.first_read(ctx) {
-                keys(a, s, &ctx.input(|i| i.events.clone()));
-                if s.capture.is_none() {
-                    ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
-                    return;
-                }
-            }
-        }
-        let sounding = auditioning(a, s);
-        let bpm = a.patterns.tempo.0;
-        let body = |ui: &mut egui::Ui| clicked = rows::list(ui, s, sounding, bpm);
         if class == egui::ViewportClass::Embedded {
-            egui::Window::new(TITLE).show(ctx, body);
-        } else {
-            egui::CentralPanel::default().show(ctx, body);
+            let sounding = auditioning(a, s);
+            let bpm = a.patterns.tempo.0;
+            egui::Window::new(TITLE).show(ctx, |ui| clicked = rows::list(ui, s, sounding, bpm));
+            return;
         }
+        if ctx.input(|i| i.viewport().close_requested()) {
+            close(a, s);
+            return;
+        }
+        if let Some(at) = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min) {
+            companions::remember(a, PLACE, at);
+        }
+        super::super::help::observe_recording(a, ctx);
+        let input = super::modal::begin(a, ctx);
+        if s.first_read(ctx) {
+            keys(a, s, &ctx.input(|i| i.events.clone()));
+        }
+        if s.capture.is_none() {
+            ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
+        } else {
+            let sounding = auditioning(a, s);
+            let bpm = a.patterns.tempo.0;
+            egui::CentralPanel::default()
+                .show(ctx, |ui| clicked = rows::list(ui, s, sounding, bpm));
+        }
+        super::modal::end(a, ctx, input);
     });
     match clicked {
         Some(rows::Click::Take(i)) => {

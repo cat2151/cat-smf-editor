@@ -46,7 +46,9 @@ impl Fixture {
 
     pub fn visible(&mut self, visible: bool) {
         match self.screen {
-            Screen::Staff | Screen::Song | Screen::Scene => self.app.note_mode = visible,
+            Screen::Staff => self.app.note_mode = visible,
+            // The pattern windows stay with the song; a menu over the editor hides them.
+            Screen::Song | Screen::Scene => self.app.comma_menu.open = !visible,
             Screen::PianoRoll => self.app.piano_roll.open = visible,
             Screen::Tempo => self.app.tempo_curve.open = visible,
             Screen::TrackOverview => self.app.track_overview.open = visible,

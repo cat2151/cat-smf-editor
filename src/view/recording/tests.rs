@@ -113,8 +113,8 @@ fn keyboard_recording_commit_round_trip_and_single_undo() {
         ],
         true,
     );
-    assert!(!a.patterns.recording.is_open());
-    assert!(!a.audition.live_active());
+    assert!(a.patterns.recording.is_open());
+    assert!(a.audition.live_active());
     let music = &a.loaded.as_ref().unwrap().music;
     let c = Catalog::read(music).unwrap();
     // A take, and the Capture of the keys.
@@ -204,7 +204,7 @@ fn empty_cancel_repeat_and_focus_loss_do_not_stick_notes_or_leak_keys() {
         vec![key(Key::Escape, true, Modifiers::NONE)],
         true,
     );
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
 }
 
 #[test]

@@ -11,6 +11,7 @@ pub(super) fn rows(ui: &mut egui::Ui) {
                     ("Ctrl+Z", "元に戻す"),
                     ("V", "Notes / Raw"),
                     ("i", "MML・コード進行"),
+                    ("c", "Chord timing"),
                     ("ノート左端 / 中央 / 右端: ドラッグ", "開始 / 位置 / 長さ"),
                 ],
             ),

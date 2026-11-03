@@ -21,6 +21,49 @@ pub(super) fn measure(app: &App) -> Result<drums::Measure, String> {
     Ok(result)
 }
 
+/// Step of `measure` now sounding, from the transport or else from a repeating phrase.
+pub(super) fn sounding(app: &App, measure: &drums::Measure) -> Option<usize> {
+    let tick = transport_tick(app).or_else(|| phrase_tick(app))?;
+    if !(measure.start..measure.end).contains(&tick) {
+        return None;
+    }
+    measure.steps.iter().rposition(|&s| s <= tick)
+}
+
+/// Pattern and Song playback clock the arrangement, so their tick is mapped through the edited
+/// pattern's occurrences onto the grid's projected timeline.
+fn transport_tick(app: &App) -> Option<u64> {
+    use crate::play::playback::Mode;
+    let loaded = app.loaded.as_ref()?;
+    let active = app.playback.active.as_ref()?;
+    let occurrences = match active.mode {
+        Mode::Pattern(id) => vec![(id, 0)],
+        Mode::Arrangement(scene) => {
+            cat_smf_editor::score::scene::arrangement::occurrences(&loaded.music, scene)
+                .ok()?
+                .0
+        }
+        _ => return crate::play::transport::tick_for(app, app.track),
+    };
+    let tick = crate::play::transport::tick_for(app, active.clock_track)?;
+    occurrences
+        .iter()
+        .find_map(|&(id, at)| projected(app, id, tick.checked_sub(at)?))
+}
+
+/// The tick a Phrase loop repeating the edited pattern plays now.
+fn phrase_tick(app: &App) -> Option<u64> {
+    let id = crate::view::patterns::mode::editing(app, app.track)?.pattern;
+    projected(app, id, crate::view::recording::phrase_tick(app, id)?)
+}
+
+/// `local`, a tick into pattern `id`, on the grid's timeline when `id` is the edited pattern.
+fn projected(app: &App, id: u64, local: u64) -> Option<u64> {
+    let context = crate::view::patterns::mode::editing(app, app.track)?;
+    let (start, end) = context.edit_range(&app.loaded.as_ref()?.music).ok()?;
+    (context.pattern == id && local < end - start).then_some(start + local)
+}
+
 pub(super) fn range(app: &App) -> Result<(u64, u64), String> {
     let loaded = app.loaded.as_ref().ok_or(message::NO_SONG)?;
     let map = loaded
@@ -39,6 +82,11 @@ pub(super) fn range(app: &App) -> Result<(u64, u64), String> {
         }
     }
     Ok(result)
+}
+
+/// Solo chooses among the song's tracks; an edited pattern loops alone.
+pub(super) fn soloable(app: &App) -> bool {
+    app.drum_editor.loop_enabled && !app.patterns.editing.as_ref().is_some_and(|c| c.standalone)
 }
 
 pub(crate) fn scope(app: &App, requested: (u64, u64)) -> Option<(Vec<usize>, usize)> {
@@ -60,6 +108,8 @@ pub(super) fn restart(app: &mut App) -> Result<(), String> {
         return Ok(());
     }
     let range = range(app)?;
+    // The grid's range is the edited pattern's, not the Song's an earlier A-B repeat left.
+    app.playback.repeat_mode = None;
     let prepared =
         crate::play::transport::repeat::prepare(app, range).ok_or("drumのloopを準備できません")?;
     app.audition.stop();

@@ -125,14 +125,14 @@ fn two_phrases_go_to_one_capture_pattern_with_a_bar_between_and_no_undo_step() {
     frame(&mut a, &ctx, vec![], true);
     assert_eq!(captured(&a).len(), 3, "{:?}", session(&a).error);
     tap(&mut a, &ctx, Key::C, ms(250), ms(0));
-    // Closing the keyboard puts the open phrase in the song.
+    // Discarding the take puts the open phrase in the song; the keyboard stays.
     frame(
         &mut a,
         &ctx,
         vec![key(Key::Escape, true, Modifiers::SHIFT)],
         true,
     );
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
     assert_eq!(
         captured(&a),
         vec![
@@ -335,14 +335,14 @@ fn track_name(a: &App, track: usize) -> Option<Vec<u8>> {
         .find(|e| e.status == 0xff && e.meta_type == 3)
         .map(|e| e.data.clone())
 }
-/// One phrase on Z, ended by the silence and the keyboard closed.
+/// One phrase on Z, ended by the silence and a discarded take.
 fn play_one_phrase(a: &mut App, ctx: &egui::Context) {
     open_key(a, ctx);
     let ms = Duration::from_millis;
     tap(a, ctx, Key::Z, ms(500), ms(3000));
     frame(a, ctx, vec![], true);
     frame(a, ctx, vec![key(Key::Escape, true, Modifiers::SHIFT)], true);
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
 }
 
 #[test]
@@ -355,7 +355,8 @@ fn undoing_an_edit_made_before_the_keys_keeps_their_capture_and_its_new_containe
     let played = captured(&a);
     assert_eq!(played.iter().filter(|e| e.1 == 0x90).count(), 1);
 
-    frame(&mut a, &ctx, vec![key(Key::Z, true, Modifiers::CTRL)], true);
+    // In the editor; the open keyboard has the input of this test's frames.
+    a.undo_music().unwrap();
     assert_ne!(track_name(&a, 0), Some(b"Edited".to_vec()));
     let c = Catalog::read(&a.loaded.as_ref().unwrap().music).unwrap();
     assert_eq!(c.patterns.len(), 1);

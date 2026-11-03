@@ -47,6 +47,7 @@ fn lyric_overlays_follow_note_starts_including_drag_and_hover() {
                 &layout,
                 Some((2, moved)),
                 Some((2, Part::Start)),
+                &[],
             );
         });
     });

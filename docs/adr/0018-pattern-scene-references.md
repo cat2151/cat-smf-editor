@@ -1,7 +1,7 @@
 # ADR 0018: same measure・pattern・Scene／SongをSMF内の参照として扱う
 
 - 状態: 採用
-- 決定者: user（同じ小節への参照、take比較、3窓の作業領域、音色入れ物とpatternの所属、専用trackへの保存、配置レーン・Scene・Songをconductorのmeta 1個に集約、発音単位、演奏表現と競合・復元・移動の規則、patternが無い曲での開始、候補patternのクリックによる単体再生と本体表示）
+- 決定者: user（同じ小節への参照、take比較、3窓の作業領域、音色入れ物とpatternの所属、専用trackへの保存、配置レーン・Scene・Songをconductorのmeta 1個に集約、発音単位、演奏表現と競合・復元・移動の規則、patternが無い曲での開始、候補patternのクリックによる単体再生と本体表示、Song窓とkeyboard窓を閉じない寿命、窓の開閉を他の機能のきっかけにしない）
 - 関連: [0006: instrument layerと音色参照](0006-instrument-layers-and-patch-state-cache.md)、[0010: 通常のMML・コード入力](0010-mml-chord-note-insertion.md)、[0013: 安定した所有元への参照](0013-instrument-parameter-automation.md)、[0017: ドラム編集](0017-drum-sequencer.md)
 
 ## 参照を保存し、本体の変更へ追従する
@@ -30,9 +30,11 @@ patternが1つも無い曲でpattern作業を始めた場合は、空のScene／
 
 その作業を一時的なmodalの往復だけで代用せず、userの選択によりSceneとSongを同時に表示する。各窓の選択・入力所有者は独立させ、再描画でrootの編集中入力からfocusを奪わない。補助窓が入力dialogを覆わないよう、個々の窓に例外を足すのでなく共通の入力所有権で制御する。
 
+Song窓は、曲にpatternの入れ物がある間だけ存在し、Notes／Rawのどちらでも閉じない。Escは本体窓（Event list）へfocusを戻すだけにする（user）。Virtual MIDI keyboardも、Song窓がある間は自動で開いて閉じず、Esc・Stopはtakeの確定、Shift+Escはtakeの破棄だけを行う。最小化はuserが窓の最小化ボタンを押したときだけで、その間はSong窓のボタンかShift+Rで戻す（user）。窓の開閉を他の機能（track移動・編集Contextの破棄・再生停止・takeの確定）のきっかけにしない（user）。keyboardが消えた窓を参照し続けると、eguiが無題の窓を作り直し続け、Windowsが所有窓ごと破棄した窓をeframeが触って落ちる。窓の寿命を曲の中身だけから導き、この参照切れを起こさない。
+
 Notesではpatternの本体範囲を通常編集へ投影し、本体への対応を通して書き戻す。一方、Rawは保存用SMFの実eventを直接編集する。表示列だけをRawへ変えて投影を残す方式は、表示と編集先を食い違わせるため採らない。表示・実eventの対応・編集権限を共通の境界で決め、mode切替だけでは曲やUndoを変えない。
 
-編集Contextや独立した表示フラグだけでmodeを決めると、表示切替やtrack移動でNotesと実trackの役割が食い違うため、両者からpattern modeを導出する。有効な本体と対応付けを要求する編集権限は別に保ち、modeが有効なだけで本体の保存用trackへ直接書き込めるようにはしない。overviewを閉じる際も、この規則との整合をRawへの暗黙切替で取らず、userの指定によりNotesを維持して通常trackへ移る。
+編集Contextや独立した表示フラグだけでmodeを決めると、表示切替やtrack移動でNotesと実trackの役割が食い違うため、両者からpattern modeを導出する。有効な本体と対応付けを要求する編集権限は別に保ち、modeが有効なだけで本体の保存用trackへ直接書き込めるようにはしない。
 
 ## 音色入れ物がpatternを所有する
 

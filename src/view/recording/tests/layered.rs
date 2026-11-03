@@ -145,10 +145,8 @@ fn each_container_keeps_the_mode_it_was_left_with() {
     assert_eq!(mode(&a), Mode::Seventh);
     press(&mut a, &ctx, Key::ArrowLeft, Modifiers::NONE);
     assert_eq!(mode(&a), Mode::Triad);
-    // The next opening plays each container as it was left.
-    press(&mut a, &ctx, Key::Escape, Modifiers::NONE);
-    a.track += 1;
-    open_key(&mut a, &ctx);
+    // Each container plays as it was left.
+    press(&mut a, &ctx, Key::ArrowRight, Modifiers::NONE);
     assert_eq!(mode(&a), Mode::Seventh);
 }
 

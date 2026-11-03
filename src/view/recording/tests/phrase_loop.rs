@@ -773,3 +773,184 @@ fn a_melodic_phrase_still_stops_under_the_next_key() {
     assert!(under.is_none());
     assert!(!session(&a).sound().live.phrase.playing());
 }
+
+#[test]
+fn deleting_another_pattern_keeps_the_keyboard_and_its_phrase() {
+    use cat_smf_editor::score::pattern::{operations, Catalog};
+    let (mut a, track) = container();
+    let mut other = 0;
+    a.edit_tracks(|m| {
+        other = operations::create(m, track, None)?;
+        Ok(())
+    })
+    .unwrap();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    start_loop(&mut a, &ctx);
+    let Looper::Looping { pattern, .. } = session(&a).sound().looper else {
+        unreachable!()
+    };
+    crate::view::patterns::workspace::mutate(&mut a, |m| operations::delete(m, other)).unwrap();
+    frame(&mut a, &ctx, vec![], true);
+    assert!(a.patterns.recording.is_open());
+    assert!(phrase::looping(session(&a)));
+    let music = &a.loaded.as_ref().unwrap().music;
+    assert!(Catalog::read(music)
+        .unwrap()
+        .patterns
+        .contains_key(&pattern));
+}
+
+#[test]
+fn the_keyboard_follows_its_container_to_its_new_track() {
+    let (mut a, track) = container();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    start_loop(&mut a, &ctx);
+    a.edit_tracks(|m| {
+        m.tracks
+            .insert(track, cat_smf_editor::model::Track { events: vec![] });
+        Ok(())
+    })
+    .unwrap();
+    frame(&mut a, &ctx, vec![], true);
+    assert!(phrase::looping(session(&a)));
+    assert_eq!(session(&a).sound().track, track + 1);
+}
+
+#[test]
+fn removing_the_playing_container_closes_the_keyboard() {
+    let (mut a, track) = container();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    start_loop(&mut a, &ctx);
+    a.edit_tracks(|m| {
+        m.tracks.remove(track);
+        Ok(())
+    })
+    .unwrap();
+    frame(&mut a, &ctx, vec![], true);
+    assert!(!a.patterns.recording.is_open());
+}
+
+#[test]
+fn placing_the_loop_in_the_song_places_an_ordinary_pattern_of_its_body() {
+    use cat_smf_editor::score::{
+        pattern::{operations, Catalog, Kind},
+        scene::{self, arrangement::PatternOrScene},
+    };
+    let (mut a, _) = container();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    start_loop(&mut a, &ctx);
+    let id = looping_pattern(&a);
+    let place = |a: &mut App, measure| {
+        a.patterns.workspace.selection_mut(Pane::Song).measure = measure;
+        crate::view::patterns::workspace::place(a, Pane::Song, Some(PatternOrScene::Pattern(id)))
+            .unwrap();
+    };
+    place(&mut a, 1);
+    frame(&mut a, &ctx, vec![], true);
+    assert!(phrase::looping(session(&a)));
+    let music = &a.loaded.as_ref().unwrap().music;
+    let normal = operations::same_normal(music, id).unwrap().unwrap();
+    let c = Catalog::read(music).unwrap();
+    assert_eq!(c.patterns[&id].kind, Kind::Loop);
+    let song: Vec<_> = scene::read(music)
+        .unwrap()
+        .song
+        .iter()
+        .map(|p| p.part)
+        .collect();
+    assert_eq!(song, vec![PatternOrScene::Pattern(normal)]);
+    // Placed again, the Loop reuses that pattern.
+    let count = c.patterns.len();
+    place(&mut a, 2);
+    let music = &a.loaded.as_ref().unwrap().music;
+    assert_eq!(Catalog::read(music).unwrap().patterns.len(), count);
+    let song: Vec<_> = scene::read(music)
+        .unwrap()
+        .song
+        .iter()
+        .map(|p| p.part)
+        .collect();
+    assert_eq!(song, vec![PatternOrScene::Pattern(normal); 2]);
+}
+
+#[test]
+fn the_drum_sequencer_frames_the_step_the_drum_phrase_plays() {
+    let (mut a, track) = container();
+    // Saved in the song, so the Loop pattern's write keeps the container a drum one.
+    let drums = cat_smf_editor::score::drums::Settings::default();
+    let patch = Patch {
+        layers: drums
+            .rows
+            .iter()
+            .map(|r| cat_smf_editor::score::instrument::ResolvedLayer {
+                settings: cat_smf_editor::instrument_layers::Layer {
+                    id: r.layer,
+                    ..Default::default()
+                },
+                instrument: None,
+            })
+            .collect(),
+        drums: Some(drums),
+        effects: vec![],
+    };
+    crate::player::selection::store_track(&mut a, track, &patch).unwrap();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    let length = measure(&a);
+    press(&mut a, &ctx, Key::E, Modifiers::CTRL);
+    frame(&mut a, &ctx, vec![key(Key::Z, true, Modifiers::NONE)], true);
+    rewind(&mut a, length / 4);
+    let up = key(Key::Z, false, Modifiers::NONE);
+    frame(&mut a, &ctx, vec![up], true);
+    rewind(&mut a, length);
+    frame(&mut a, &ctx, vec![], true);
+    let id = looping_pattern(&a);
+    if !a.note_mode {
+        crate::view::patterns::mode::toggle(&mut a);
+    }
+    crate::view::drums::display(&mut a);
+    assert!(crate::view::drums::is_open(&a));
+    let Looper::Looping { start, .. } = session(&a).sound().looper else {
+        panic!("{:?}", session(&a).sound().looper)
+    };
+    // Into the sixth sixteenth of a lap, half a step past its start.
+    let into = (session(&a).clock.elapsed() - start).as_nanos() % length.as_nanos();
+    let to = length * 5 / 16 + length / 32;
+    rewind(&mut a, length - Duration::from_nanos(into as u64) + to);
+    let grid = egui::Context::default();
+    let mut framed = None;
+    for _ in 0..2 {
+        let _ = grid.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1500.0, 900.0),
+                )),
+                ..Default::default()
+            },
+            |c| crate::view::drums::show(&mut a, c),
+        );
+        let cells = grid
+            .data(|d| {
+                d.get_temp::<(egui::Rect, egui::Rect, Vec<egui::Rect>)>(egui::Id::new(
+                    "drum-grid-bounds",
+                ))
+            })
+            .unwrap()
+            .2;
+        framed = grid
+            .data(|d| d.get_temp::<egui::Rect>(egui::Id::new("drum-playing")))
+            .map(|f| {
+                (0..cells.len())
+                    .find(|&i| f.contains_rect(cells[i]))
+                    .unwrap()
+                    - 2
+            });
+    }
+    assert_eq!(a.patterns.editing.as_ref().map(|e| e.pattern), Some(id));
+    assert_eq!(framed, Some(5));
+}

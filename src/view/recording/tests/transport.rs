@@ -23,7 +23,7 @@ fn to_loop(a: &mut App, ctx: &egui::Context) {
 }
 
 #[test]
-fn free_rec_starts_the_clock_and_stop_commits_and_closes() {
+fn free_rec_starts_the_clock_and_stop_commits_and_keeps_the_keyboard() {
     let mut a = app();
     let ctx = egui::Context::default();
     open_key(&mut a, &ctx);
@@ -41,7 +41,8 @@ fn free_rec_starts_the_clock_and_stop_commits_and_closes() {
         vec![key(Key::Z, false, Modifiers::NONE)],
         true,
     );
-    assert!(click(&mut a, Button::Stop));
+    assert!(!click(&mut a, Button::Stop));
+    assert!(a.patterns.recording.is_open() && !playing::armed(session(&a)));
     assert_eq!(patterns(&a), before + 1);
     let music = &a.loaded.as_ref().unwrap().music;
     let p = &Catalog::read(music).unwrap().patterns[&a.patterns.selected.unwrap()];
@@ -87,7 +88,7 @@ fn stop_is_inert_until_armed_and_loop_rec_counts_in_once() {
 }
 
 #[test]
-fn pads_only_sound_until_rec_by_default() {
+fn pads_only_sound_until_rec() {
     let mut a = app();
     let ctx = egui::Context::default();
     open_key(&mut a, &ctx);
@@ -104,28 +105,6 @@ fn pads_only_sound_until_rec_by_default() {
         ],
         true,
     );
-    assert!(!a.patterns.recording.is_open());
+    assert!(a.patterns.recording.is_open());
     assert_eq!(patterns(&a), before);
-}
-
-#[test]
-fn key_start_records_from_the_first_pad_and_counts_in_a_loop() {
-    for looping in [false, true] {
-        let mut a = app();
-        let ctx = egui::Context::default();
-        open_key(&mut a, &ctx);
-        let mut keys = vec![Key::S];
-        if looping {
-            keys.push(Key::R);
-        }
-        for k in keys {
-            frame(&mut a, &ctx, vec![key(k, true, Modifiers::CTRL)], true);
-        }
-        assert!(!playing::armed(session(&a)));
-        frame(&mut a, &ctx, vec![key(Key::Z, true, Modifiers::NONE)], true);
-        assert!(playing::armed(session(&a)), "loop {looping}");
-        // A loop's first pad only starts the count-in.
-        assert_eq!(recorder(&a).started(), !looping);
-        assert_eq!(recorder(&a).recorded(), !looping);
-    }
 }
