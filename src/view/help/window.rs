@@ -65,6 +65,7 @@ fn remember(a: &mut App) {
 pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
     if !a.help_open {
         remember(a);
+        a.help.builder = None;
         return;
     }
     if a.help.geometry.is_some_and(|w| {
@@ -80,15 +81,25 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
             })),
         );
     }
-    let mut builder = egui::ViewportBuilder::default()
-        .with_title("ヘルプ")
-        .with_active(false)
-        .with_inner_size([620.0, 680.0])
-        .with_min_inner_size([240.0, 160.0]);
-    if let Some([x, y, w, h]) = a.help.geometry {
-        builder = builder.with_position([x, y]).with_inner_size([w, h]);
-    }
+    let geometry = a.help.geometry;
+    let builder = a
+        .help
+        .builder
+        .get_or_insert_with(|| {
+            let builder = egui::ViewportBuilder::default()
+                .with_title("ヘルプ")
+                .with_active(false)
+                .with_inner_size([620.0, 680.0])
+                .with_min_inner_size([240.0, 160.0]);
+            match geometry {
+                Some([x, y, w, h]) => builder.with_position([x, y]).with_inner_size([w, h]),
+                None => builder,
+            }
+        })
+        .clone();
+    let _window_span = crate::frame_trace::span("help");
     ctx.show_viewport_immediate(viewport(), builder, |ctx, class| {
+        let _span = crate::frame_trace::span("help/ui");
         if class == egui::ViewportClass::Embedded {
             return; // This UI requires a native backend; never replace the editor with help.
         }

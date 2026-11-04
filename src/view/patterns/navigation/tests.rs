@@ -168,7 +168,7 @@ fn manual_loop_survives_edits_and_undo_but_not_target_changes() {
 }
 
 #[test]
-fn raw_and_restart_restore_valid_targets_without_persisting_last_pattern() {
+fn raw_and_restart_restore_the_saved_pattern_and_song_selection() {
     let (mut a, track, ids) = fixture();
     let c = egui::Context::default();
     library::edit(&mut a, ids[1]).unwrap();
@@ -183,7 +183,11 @@ fn raw_and_restart_restore_valid_targets_without_persisting_last_pattern() {
     restarted.restore_position(&raw);
     assert!(!drums::is_open(&restarted));
     restarted.restore_position(&notes);
-    assert_body(&restarted, &c, ids[0]);
+    assert_body(&restarted, &c, ids[1]);
+    assert_eq!(
+        restarted.patterns.workspace.song_cell.choice,
+        Some(PatternOrScene::Pattern(ids[1]))
+    );
     assert_eq!(restarted.track, track);
 
     // Opening a track in Raw has no prior edit context to restore.

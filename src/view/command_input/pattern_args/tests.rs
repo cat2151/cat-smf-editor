@@ -35,7 +35,7 @@ fn container_midi_baseline_palette_is_atomic_keyboard_input_and_undoable() {
     let (mut a, c, id, _, _) = verification_song();
     let root = egui::ViewportId::ROOT;
     let before = bytes(&a);
-    command(&mut a, &c, root, "Container MIDI baseline");
+    command(&mut a, &c, root, "Container CC default outside patterns");
     text(&mut a, &c, root, "Pattern 1");
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
     text(&mut a, &c, root, "2 64 0");

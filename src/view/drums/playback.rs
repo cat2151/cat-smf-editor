@@ -13,7 +13,7 @@ pub(super) fn measure(app: &App) -> Result<drums::Measure, String> {
         app.drum_editor.page + 1,
     )?;
     if let Some(context) = crate::view::patterns::mode::editing(app, app.track) {
-        let range = context.edit_range(&loaded.music)?;
+        let range = loaded.edit_range(context)?;
         if result.start < range.0 || result.end > range.1 {
             return Err("小節がpatternの長さの外です".into());
         }
@@ -23,45 +23,23 @@ pub(super) fn measure(app: &App) -> Result<drums::Measure, String> {
 
 /// Step of `measure` now sounding, from the transport or else from a repeating phrase.
 pub(super) fn sounding(app: &App, measure: &drums::Measure) -> Option<usize> {
-    let tick = transport_tick(app).or_else(|| phrase_tick(app))?;
+    let tick =
+        crate::play::transport::display_tick_for(app, app.track).or_else(|| phrase_tick(app))?;
     if !(measure.start..measure.end).contains(&tick) {
         return None;
     }
     measure.steps.iter().rposition(|&s| s <= tick)
 }
 
-/// Pattern and Song playback clock the arrangement, so their tick is mapped through the edited
-/// pattern's occurrences onto the grid's projected timeline.
-fn transport_tick(app: &App) -> Option<u64> {
-    use crate::play::playback::Mode;
-    let loaded = app.loaded.as_ref()?;
-    let active = app.playback.active.as_ref()?;
-    let occurrences = match active.mode {
-        Mode::Pattern(id) => vec![(id, 0)],
-        Mode::Arrangement(scene) => {
-            cat_smf_editor::score::scene::arrangement::occurrences(&loaded.music, scene)
-                .ok()?
-                .0
-        }
-        _ => return crate::play::transport::tick_for(app, app.track),
-    };
-    let tick = crate::play::transport::tick_for(app, active.clock_track)?;
-    occurrences
-        .iter()
-        .find_map(|&(id, at)| projected(app, id, tick.checked_sub(at)?))
-}
-
 /// The tick a Phrase loop repeating the edited pattern plays now.
 fn phrase_tick(app: &App) -> Option<u64> {
     let id = crate::view::patterns::mode::editing(app, app.track)?.pattern;
-    projected(app, id, crate::view::recording::phrase_tick(app, id)?)
-}
-
-/// `local`, a tick into pattern `id`, on the grid's timeline when `id` is the edited pattern.
-fn projected(app: &App, id: u64, local: u64) -> Option<u64> {
-    let context = crate::view::patterns::mode::editing(app, app.track)?;
-    let (start, end) = context.edit_range(&app.loaded.as_ref()?.music).ok()?;
-    (context.pattern == id && local < end - start).then_some(start + local)
+    crate::play::transport::pattern_tick(
+        app,
+        app.track,
+        id,
+        crate::view::recording::phrase_tick(app, id)?,
+    )
 }
 
 pub(super) fn range(app: &App) -> Result<(u64, u64), String> {
@@ -76,7 +54,7 @@ pub(super) fn range(app: &App) -> Result<(u64, u64), String> {
         drums::Measure::new(map, loaded.music.division, s.last)?.end,
     );
     if let Some(context) = crate::view::patterns::mode::editing(app, app.track) {
-        let range = context.edit_range(&loaded.music)?;
+        let range = loaded.edit_range(context)?;
         if result.0 < range.0 || result.1 > range.1 {
             return Err("drumの範囲がpatternの長さの外です".into());
         }

@@ -99,7 +99,7 @@ pub fn validate(a: &mut App) {
         || context.track != a.track
         || a.loaded
             .as_ref()
-            .and_then(|l| context.edit_range(&l.music).ok())
+            .and_then(|l| l.edit_range(context).ok())
             .is_none_or(|(start, end)| !(start..end).contains(&current))
     {
         let tick = crate::play::playback::location(a).0;
@@ -141,7 +141,7 @@ impl Action {
             Self::MoveContainer => "Move pattern to container",
             Self::Structure => "Pattern measures / meter",
             Self::AuditionTempo => "Audition tempo",
-            Self::MidiBaseline => "Container MIDI baseline",
+            Self::MidiBaseline => "Container CC default outside patterns",
         }
     }
 }
@@ -178,6 +178,16 @@ pub(crate) fn collect(app: &App, s: Screen, out: &mut Vec<Command>) {
             super::commands::Operation::pattern(action),
         ));
     }
+    for (id, name, drums) in [
+        ("new-container", "New Init Saw container", false),
+        ("new-drum-container", "New Drums container", true),
+    ] {
+        out.push(Command::plain(s, id, name, &[], move |a, _| {
+            if let Err(error) = library::new_container(a, drums) {
+                a.load_error = Some(error);
+            }
+        }));
+    }
 }
 
 pub fn show(a: &mut App, ctx: &eframe::egui::Context) {
@@ -199,6 +209,8 @@ mod acceptance_tests;
 mod beacon_tests;
 #[cfg(test)]
 mod crop_tests;
+#[cfg(test)]
+mod drum_step_tests;
 #[cfg(test)]
 mod e2e_tests;
 #[cfg(test)]

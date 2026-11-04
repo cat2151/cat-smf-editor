@@ -281,3 +281,59 @@ fn song_minimap_pans_cells_live_and_repeat_tracks_the_scrolled_cells() {
         assert_eq!(bytes(&a), before);
     }
 }
+
+/// The measure under the pointer, from this frame's cells only.
+fn measure_under(a: &mut App, c: &egui::Context, x: f32) -> u64 {
+    for m in 1..1000u64 {
+        c.data_mut(|d| {
+            d.remove::<egui::Rect>(egui::Id::new((Pane::Song.title(), "cell", 0usize, m)))
+        });
+    }
+    frame(a, c, Pane::Song.viewport(), vec![]);
+    (1..1000u64)
+        .find(|&m| {
+            c.data(|d| {
+                d.get_temp::<egui::Rect>(egui::Id::new((Pane::Song.title(), "cell", 0usize, m)))
+            })
+            .is_some_and(|r| r.left() <= x && x < r.right())
+        })
+        .expect("a measure under the pointer")
+}
+
+#[test]
+fn song_wheel_zoom_keeps_the_measure_under_the_pointer_through_full_zoom_out() {
+    let (mut a, c, _, _, _) = verification_song();
+    let id = Pane::Song.viewport();
+    frame(&mut a, &c, id, vec![]);
+    let pos = egui::pos2(rect(&c, "zoom").left() + 60.0, rect(&c, "zoom").center().y);
+    let wheel = |a: &mut App, delta: f32, times: usize| {
+        for _ in 0..times {
+            frame(
+                a,
+                &c,
+                id,
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, delta),
+                        modifiers: Default::default(),
+                    },
+                ],
+            );
+            for _ in 0..6 {
+                frame(a, &c, id, vec![egui::Event::PointerMoved(pos)]);
+            }
+        }
+    };
+    // Far past the narrowest cell, so later zoom-ins must not be swallowed or shifted.
+    wheel(&mut a, -120.0, 30);
+    let pointed = measure_under(&mut a, &c, pos.x);
+    assert!(pointed > 1);
+    for _ in 0..4 {
+        wheel(&mut a, 120.0, 6);
+        assert!(measure_under(&mut a, &c, pos.x).abs_diff(pointed) <= 1);
+        wheel(&mut a, -120.0, 6);
+        assert!(measure_under(&mut a, &c, pos.x).abs_diff(pointed) <= 1);
+    }
+}

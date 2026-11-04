@@ -86,7 +86,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let mut close = false;
     let visible = companion_visible(app, ctx);
     builder = builder.with_visible(visible);
+    let window_span = crate::frame_trace::span("analysis");
     ctx.show_viewport_immediate(viewport(app.analysis.placement), builder, |ctx, _class| {
+        let _span = crate::frame_trace::span("analysis/ui");
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(visible));
         if !visible {
             return;
@@ -113,6 +115,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         ctx.request_repaint_after_for(Duration::from_millis(50), egui::ViewportId::ROOT);
         ctx.request_repaint_after(Duration::from_millis(50));
     });
+    drop(window_span);
     let state = &mut app.analysis;
     // The editor is the foreground window while it has focus.
     #[cfg(windows)]

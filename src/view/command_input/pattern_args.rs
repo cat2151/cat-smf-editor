@@ -83,9 +83,7 @@ impl State {
                 .map(|(&id, &t)| {
                     (
                         Some(id),
-                        m.tracks[t]
-                            .name()
-                            .unwrap_or_else(|| format!("Container {id}")),
+                        cat_smf_editor::score::pattern::container_name(m, id, t),
                     )
                 })
                 .collect();

@@ -24,6 +24,7 @@ pub(crate) use presentation::{close, dismiss, display, is_open, open, reconcile}
 pub(crate) mod playback;
 #[cfg(test)]
 pub(crate) mod tests;
+mod title;
 mod widgets;
 
 #[derive(Default)]

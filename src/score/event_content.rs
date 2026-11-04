@@ -221,7 +221,7 @@ fn meta(event: &Event) -> Vec<Part> {
     }
 }
 
-fn cc_name(controller: u8) -> Option<&'static str> {
+pub(crate) fn cc_name(controller: u8) -> Option<&'static str> {
     Some(match controller {
         0 => "Bank Select MSB",
         1 => "Modulation",

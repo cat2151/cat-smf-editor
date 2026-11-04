@@ -117,13 +117,15 @@ impl Keys {
             self.closed.push(phrase);
         }
     }
+    /// A phrase is open that `gap` milliseconds of silence up to `now` have not ended.
+    pub fn playing(&self, now: u64, gap: u64) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|o| !o.silent() || now.saturating_sub(o.last) < gap)
+    }
     /// Phrases ended by another container's key, or by `gap` milliseconds of silence up to `now`.
     pub fn take(&mut self, now: u64, gap: u64) -> Vec<Phrase> {
-        if self
-            .open
-            .as_ref()
-            .is_some_and(|o| o.silent() && now.saturating_sub(o.last) >= gap)
-        {
+        if self.open.is_some() && !self.playing(now, gap) {
             self.end();
         }
         std::mem::take(&mut self.closed)

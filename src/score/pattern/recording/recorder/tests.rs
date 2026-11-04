@@ -56,7 +56,7 @@ fn shared_chord_notes_sound_until_the_last_pad_releases() {
     assert!((0..128).all(|p| !r.sounding(p)));
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let ids = r.commit(&mut m, None).unwrap();
+    let ids = r.commit(&mut m, None, Duration::ZERO).unwrap();
     let mut notes = bodies(&m, &ids).remove(0).1;
     notes.sort_by_key(|&(tick, status, pitch)| (pitch, tick, status));
     assert_eq!(
@@ -104,7 +104,7 @@ fn loop_laps_become_takes_split_at_the_boundary_and_round_trip() {
     r.release_all(ms(15000)).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let ids = r.commit(&mut m, None).unwrap();
+    let ids = r.commit(&mut m, None, Duration::ZERO).unwrap();
     assert_eq!(ids.len(), 4);
     assert_eq!(
         bodies(&m, &ids),
@@ -153,7 +153,7 @@ fn empty_laps_and_count_in_presses_are_not_recorded() {
     r.release(z(1), ms(7000)).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let ids = r.commit(&mut m, None).unwrap();
+    let ids = r.commit(&mut m, None, Duration::ZERO).unwrap();
     assert_eq!(
         bodies(&m, &ids),
         vec![
@@ -163,7 +163,9 @@ fn empty_laps_and_count_in_presses_are_not_recorded() {
     );
     let mut silent = Recorder::new(480, settings(Range::Loop { measures: 1 })).unwrap();
     silent.start(ms(0));
-    assert!(silent.commit(&mut edit::tracks::new_song(), None).is_err());
+    assert!(silent
+        .commit(&mut edit::tracks::new_song(), None, Duration::ZERO)
+        .is_err());
 }
 
 #[test]
@@ -174,7 +176,7 @@ fn a_release_on_the_lap_boundary_ends_the_earlier_lap() {
     r.release(z(0), ms(2000)).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let ids = r.commit(&mut m, None).unwrap();
+    let ids = r.commit(&mut m, None, Duration::ZERO).unwrap();
     assert_eq!(
         bodies(&m, &ids),
         vec![(1, vec![(960, 0x90, 60), (1920, 0x80, 60)])]
@@ -188,9 +190,9 @@ fn free_take_is_measured_from_rec_and_held_notes_block_commit() {
     r.press(z(0), ms(9000)).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    assert!(r.commit(&mut m.clone(), None).is_err());
+    assert!(r.commit(&mut m.clone(), None, Duration::ZERO).is_err());
     r.release(z(0), ms(11250)).unwrap();
-    let ids = r.commit(&mut m, None).unwrap();
+    let ids = r.commit(&mut m, None, Duration::ZERO).unwrap();
     assert_eq!(
         bodies(&m, &ids),
         vec![(2, vec![(0, 0x90, 60), (2160, 0x80, 60)])]
@@ -215,7 +217,7 @@ fn takes_hold_each_press_velocity_and_the_cc1_played_over_each_lap() {
     r.release_all(ms(3500)).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let ids = r.commit(&mut m, None).unwrap();
+    let ids = r.commit(&mut m, None, Duration::ZERO).unwrap();
     let c = Catalog::read(&m).unwrap();
     for (lap, id) in ids.iter().enumerate() {
         let p = &c.patterns[id];
@@ -259,7 +261,7 @@ fn bpm_90_puts_one_beat_on_division_ticks() {
     r.release_all(beat * 2).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let ids = r.commit(&mut m, None).unwrap();
+    let ids = r.commit(&mut m, None, Duration::ZERO).unwrap();
     let notes = bodies(&m, &ids).remove(0).1;
     assert!(notes.contains(&(480, 0x90, 62)), "{notes:?}");
 }
@@ -277,7 +279,7 @@ fn a_quantized_take_starts_and_ends_its_notes_on_sixteenths() {
     r.release(z(1), ms(260)).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let ids = r.commit(&mut m, None).unwrap();
+    let ids = r.commit(&mut m, None, Duration::ZERO).unwrap();
     assert_eq!(
         bodies(&m, &ids),
         vec![(

@@ -1,6 +1,6 @@
 //! Session settings: one value per item, changed from the settings window or by shortcut.
 use super::*;
-use cat_smf_editor::score::pattern::recording::{Layout, Mode, Modulation, Range, Scale, Velocity};
+use cat_smf_editor::score::pattern::recording::{Mode, Modulation, Range, Scale, Velocity};
 
 const BPM: std::ops::RangeInclusive<i32> = 20..=300;
 const MEASURES: std::ops::RangeInclusive<i32> = 1..=64;
@@ -11,7 +11,6 @@ pub(super) enum Item {
     Range,
     Measures,
     Bpm,
-    Layout,
     Mode,
     Tonic,
     Scale,
@@ -21,29 +20,33 @@ pub(super) enum Item {
     Modulation,
     Quantize,
 }
-pub(super) const ITEMS: [Item; 13] = [
-    Item::Sound,
+/// In the order of the rows, each group together; the container, velocity and modulation are
+/// chosen on the keyboard window.
+pub(super) const ITEMS: [Item; 9] = [
     Item::Range,
     Item::Measures,
     Item::Bpm,
-    Item::Layout,
+    Item::Quantize,
     Item::Mode,
     Item::Tonic,
     Item::Scale,
     Item::NoteBase,
     Item::ChordBase,
-    Item::Velocity,
-    Item::Modulation,
-    Item::Quantize,
 ];
 
+/// What a row sets: the take or the pitches of the pads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Group {
+    Take,
+    Pitch,
+}
+
 /// Ctrl+key steps forward and Ctrl+Shift+key back; plain keys are pads.
-const SHORTCUTS: [(Item, Key); 12] = [
+const SHORTCUTS: [(Item, Key); 11] = [
     (Item::Sound, Key::P),
     (Item::Range, Key::R),
     (Item::Measures, Key::D),
     (Item::Bpm, Key::B),
-    (Item::Layout, Key::L),
     (Item::Tonic, Key::K),
     (Item::Scale, Key::M),
     (Item::NoteBase, Key::N),
@@ -60,7 +63,6 @@ impl Item {
             Self::Range => "録音範囲",
             Self::Measures => "小節数",
             Self::Bpm => "BPM",
-            Self::Layout => "配列",
             Self::Mode => "Mode",
             Self::Tonic => "Tonic",
             Self::Scale => "Scale",
@@ -69,6 +71,15 @@ impl Item {
             Self::Velocity => "Velocity",
             Self::Modulation => "Modulation",
             Self::Quantize => "Quantize",
+        }
+    }
+    pub(super) fn group(self) -> Group {
+        match self {
+            Self::Sound | Self::Velocity | Self::Modulation => unreachable!("not a row"),
+            Self::Range | Self::Measures | Self::Bpm | Self::Quantize => Group::Take,
+            Self::Mode | Self::Tonic | Self::Scale | Self::NoteBase | Self::ChordBase => {
+                Group::Pitch
+            }
         }
     }
     /// Two-valued items toggle; the others also step back with Shift.
@@ -102,23 +113,33 @@ pub(super) fn bpm(tempo: u32) -> i32 {
     (60_000_000.0 / f64::from(tempo)).round() as i32
 }
 
+/// Only the base of the pads the mode plays has a row, and the loop length only in Loop.
+pub(super) fn shown(s: &Session, item: Item) -> bool {
+    let t = s.settings();
+    let chords = t.mode.chord_notes().is_some();
+    match item {
+        Item::Measures => matches!(t.range, Range::Loop { .. }),
+        Item::NoteBase => !chords,
+        Item::ChordBase => chords,
+        _ => true,
+    }
+}
+
 /// Rows that do not apply to the current choices or a drum container, or that a started take
 /// fixes, are dimmed and skipped.
 pub(super) fn enabled(s: &Session, item: Item) -> bool {
     let t = s.settings();
-    let rows = t.layout == Layout::Rows;
-    let pitched = rows && !t.drums;
+    let pitched = t.mode != Mode::Letters && !t.drums;
     let fixed = play::armed(s);
-    match item {
-        Item::Sound => s.sounds.len() > 1 && !fixed,
-        Item::Measures => matches!(t.range, Range::Loop { .. }) && !fixed,
-        // A take writes CC1 from one choice.
-        Item::Range | Item::Bpm | Item::Modulation => !fixed,
-        Item::Mode | Item::Tonic | Item::Scale => pitched,
-        Item::ChordBase => pitched,
-        Item::NoteBase => !t.drums,
-        Item::Layout | Item::Velocity | Item::Quantize => true,
-    }
+    shown(s, item)
+        && match item {
+            Item::Sound => s.sounds.len() > 1 && !fixed,
+            // A take writes CC1 from one choice.
+            Item::Range | Item::Measures | Item::Bpm | Item::Modulation => !fixed,
+            Item::Tonic | Item::Scale | Item::ChordBase => pitched,
+            Item::NoteBase => !t.drums,
+            Item::Mode | Item::Velocity | Item::Quantize => true,
+        }
 }
 
 pub(super) fn first(s: &Session) -> Item {
@@ -139,17 +160,13 @@ pub(super) fn step_item(s: &Session, down: bool) -> Item {
 pub(super) fn value(s: &Session, item: Item) -> String {
     let t = s.settings();
     match item {
-        Item::Sound => s.sounds[s.selected].name.clone(),
+        Item::Sound | Item::Velocity | Item::Modulation => unreachable!("not a row"),
         Item::Range => match t.range {
             Range::Free => "Free".into(),
             Range::Loop { .. } => "Loop".into(),
         },
         Item::Measures => s.measures.to_string(),
         Item::Bpm => bpm(t.tempo).to_string(),
-        Item::Layout => match t.layout {
-            Layout::Rows => "z a q 1".into(),
-            Layout::Letters => "c d e f g a b".into(),
-        },
         Item::Mode => t.mode.label().into(),
         Item::Tonic => window::pitch_class(t.key().tonic).into(),
         Item::Scale => match t.key().scale {
@@ -158,9 +175,25 @@ pub(super) fn value(s: &Session, item: Item) -> String {
         },
         Item::NoteBase => cat_smf_editor::score::note_view::note_name(t.note_base),
         Item::ChordBase => cat_smf_editor::score::note_view::note_name(t.chord_base),
-        Item::Velocity => t.velocity.label().into(),
-        Item::Modulation => t.modulation.label(),
         Item::Quantize => if t.quantize { "1/16" } else { "Off" }.into(),
+    }
+}
+
+/// Both values of a two-valued item, and the index of the chosen one.
+pub(super) fn choices(s: &Session, item: Item) -> Option<([&'static str; 2], usize)> {
+    let t = s.settings();
+    match item {
+        Item::Range => Some((["Free", "Loop"], usize::from(t.range != Range::Free))),
+        Item::Scale => Some((
+            ["Major pentatonic", "Minor pentatonic"],
+            usize::from(t.key().scale == Scale::MinorPentatonic),
+        )),
+        Item::Quantize => Some((["Off", "1/16"], usize::from(t.quantize))),
+        Item::Mode if t.drums => Some((
+            Mode::DRUMS.map(Mode::label),
+            usize::from(t.mode == Mode::DRUMS[1]),
+        )),
+        _ => None,
     }
 }
 
@@ -214,19 +247,28 @@ pub(super) fn change(a: &mut App, s: &mut Session, item: Item, step: i32, big: b
                 Range::Loop { .. } => Range::Free,
             }
         }
-        Item::Modulation => {
-            // The keys captured so far keep the CC1 they were played with.
-            if let Err(error) = super::capture::flush(a, s, true) {
-                s.error = Some(error);
-            }
-            let t = s.settings_mut();
-            t.modulation = cycle(&Modulation::ALL, t.modulation, step);
-        }
+        Item::Modulation => modulate(a, s, cycle(&Modulation::ALL, s.settings().modulation, step)),
         _ => edit(s.settings_mut(), item, step, big),
     }
     if !enabled(s, s.item) {
         s.item = first(s);
     }
+}
+
+/// The keys captured so far keep the CC1 they were played with.
+pub(super) fn modulate(a: &mut App, s: &mut Session, modulation: Modulation) {
+    if !enabled(s, Item::Modulation) {
+        return;
+    }
+    if let Err(error) = super::capture::flush(a, s, true) {
+        s.error = Some(error);
+    }
+    s.settings_mut().modulation = modulation;
+}
+
+/// The name and keys of an item chosen on the keyboard window, for its tooltip.
+pub(super) fn tip(item: Item) -> String {
+    format!("{}  {}", item.label(), item.keys())
 }
 
 /// Plays another container while the phrases go on; one that cannot play opens the settings
@@ -265,15 +307,9 @@ fn edit(t: &mut Settings, item: Item, step: i32, big: bool) {
         Item::Velocity => t.velocity = cycle(&Velocity::ALL, t.velocity, step),
         Item::Quantize => t.quantize = !t.quantize,
         Item::Bpm => t.tempo = tempo(bpm(t.tempo) + step * if big { 10 } else { 1 }),
-        Item::Layout => {
-            t.layout = match t.layout {
-                Layout::Rows => Layout::Letters,
-                Layout::Letters => Layout::Rows,
-            }
-        }
         Item::Mode => {
-            let i = Mode::ALL.iter().position(|&m| m == t.mode).unwrap() as i32;
-            t.mode = Mode::ALL[(i + step).rem_euclid(Mode::ALL.len() as i32) as usize];
+            let all: &[Mode] = if t.drums { &Mode::DRUMS } else { &Mode::ALL };
+            t.mode = cycle(all, t.mode, step);
         }
         Item::Tonic => t.set_key(recording::Key {
             tonic: (i32::from(key.tonic) + step).rem_euclid(12) as u8,
@@ -288,7 +324,7 @@ fn edit(t: &mut Settings, item: Item, step: i32, big: bool) {
         }),
         Item::NoteBase => {
             // Letters only use the octave of the base.
-            let big = big || t.layout == Layout::Letters;
+            let big = big || t.mode == Mode::Letters;
             t.note_base = neighbor(t.note_base, key.tonic, key.scale.steps(), step, big)
         }
         Item::ChordBase => {

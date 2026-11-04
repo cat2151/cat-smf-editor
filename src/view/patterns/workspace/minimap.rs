@@ -13,10 +13,12 @@ pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     }
     let Some(l) = &a.loaded else { return };
     let music = &l.music;
-    let Ok((occurrences, end)) = model::occurrences(music, id) else {
+    let Some((catalog, collection)) = &l.arrangement else {
         return;
     };
-    let catalog = Catalog::read(music).unwrap_or_default();
+    let Ok((occurrences, end)) = model::occurrences_in(music, catalog, collection, id) else {
+        return;
+    };
     let (rect, _) = ui.allocate_exact_size(
         egui::vec2(
             ui.available_width(),
@@ -44,14 +46,10 @@ pub fn show(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     let Some((stride, label)) = state.cells else {
         return;
     };
-    let collection = scene::read(music).unwrap_or_default();
     let Some(scene) = collection.scenes.iter().find(|s| Some(s.id) == id) else {
         return;
     };
-    let mut boundaries = vec![0];
-    for meter in &scene.meters {
-        boundaries.push(boundaries.last().unwrap() + meter.ticks);
-    }
+    let boundaries = super::timeline::scene_boundaries(scene);
     let axis = super::timeline::SceneCells {
         boundaries: &boundaries,
         stride,

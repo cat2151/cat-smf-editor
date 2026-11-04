@@ -76,7 +76,10 @@ pub(crate) fn track_color(track: usize) -> Color32 {
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
     help::input(app, ctx);
-    patterns::validate(app);
+    {
+        let _span = crate::frame_trace::span("validate");
+        patterns::validate(app);
+    }
     if app.startup_pending(ctx) {
         app.lifecycle.interrupted();
         return;
@@ -110,8 +113,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     crate::play::mascot::update(app);
     app.frame_started(ctx);
     let style_input = edit_style::suspend_background(app, ctx);
-    let event_list_drawn = show_contents(app, ctx);
-    patterns::show(app, ctx);
+    let event_list_drawn = {
+        let _span = crate::frame_trace::span("contents");
+        show_contents(app, ctx)
+    };
+    {
+        let _span = crate::frame_trace::span("patterns");
+        patterns::show(app, ctx);
+    }
     patterns::workspace::root_dialog(app, ctx);
     track_rename::show(app, ctx);
     if crate::view::modal::is_open(app) || app.patterns.recording.is_open() {
@@ -123,8 +132,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     patterns::workspace::show(app, ctx);
     recording::show(app, ctx);
     if !opening::pending(app) {
+        let _span = crate::frame_trace::span("auto_save");
         app.auto_save(ctx);
     }
+    let _tail = crate::frame_trace::span("tail");
     title::update(app, ctx);
     app.frame_completed(ctx, event_list_drawn);
     edit_style::show(app, ctx, style_input);
@@ -176,7 +187,10 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
             crate::play::transport::stop_shortcut(app, ctx);
             undo::shortcuts(app, ctx);
             crate::view::layers::show(app, ctx);
-            crate::view::drums::show(app, ctx);
+            {
+                let _span = crate::frame_trace::span("contents/drums");
+                crate::view::drums::show(app, ctx);
+            }
             crate::view::effects::show(app, ctx);
             #[cfg(windows)]
             crate::player::resident_link::trace_slow(app, "advance", started);

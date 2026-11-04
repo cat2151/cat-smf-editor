@@ -12,14 +12,7 @@ pub enum Range {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Layout {
-    /// Four keyboard rows `z`, `a`, `q`, `1`.
-    Rows,
-    /// `c d e f g a b`.
-    Letters,
-}
-
+/// Every mode but `Letters` plays the four keyboard rows `z`, `a`, `q`, `1`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mode {
     Note,
@@ -29,20 +22,25 @@ pub enum Mode {
     /// Rows play root position, then the first, second and third inversion.
     TriadInversions,
     SeventhInversions,
+    /// The keys `c d e f g a b` play the white notes of the note base octave.
+    Letters,
 }
 
 impl Mode {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Note,
         Self::Triad,
         Self::Seventh,
         Self::TriadInversions,
         Self::SeventhInversions,
+        Self::Letters,
     ];
+    /// What a drum container plays: one lane per row or per letter.
+    pub const DRUMS: [Self; 2] = [Self::Note, Self::Letters];
     /// Notes each chord pad stacks; `None` plays single notes.
     pub fn chord_notes(self) -> Option<usize> {
         match self {
-            Self::Note => None,
+            Self::Note | Self::Letters => None,
             Self::Triad | Self::TriadInversions => Some(3),
             Self::Seventh | Self::SeventhInversions => Some(4),
         }
@@ -57,6 +55,7 @@ impl Mode {
             Self::Seventh => "Seventh",
             Self::TriadInversions => "Triad inversions",
             Self::SeventhInversions => "Seventh inversions",
+            Self::Letters => "c d e f g a b",
         }
     }
 }
@@ -116,10 +115,9 @@ pub struct Settings {
     pub range: Range,
     /// Microseconds per quarter note, as in an SMF tempo event.
     pub tempo: u32,
-    pub layout: Layout,
     pub mode: Mode,
     key: Key,
-    /// Pitch of `z` in note mode, and the octave of the letter layout.
+    /// Pitch of `z` in note mode, and the octave of the letters.
     pub note_base: u8,
     /// Root of the `z` chord in chord mode.
     pub chord_base: u8,
@@ -157,7 +155,6 @@ impl Settings {
         Self {
             range: Range::Free,
             tempo,
-            layout: Layout::Rows,
             mode: Mode::Note,
             key: Key { tonic, ..key },
             drums: false,

@@ -182,6 +182,25 @@ fn new_rows_appear_only_when_no_container_of_that_kind_is_unused() {
         .any(|(c, _)| *c == Choice::New(true)));
 }
 #[test]
+fn palette_new_container_adds_one_without_patterns_beside_empty_ones_and_undoes() {
+    use crate::view::patterns::workspace_tests::command;
+    let mut a = containers();
+    let c = egui::Context::default();
+    let before = bytes(&a);
+    command(&mut a, &c, egui::ViewportId::ROOT, "New Init Saw container");
+    assert!(a.load_error.is_none(), "{:?}", a.load_error);
+    let music = &a.loaded.as_ref().unwrap().music;
+    let catalog = Catalog::read(music).unwrap();
+    assert_eq!(catalog.sources.len(), 3);
+    assert!(catalog.patterns.is_empty());
+    let id = a.patterns.container.unwrap();
+    let track = catalog.tracks[&id];
+    assert_eq!(track, music.tracks.len() - 1);
+    assert_eq!(music.tracks[track].name().as_deref(), Some("Init Saw 2"));
+    a.undo_music().unwrap();
+    assert_eq!(bytes(&a), before);
+}
+#[test]
 fn new_container_gets_a_numbered_name_and_undoes_with_its_pattern() {
     let mut a = containers();
     let before = bytes(&a);

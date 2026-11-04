@@ -28,6 +28,7 @@ pub fn regenerate(music: &mut crate::model::Music) -> Result<(), String> {
     // never leave a partially changed song.
     let mut next = music.clone();
     trill::rebuild(&mut next, curve.as_ref())?;
+    crate::score::drums::rebuild_patterns(&mut next)?;
     crate::score::drums::rebuild(&mut next)?;
     if let Some(curve) = &curve {
         tempo_curve::regenerate(&mut next, curve)?;

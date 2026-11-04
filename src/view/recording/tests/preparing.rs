@@ -1,5 +1,5 @@
 use super::*;
-use cat_smf_editor::score::pattern::recording::{Layout, Mode, Modulation, Range, Scale, Velocity};
+use cat_smf_editor::score::pattern::recording::{Mode, Modulation, Range, Scale, Velocity};
 use setup::Item;
 
 fn press(a: &mut App, ctx: &egui::Context, keys: &[(Key, Modifiers)]) {
@@ -39,34 +39,39 @@ fn every_item_changes_in_the_settings_window_while_the_pads_play() {
     assert_eq!(recorder(&a).settings().range, Range::Loop { measures: 9 });
     press(&mut a, &ctx, &[DOWN, RIGHT, BIG]);
     assert_eq!(setup::bpm(recorder(&a).settings().tempo), 131);
-    press(&mut a, &ctx, &[DOWN, RIGHT]);
-    assert_eq!(recorder(&a).settings().layout, Layout::Letters);
+    press(&mut a, &ctx, &[DOWN, DOWN, LEFT]);
+    assert_eq!(recorder(&a).settings().mode, Mode::Letters);
     // Letters ignore every pad setting except the octave of the note base.
     press(&mut a, &ctx, &[DOWN]);
     assert_eq!(session(&a).item, Item::NoteBase);
     press(&mut a, &ctx, &[RIGHT]);
     assert_eq!(recorder(&a).settings().note_base, 72);
-    press(&mut a, &ctx, &[LEFT, UP, LEFT]);
-    assert_eq!(recorder(&a).settings().layout, Layout::Rows);
+    press(&mut a, &ctx, &[LEFT, UP, RIGHT]);
+    assert_eq!(recorder(&a).settings().mode, Mode::Note);
+    assert!(setup::shown(session(&a), Item::NoteBase));
+    assert!(!setup::shown(session(&a), Item::ChordBase));
+    // Chord modes show the chord base row in place of the note base row.
     press(
         &mut a,
         &ctx,
         &[
-            DOWN, RIGHT, RIGHT, RIGHT, RIGHT, DOWN, RIGHT, DOWN, RIGHT, DOWN, RIGHT, DOWN, RIGHT,
-            BIG,
+            RIGHT, RIGHT, RIGHT, RIGHT, DOWN, RIGHT, DOWN, RIGHT, DOWN, RIGHT, BIG,
         ],
     );
     let t = *recorder(&a).settings();
     assert_eq!(session(&a).item, Item::ChordBase);
+    assert!(!setup::shown(session(&a), Item::NoteBase));
     assert_eq!(t.mode, Mode::SeventhInversions);
     assert_eq!((t.key().tonic, t.key().scale), (1, Scale::MinorPentatonic));
-    // C# minor pentatonic above C#4, then the natural minor degree above C#3 and an octave.
-    assert_eq!(t.note_base, 64);
+    // The natural minor degree above C#3 and an octave; the note base follows the tonic.
+    assert_eq!(t.note_base, 61);
     assert_eq!(t.chord_base, 51 + 12);
+    // The last row; velocity and modulation have only their keys here.
+    press(&mut a, &ctx, &[DOWN]);
+    assert_eq!(session(&a).item, Item::ChordBase);
     // From the 80-127 sweep and the CC1 sweep to the next choices, and back.
-    press(&mut a, &ctx, &[DOWN, RIGHT, DOWN, RIGHT]);
+    press(&mut a, &ctx, &[ctrl(Key::V), ctrl(Key::W)]);
     let t = *recorder(&a).settings();
-    assert_eq!(session(&a).item, Item::Modulation);
     assert_eq!(
         (t.velocity, t.modulation),
         (Velocity::V100, Modulation::Off)
@@ -77,7 +82,8 @@ fn every_item_changes_in_the_settings_window_while_the_pads_play() {
         (t.velocity, t.modulation),
         (Velocity::Range80To127, Modulation::Sweep)
     );
-    press(&mut a, &ctx, &[DOWN, RIGHT]);
+    // Quantize sits with the take rows, above the pitch rows.
+    press(&mut a, &ctx, &[UP, UP, UP, UP, RIGHT]);
     assert_eq!(session(&a).item, Item::Quantize);
     assert!(recorder(&a).settings().quantize);
     press(&mut a, &ctx, &[(Key::Q, Modifiers::CTRL)]);
@@ -106,6 +112,39 @@ fn every_item_changes_in_the_settings_window_while_the_pads_play() {
     );
     assert_eq!((kept.note_base, kept.chord_base), (60, 60));
     assert_eq!(session(&a).measures, 9);
+}
+
+#[test]
+fn the_settings_window_fits_the_shown_rows() {
+    let mut a = app();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    let mut measure = |a: &mut App| {
+        let mut size = egui::Vec2::ZERO;
+        let s = a.patterns.recording.session.as_mut().unwrap();
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000., 700.),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| size = companions::settings(ui, s));
+            },
+        );
+        size
+    };
+    // Free hides the loop length; Loop shows it one row lower.
+    assert!(!setup::shown(session(&a), Item::Measures));
+    let free = measure(&mut a);
+    settings_keys(&mut a, &[ctrl(Key::R)]);
+    assert!(setup::shown(session(&a), Item::Measures));
+    let looped = measure(&mut a);
+    assert!(looped.y > free.y, "{free:?} {looped:?}");
+    // Ten rows and three group gaps, without a margin of empty rows below.
+    assert!(free.y < 300.0, "{free:?}");
 }
 
 fn with_key(data: Option<[u8; 2]>) -> App {
@@ -164,9 +203,14 @@ fn a_drum_container_plays_one_lane_per_row_and_records_into_itself() {
     open_key(&mut a, &ctx);
     assert!(session(&a).error.is_none() && !session(&a).settings_open);
     assert!(recorder(&a).settings().drums);
-    for item in [Item::Mode, Item::Tonic, Item::NoteBase, Item::ChordBase] {
+    for item in [Item::Tonic, Item::NoteBase, Item::ChordBase] {
         assert!(!setup::enabled(session(&a), item), "{item:?}");
     }
+    // Drums choose only between the rows and the letters.
+    press(&mut a, &ctx, &[(Key::Tab, Modifiers::NONE)]);
+    assert_eq!(recorder(&a).settings().mode, Mode::Letters);
+    press(&mut a, &ctx, &[(Key::Tab, Modifiers::NONE)]);
+    assert_eq!(recorder(&a).settings().mode, Mode::Note);
     let rows = [Key::Z, Key::X, Key::A, Key::Q, Key::Num1];
     let down = |pressed| {
         rows.iter()
@@ -212,6 +256,7 @@ fn shortcuts_change_items_from_the_pads_until_a_take_fixes_them() {
         &[
             (Key::Tab, Modifiers::SHIFT),
             (Key::Tab, Modifiers::SHIFT),
+            (Key::Tab, Modifiers::SHIFT),
             back(Key::K),
             ctrl(Key::M),
             ctrl(Key::N),
@@ -226,10 +271,10 @@ fn shortcuts_change_items_from_the_pads_until_a_take_fixes_them() {
     assert_eq!((t.key().tonic, t.key().scale), (11, Scale::MinorPentatonic));
     assert_eq!(t.range, Range::Loop { measures: 5 });
     assert_eq!(setup::bpm(t.tempo), 119);
-    // Shift+Tab twice steps back to Triad inversions, Tab forward to Seventh inversions.
+    // Shift+Tab three times steps back to Triad inversions, Tab forward to Seventh inversions.
     assert_eq!(t.mode, Mode::SeventhInversions);
-    // B minor pentatonic from B4 one step up; the natural minor degree below B3.
-    assert_eq!((t.note_base, t.chord_base), (74, 57));
+    // A chord mode leaves the note base; the natural minor degree below B3.
+    assert_eq!((t.note_base, t.chord_base), (71, 57));
     // Armed, the tempo and range belong to the take.
     press(&mut a, &ctx, &[(Key::Space, Modifiers::NONE)]);
     press(
@@ -239,7 +284,7 @@ fn shortcuts_change_items_from_the_pads_until_a_take_fixes_them() {
     );
     let armed = *recorder(&a).settings();
     assert_eq!((armed.tempo, armed.range), (t.tempo, t.range));
-    assert_eq!(armed.mode, Mode::Note);
+    assert_eq!(armed.mode, Mode::Letters);
     // Pads do not sound with Ctrl.
     assert!(!(0..128).any(|p| recorder(&a).sounding(p)));
 }

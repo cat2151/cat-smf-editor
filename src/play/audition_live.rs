@@ -1,15 +1,19 @@
 //! Ordered live notes share the existing layer routing and never restart held voices.
 use super::*;
 use cat_smf_editor::score::pattern::recording::Modulation;
-use std::{collections::VecDeque, sync::Mutex, time::Instant};
+use std::{
+    collections::VecDeque,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 pub(crate) type Queue = Arc<Mutex<Keys>>;
 
 /// The keyboard's MIDI: queued key words and CC1 on the keyboard session's clock.
 pub(crate) struct Keys {
     pub words: VecDeque<u32>,
-    /// The keyboard session's clock, whose zero the CC1 sweep starts from.
-    clock: Instant,
+    /// When the CC1 sweep started; `None` holds it at its start.
+    sweep: Option<Instant>,
     modulation: Modulation,
     /// The CC1 value last handed to the audio thread.
     cc1: Option<u8>,
@@ -19,7 +23,7 @@ impl Default for Keys {
     fn default() -> Self {
         Self {
             words: VecDeque::new(),
-            clock: Instant::now(),
+            sweep: None,
             modulation: Modulation::Off,
             cc1: None,
         }
@@ -27,19 +31,20 @@ impl Default for Keys {
 }
 
 impl Keys {
-    /// Plays `modulation` on the session clock; another choice is sent at once.
-    pub(crate) fn modulate(&mut self, clock: Instant, modulation: Modulation) {
-        if (self.clock, self.modulation) != (clock, modulation) {
-            (self.clock, self.modulation, self.cc1) = (clock, modulation, None);
+    /// Plays `modulation` with its sweep started at `sweep`; another choice is sent at once.
+    pub(crate) fn modulate(&mut self, sweep: Option<Instant>, modulation: Modulation) {
+        if (self.sweep, self.modulation) != (sweep, modulation) {
+            (self.sweep, self.modulation, self.cc1) = (sweep, modulation, None);
         }
     }
 
     /// Writes a changed CC1 value, then the queued words, into `out`; returns how many.
     pub(crate) fn take(&mut self, now: Instant, out: &mut [u32]) -> usize {
         let mut count = 0;
-        let cc1 = self
-            .modulation
-            .value(now.saturating_duration_since(self.clock));
+        let since = self
+            .sweep
+            .map_or(Duration::ZERO, |z| now.saturating_duration_since(z));
+        let cc1 = self.modulation.value(since);
         if let Some(value) = cc1.filter(|_| self.cc1 != cc1 && !out.is_empty()) {
             out[0] = 0x20B0_0100 | u32::from(value);
             self.cc1 = cc1;

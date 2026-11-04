@@ -85,6 +85,9 @@ impl App {
             note_mode: self.note_mode,
             split: self.track_view.split.map(|tracks| tracks.map(|t| t + 1)),
             split_active: self.track_view.active,
+            edited_pattern: crate::view::patterns::mode::editing(self, self.track)
+                .filter(|c| c.standalone)
+                .map(|c| c.pattern),
         })
     }
 
@@ -129,6 +132,37 @@ impl App {
 
     pub fn restore_position(&mut self, session: &Session) {
         self.restore_cursor(session);
+        let target = session.edited_pattern.filter(|id| {
+            session.note_mode
+                && self.loaded.as_ref().is_some_and(|l| {
+                    l.arrangement.as_ref().is_some_and(|(catalog, _)| {
+                        catalog
+                            .patterns
+                            .get(id)
+                            .is_some_and(|p| p.track == self.track)
+                    })
+                })
+        });
+        if let Some(id) = target {
+            match crate::view::patterns::navigation::edit(self, id) {
+                Ok(()) => {
+                    // Restore local coordinates only after installing the saved projection.
+                    self.restore_cursor(session);
+                    if let Some(tick) = session.tick
+                        && crate::play::playback::location(self).0 != tick
+                        && crate::view::patterns::mode::editing(self, self.track)
+                            .and_then(|c| self.loaded.as_ref()?.edit_range(c).ok())
+                            .is_some_and(|(start, end)| (start..end).contains(&tick))
+                    {
+                        // An empty measure has one row, but the cursor can be inside it.
+                        crate::cursor::moves::at_tick(self, tick);
+                    }
+                    crate::view::patterns::navigation::present(self);
+                    return;
+                }
+                Err(error) => self.load_error = Some(error),
+            }
+        }
         crate::view::patterns::track_selected(self);
     }
 

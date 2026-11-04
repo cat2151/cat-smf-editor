@@ -25,7 +25,15 @@ pub fn music(base: &Music, scene: &Scene, c: &Catalog) -> Result<Music, String> 
         let track = p.track;
         let source = p.range()?;
         let dest = scene.range(u128::from(cell.measure) + 1)?;
-        for mut e in same_measure::notes(&base.tracks[p.track].events, source)? {
+        let notes = if crate::score::drums::read(&base.tracks[p.track])?.is_some() {
+            crate::score::drums::pattern_body(base, p)?
+                .into_iter()
+                .filter(|e| note_on(e) || note_off(e))
+                .collect()
+        } else {
+            same_measure::notes(&base.tracks[p.track].events, source)?
+        };
+        for mut e in notes {
             e.tick = dest.0 + (e.tick - source.0);
             crate::edit::insert(&mut next.tracks[track], e);
         }

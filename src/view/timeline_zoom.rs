@@ -32,10 +32,10 @@ pub(crate) fn clamp(zoom: f32) -> f32 {
     zoom.clamp(f32::MIN_POSITIVE, MAX)
 }
 
-/// Scroll after zooming from `from` to `to` that centers, within `length`,
-/// the content that was `anchor` px from the visible start.
-pub(crate) fn rescroll(scroll: f32, anchor: f32, from: f32, to: f32, length: f32) -> f32 {
-    ((scroll + anchor) * to / from - length / 2.0).max(0.0)
+/// Scroll after zooming from `from` to `to` that moves the content that was `anchor`
+/// px from the visible start to `target` px from it.
+pub(crate) fn rescroll(scroll: f32, anchor: f32, from: f32, to: f32, target: f32) -> f32 {
+    ((scroll + anchor) * to / from - target).max(0.0)
 }
 
 /// Draws a page button at each end of `bar`; returns -1 for the start one and +1 for

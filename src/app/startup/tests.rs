@@ -5,6 +5,8 @@ use crate::{
 };
 use cat_smf_editor::smf_io;
 
+mod song;
+
 fn fixture() -> (tempfile::TempDir, PathBuf) {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("song.mid");
@@ -42,6 +44,7 @@ fn fixture() -> (tempfile::TempDir, PathBuf) {
         note_mode: false,
         split: None,
         split_active: 0,
+        edited_pattern: None,
     });
     config.persist();
     (root, path)

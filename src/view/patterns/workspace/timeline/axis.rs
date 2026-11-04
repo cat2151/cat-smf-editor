@@ -1,6 +1,6 @@
 //! Equal-width measures, interpolated using their actual meters.
 use crate::view::timeline_repeat::TickAxis;
-use cat_smf_editor::score::{musical_time::MeterMap, same_measure};
+use cat_smf_editor::score::{musical_time::MeterMap, same_measure, scene::Scene};
 pub(crate) struct Cells<'a> {
     pub map: &'a MeterMap,
     pub stride: f32,
@@ -22,6 +22,15 @@ impl TickAxis for Cells<'_> {
         };
         start.saturating_add(((end - start) as f32 * cell.fract()).round() as u64)
     }
+}
+
+/// Where each measure of a scene starts, then where the scene ends.
+pub(crate) fn scene_boundaries(scene: &Scene) -> Vec<u64> {
+    let mut boundaries = vec![0];
+    for meter in &scene.meters {
+        boundaries.push(boundaries.last().unwrap() + meter.ticks);
+    }
+    boundaries
 }
 
 /// Scene-local meters; never substitute the Song conductor's meter map.

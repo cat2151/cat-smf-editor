@@ -51,9 +51,7 @@ pub(super) fn choices(a: &App) -> Result<Vec<(Choice, String)>, String> {
         .map(|&(t, id)| {
             (
                 Choice::Container(id),
-                m.tracks[t]
-                    .name()
-                    .unwrap_or_else(|| format!("Container {id}")),
+                cat_smf_editor::score::pattern::container_name(m, id, t),
             )
         })
         .collect();

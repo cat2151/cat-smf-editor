@@ -40,7 +40,7 @@ pub(super) fn follow(a: &mut App, ctx: &egui::Context) {
     }
     a.patterns.recording.resuming = false;
     let origin = pane.map_or(ctx.viewport_id(), Pane::viewport);
-    if let Err(error) = open_from(a, ctx, origin, pane) {
+    if let Err(error) = open_from(a, ctx, origin, pane, false) {
         a.patterns.recording.failed = Some(a.song_id);
         a.load_error = Some(error);
         return;

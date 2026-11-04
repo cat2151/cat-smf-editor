@@ -89,6 +89,12 @@ pub fn event(tick: u64, r: &Record) -> Event {
 pub fn has_containers(music: &Music) -> bool {
     (0..music.tracks.len()).any(|track| is_source(music, track))
 }
+/// The name a person knows the container by.
+pub fn container_name(music: &Music, id: u64, track: usize) -> String {
+    music.tracks[track]
+        .name()
+        .unwrap_or_else(|| format!("Container {id}"))
+}
 pub fn is_source(music: &Music, track: usize) -> bool {
     music.tracks.get(track).is_some_and(|t| {
         t.events

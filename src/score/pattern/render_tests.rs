@@ -65,7 +65,7 @@ fn whole_occurrence_conflicts_include_scene_instances_but_distinct_targets_and_n
     assert!(
         grid::place(&mut m, None, song2, 1, Some(PatternOrScene::Scene(s)))
             .unwrap_err()
-            .contains("patternのcontrolが重なっています")
+            .contains("CC重複")
     );
     assert_eq!(crate::smf_io::encode(&m).unwrap(), before);
     // A second body with the same controller conflicts for its entire duration, even equal values.
@@ -197,4 +197,25 @@ fn parameter_membership_moves_retarget_atomically_and_use_the_destination_baseli
         0.8
     );
     assert_eq!(c.patterns[&b].tick, 0);
+}
+#[test]
+fn an_overlap_names_the_patterns_the_container_and_the_controller() {
+    let (mut m, _, a, b) = fixture();
+    let c = Catalog::read(&m).unwrap();
+    let owner = c.patterns[&a].container;
+    let names = [&c.patterns[&a].name, &c.patterns[&b].name].map(|n| n.clone());
+    automation::set_midi_baseline(&mut m, owner, 2, Some(1), 0).unwrap();
+    control(&mut m, a, 1, 15);
+    control(&mut m, b, 1, 100);
+    let c = Catalog::read(&m).unwrap();
+    let error = render::expand(&m, &c, &[(a, 0), (b, 0)], 3840)
+        .err()
+        .unwrap();
+    assert!(
+        error.starts_with("ERROR : CC重複 : ")
+            && names.iter().all(|n| error.contains(n.as_str()))
+            && error.ends_with("は、Init Sawに同じ時間帯に同じCC1 Modulationを送信しています")
+            && !error.contains(&owner.to_string()),
+        "{error}"
+    );
 }

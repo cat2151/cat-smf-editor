@@ -91,6 +91,7 @@ impl Fixture {
                         (0..80).map(|i| meters[i % meters.len()].clone()).collect(),
                     )
                     .unwrap();
+                    a.loaded.as_mut().unwrap().refresh();
                     view::patterns::workspace::open_scene(&mut a, scene).unwrap();
                     view::patterns::workspace::Pane::Scene
                 };

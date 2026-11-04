@@ -1,5 +1,5 @@
 //! Keyboard events to recording pads, by physical key position on a Japanese keyboard.
-use cat_smf_editor::score::pattern::recording::{Layout, Pad};
+use cat_smf_editor::score::pattern::recording::{Mode, Pad};
 use eframe::egui::Key;
 
 /// Both yen/ro keys arrive as `Backslash` without a physical key; only Win32 tells them apart.
@@ -78,19 +78,19 @@ pub(super) const LETTER_LABELS: [&str; 7] = ["c", "d", "e", "f", "g", "a", "b"];
 
 /// `held` tells which pads are down; `down` reads a Win32 virtual key at this moment.
 pub(super) fn pad(
-    layout: Layout,
+    mode: Mode,
     key: Key,
     physical: Option<Key>,
     pressed: bool,
     held: impl Fn(Pad) -> bool,
     down: impl Fn(u8) -> bool,
 ) -> Option<Pad> {
-    match layout {
-        Layout::Letters => LETTERS
+    match mode {
+        Mode::Letters => LETTERS
             .iter()
             .position(|&k| k == key)
             .map(|i| Pad::Letter(i as u8)),
-        Layout::Rows => match physical {
+        _ => match physical {
             Some(physical) => ROWS.iter().enumerate().find_map(|(row, keys)| {
                 keys.iter()
                     .position(|&k| k == physical)

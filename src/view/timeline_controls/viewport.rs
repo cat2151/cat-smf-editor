@@ -16,6 +16,8 @@ pub(crate) struct Viewport {
     pub(crate) minimap_state: crate::view::timeline_minimap::State,
     pub(crate) zoom_bars: [Option<egui::Rect>; 2],
     pub(crate) panes: usize,
+    /// Smallest time zoom the adapter can still draw at its actual scale.
+    pub(crate) min_time_zoom: f32,
 }
 
 impl Viewport {
@@ -73,6 +75,7 @@ impl Viewport {
                 0,
                 self.axis_length(0) * fraction / span,
                 (start + end) / 2.0 - self.scroll.x,
+                self.axis_length(0) / 2.0,
             );
         }
     }
@@ -94,16 +97,18 @@ impl Viewport {
                 1.0 / timeline_zoom::CLICK
             },
             self.axis_length(0) / 2.0,
+            self.axis_length(0) / 2.0,
         );
     }
 
-    fn zoom_axis(&mut self, axis: usize, factor: f32, anchor: f32) {
+    /// Zooms one axis and moves the content at `anchor` px to `target` px.
+    fn zoom_axis(&mut self, axis: usize, factor: f32, anchor: f32, target: f32) {
         if self.panel.is_none() {
             return;
         }
         let mut zoom = self.zoom();
         let next = if axis == 0 {
-            timeline_zoom::clamp(zoom[axis] * factor)
+            timeline_zoom::clamp(zoom[axis] * factor).max(self.min_time_zoom)
         } else {
             (zoom[axis] * factor).clamp(1.0 / 64.0, 64.0)
         };
@@ -115,16 +120,11 @@ impl Viewport {
                 zoom.x,
                 next,
                 anchor,
+                target,
             )
             .1
         } else {
-            timeline_zoom::rescroll(
-                self.scroll[axis],
-                anchor,
-                zoom[axis],
-                next,
-                self.axis_length(axis),
-            )
+            timeline_zoom::rescroll(self.scroll[axis], anchor, zoom[axis], next, target)
         };
         zoom[axis] = next;
         self.zoom = zoom;
@@ -187,7 +187,7 @@ impl Viewport {
             if axis == 0 {
                 let screen = self.screen.expect("register timeline before zoom input");
                 if let Some(panel) = self.panel
-                    && let Some((factor, anchor)) = self.horizontal_zoom.show(
+                    && let Some((factor, anchor, target)) = self.horizontal_zoom.show(
                         ui,
                         zone,
                         (screen, panel),
@@ -196,7 +196,7 @@ impl Viewport {
                         &response,
                     )
                 {
-                    self.zoom_axis(0, factor, anchor);
+                    self.zoom_axis(0, factor, anchor, target);
                 }
                 continue;
             }
@@ -236,6 +236,7 @@ impl Viewport {
                         1.0 / timeline_zoom::CLICK
                     },
                     local(pos),
+                    self.axis_length(axis) / 2.0,
                 );
             }
             if response.drag_started_by(egui::PointerButton::Primary)
@@ -259,6 +260,7 @@ impl Viewport {
                         axis,
                         panel.size()[axis] * timeline_zoom::FIT / (start - end).abs(),
                         (start + end) / 2.0,
+                        self.axis_length(axis) / 2.0,
                     );
                 }
             }
@@ -286,7 +288,7 @@ impl Viewport {
                 let (axis, zoom) = mode;
                 if zoom {
                     let anchor = self.axis_length(axis) / 2.0;
-                    self.zoom_axis(axis, timeline_zoom::wheel(delta), anchor);
+                    self.zoom_axis(axis, timeline_zoom::wheel(delta), anchor, anchor);
                 } else {
                     let mut offset = self.scroll;
                     offset[axis] = (offset[axis] - delta).max(0.0);

@@ -12,9 +12,12 @@ fn defaults(title: &str) -> [f32; 4] {
     }
 }
 
-pub fn builder(a: &App, title: &str) -> ViewportBuilder {
+pub fn rect(a: &App, title: &str) -> [f32; 4] {
     let saved = a.config.pattern_windows.get(title).copied();
-    let [x, y, width, height] = saved.unwrap_or_else(|| defaults(title));
+    saved.unwrap_or_else(|| defaults(title))
+}
+
+pub fn builder([x, y, width, height]: [f32; 4]) -> ViewportBuilder {
     ViewportBuilder::default()
         .with_inner_size([width, height])
         .with_position([x, y])

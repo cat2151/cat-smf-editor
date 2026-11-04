@@ -7,7 +7,7 @@ pub(super) fn finish(a: &mut App, s: &Session) -> Result<(), String> {
     let source = source(a, s.sounds[s.selected].container)?;
     let mut created = vec![];
     a.edit_tracks(|music| {
-        created = recorder.commit(music, source)?;
+        created = recorder.commit(music, source, s.sweep_start())?;
         Ok(())
     })?;
     let id = *created.last().ok_or("録音したpatternが見つかりません")?;

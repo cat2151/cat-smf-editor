@@ -74,6 +74,18 @@ pub struct App {
     pub mascot: crate::play::mascot::State,
     pub playback: crate::play::playback::Playback,
 }
+pub(crate) type Arrangement = (
+    cat_smf_editor::score::pattern::Catalog,
+    cat_smf_editor::score::scene::Collection,
+);
+
+pub(crate) fn read_arrangement(music: &Music) -> Option<Arrangement> {
+    Some((
+        cat_smf_editor::score::pattern::Catalog::read(music).ok()?,
+        cat_smf_editor::score::scene::read(music).ok()?,
+    ))
+}
+
 pub struct Loaded {
     pub display_music: Option<Music>,
     pub patches: Vec<cat_smf_editor::score::instrument::Patch>,
@@ -86,8 +98,22 @@ pub struct Loaded {
     pub note_views: Vec<NoteView>,
     /// `music`'s tracks as they sound, rebuilt with `music`.
     pub expansions: Vec<crate::play::playback::Expansion>,
+    /// `music`'s patterns and arrangement, rebuilt with `music`; `None` while they do not parse.
+    pub arrangement: Option<Arrangement>,
     pub time_columns: Vec<crate::view::time_columns::TimeColumns>,
     pub display_rows: Vec<cat_smf_editor::score::display_rows::DisplayRows>,
+}
+impl Loaded {
+    pub(crate) fn edit_range(
+        &self,
+        context: &cat_smf_editor::score::pattern::editing::Context,
+    ) -> Result<(u64, u64), String> {
+        let (catalog, collection) = self
+            .arrangement
+            .as_ref()
+            .ok_or(cat_smf_editor::message::PATTERN_EDIT_TARGET_NO_LONGER_EXISTS)?;
+        context.edit_range_in(catalog, collection)
+    }
 }
 impl App {
     pub(crate) fn empty() -> Self {
@@ -265,6 +291,7 @@ impl Loaded {
             .map(|t| NoteView::new(&t.events))
             .collect();
         self.expansions = crate::play::playback::expand_all(&self.music, &self.note_views);
+        self.arrangement = read_arrangement(&self.music);
         self.refresh_display();
     }
     pub(crate) fn refresh_display(&mut self) {
@@ -299,6 +326,7 @@ impl Loaded {
 }
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        crate::frame_trace::begin(frame);
         cat_smf_editor::startup_trace::publish();
         if cat_smf_editor::startup_trace::quit_requested() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -308,6 +336,7 @@ impl eframe::App for App {
         crate::view::analysis::owner::remember(frame);
         self.log_errors();
         if !crate::view::opening::pending(self) {
+            let _span = crate::frame_trace::span("prefetch");
             crate::view::recent::prefetch(self, ctx);
         }
         crate::view::show(self, ctx);
@@ -315,12 +344,19 @@ impl eframe::App for App {
             crate::view::files::open_dialog(self, ctx, frame);
             crate::view::voicevox::pick_dialog(self, ctx, frame);
         }
-        self.save_session();
+        {
+            let _span = crate::frame_trace::span("save_session");
+            self.save_session();
+        }
         self.close(ctx);
         crate::view::busy::show(self, ctx);
         self.log_errors();
         #[cfg(windows)]
         crate::player::resident_link::trace_frame(self, started);
+        crate::frame_trace::end(ctx, || {
+            let track = self.playback.active.as_ref()?.clock_track;
+            crate::play::transport::tick_for(self, track)
+        });
     }
 
     /// editor が起動した外部プロセスを落とす。

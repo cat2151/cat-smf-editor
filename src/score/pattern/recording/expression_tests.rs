@@ -30,7 +30,7 @@ fn cc1_sweeps_0_127_0_over_four_seconds() {
 fn changes_match_the_value_at_their_time_and_stay_in_the_span() {
     let ms = Duration::from_millis;
     let m = Modulation::Sweep;
-    let changes = m.changes(ms(1500), ms(2500));
+    let changes = m.changes(ms(0), ms(1500), ms(2500));
     assert_eq!(
         changes.first(),
         Some(&(ms(1500), m.value(ms(1500)).unwrap()))
@@ -43,8 +43,20 @@ fn changes_match_the_value_at_their_time_and_stay_in_the_span() {
     assert!(changes.iter().any(|c| c.1 == 127));
     assert_eq!(changes.len(), 1 + 127 / 2);
     assert_eq!(
-        Modulation::Fixed(0).changes(ms(0), ms(9000)),
+        Modulation::Fixed(0).changes(ms(0), ms(0), ms(9000)),
         vec![(ms(0), 0)]
     );
-    assert!(Modulation::Off.changes(ms(0), ms(9000)).is_empty());
+    assert!(Modulation::Off.changes(ms(0), ms(0), ms(9000)).is_empty());
+}
+
+#[test]
+fn the_sweep_holds_its_first_value_until_it_starts() {
+    let ms = Duration::from_millis;
+    let m = Modulation::Sweep;
+    let changes = m.changes(ms(5000), ms(4000), ms(6000));
+    assert_eq!(changes.first(), Some(&(ms(4000), 0)));
+    assert!(changes[1..]
+        .iter()
+        .all(|&(at, v)| at > ms(5000) && m.value(at - ms(5000)) == Some(v)));
+    assert_eq!(changes.last().unwrap().1, 63);
 }

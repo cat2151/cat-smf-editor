@@ -7,6 +7,7 @@ struct State {
     offset: f32,
     width: f32,
     end: u64,
+    head: Option<f32>,
 }
 
 pub(super) struct Matrix {
@@ -66,6 +67,23 @@ impl Matrix {
         }
     }
 
+    /// Brings back a playhead that just left the view, at the left edge. A view scrolled away
+    /// from it stays, and a held pointer keeps the content under it until release.
+    pub fn turn_page(&mut self, ui: &egui::Ui, head: Option<f32>, unmoved: bool) {
+        if ui.input(|i| i.pointer.any_down()) {
+            return;
+        }
+        let view = self.offset..=self.offset + self.state.width;
+        if let (Some(before), Some(now)) = (self.state.head, head)
+            && unmoved
+            && view.contains(&before)
+            && !view.contains(&now)
+        {
+            self.offset = (now - self.label).max(0.0);
+        }
+        self.state.head = head;
+    }
+
     pub fn visible(&mut self, ui: &mut egui::Ui, viewport: egui::Rect) -> (egui::Rect, u64, u64) {
         let width = self.label + self.end.saturating_sub(1) as f32 * self.stride;
         ui.set_min_width(width);
@@ -117,6 +135,9 @@ impl Matrix {
         state.cells = Some((self.stride, self.label));
         state.viewport.scroll = output.state.offset;
         state.viewport.panel = Some(output.inner_rect);
+    }
+    pub fn label(&self) -> f32 {
+        self.label
     }
     pub fn row_label(&self, ui: &mut egui::Ui, text: &str) {
         ui.add_sized(

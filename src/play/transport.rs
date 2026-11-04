@@ -5,6 +5,8 @@ use crate::{
 use cat_smf_editor::message;
 use cat_smf_editor::{score::audition_timing::TempoMap, score::display_rows::DisplayRow};
 use eframe::egui;
+mod display_position;
+pub(crate) use display_position::{pattern_tick, tick_for as display_tick_for};
 
 pub struct Active {
     pub automation: super::automation::Automation,
@@ -261,10 +263,12 @@ pub fn preparing_row_for(app: &App, track: usize) -> Option<usize> {
         .as_ref()
         .map(|p| &p.active)
         .or(app.playback.active.as_ref())?;
+    let clock = display_position::clock_track(app, track, active);
     let tick = active
         .tempos
-        .get(track)?
+        .get(clock)?
         .tick_after(0, active.start_seconds);
+    let tick = display_position::project(app, track, active, tick)?;
     // Rows sharing the start tick: the overlay stays on the cursor, not the tick's last row.
     if track == app.track
         && let Some(cursor) = app.cursor_row
@@ -282,7 +286,7 @@ pub fn marker_row(app: &App) -> Option<usize> {
 }
 
 pub fn marker_for(app: &App, track: usize) -> Option<usize> {
-    row_for_tick(app, track, tick_for(app, track)?)
+    row_for_tick(app, track, display_tick_for(app, track)?)
 }
 
 /// Last row at or before `tick`.
@@ -330,7 +334,10 @@ pub fn stop(app: &mut App) {
     if preview {
         app.audition.restore_automated_baselines();
     }
-    if app.cursor_row.is_none() && crate::cursor::split::row_count(app, app.track) > 0 {
+    if !app.startup.pending
+        && app.cursor_row.is_none()
+        && crate::cursor::split::row_count(app, app.track) > 0
+    {
         let tick = playback::location(app).0;
         app.cursor_row = Some(crate::cursor::split::row_sounding_loaded(
             app.loaded.as_ref().unwrap(),

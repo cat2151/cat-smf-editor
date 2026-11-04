@@ -38,13 +38,21 @@ pub(super) fn show(
     let mut card = None;
     let mut edit = false;
     let focused = super::super::super::beacon::focused(ui.ctx());
-    let music = &a.loaded.as_ref().unwrap().music;
-    let keys = &a.loaded.as_ref().unwrap().keys;
-    let catalog = Catalog::read(music).unwrap_or_default();
-    egui::ScrollArea::vertical()
+    let l = a.loaded.as_ref().unwrap();
+    let (music, keys) = (&l.music, &l.keys);
+    let Some((catalog, _)) = &l.arrangement else {
+        return;
+    };
+    // Down to the window bottom, leaving the row of the "+" button below.
+    let plus = ui.spacing().interact_size.y + ui.spacing().item_spacing.y;
+    let height = (ui.available_height() - plus).max(60.0);
+    let list = egui::ScrollArea::vertical()
         .drag_to_scroll(false)
         .id_salt((p.title(), "parts"))
-        .max_height(120.0)
+        .max_height(height)
+        .min_scrolled_height(height)
+        .auto_shrink([true, false])
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .show(ui, |ui| {
             for (part, label) in filtered {
                 let (rect, r) = ui.allocate_exact_size(
@@ -58,7 +66,7 @@ pub(super) fn show(
                     Some(part) == selected && (p == Pane::Scene || !cells),
                     false,
                     |painter, area| {
-                        paint_part(painter, area, music, keys, &catalog, c, part, None);
+                        paint_part(painter, area, music, keys, catalog, c, part, None);
                     },
                 );
                 if let PatternOrScene::Pattern(id) = part
@@ -115,6 +123,10 @@ pub(super) fn show(
                 }
             }
         });
+    #[cfg(test)]
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(egui::Id::new((p.title(), "parts-list")), list.inner_rect));
+    let _ = list;
     // Outside the scroll area, so it stays reachable however many parts there are.
     if button(ui, p, "new-pattern", "+")
         .on_hover_text("新規pattern (N)")

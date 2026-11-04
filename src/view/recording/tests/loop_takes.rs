@@ -23,7 +23,7 @@ fn every_loop_take_is_created_by_one_edit_and_removed_by_one_undo() {
     }
     let mut ids = vec![];
     a.edit_tracks(|music| {
-        ids = r.commit(music, None)?;
+        ids = r.commit(music, None, Duration::ZERO)?;
         Ok(())
     })
     .unwrap();

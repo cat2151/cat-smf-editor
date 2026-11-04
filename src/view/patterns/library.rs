@@ -105,6 +105,33 @@ pub(super) fn add_container_with(
     let track = source(a, &mut music, drums.as_ref())?;
     commit(a, music, track)
 }
+/// A container without patterns; it becomes the current container.
+pub(crate) fn new_container(a: &mut App, drums: bool) -> Result<u64, String> {
+    let patch = if drums {
+        Some(crate::view::drums::prepare(a)?.0)
+    } else {
+        None
+    };
+    let mut music = a
+        .loaded
+        .as_ref()
+        .ok_or(message::NO_SMF_LOADED)?
+        .music
+        .clone();
+    let track = source(a, &mut music, patch.as_ref())?;
+    let id = Catalog::read(&music)?
+        .tracks
+        .iter()
+        .find_map(|(&id, &t)| (t == track).then_some(id))
+        .ok_or(message::MISSING_SOUND_CONTAINER)?;
+    a.edit_tracks(|m| {
+        *m = music;
+        Ok(())
+    })?;
+    a.patterns.container = Some(id);
+    refresh(a);
+    Ok(id)
+}
 /// `base`, numbered when another track than `except` has it, so the chooser can tell
 /// containers apart.
 pub(crate) fn numbered(

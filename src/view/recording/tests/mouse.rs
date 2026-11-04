@@ -155,3 +155,76 @@ fn the_container_menu_switches_to_a_drum_container_after_a_phrase_key() {
     assert!(session(&a).error.is_none(), "{:?}", session(&a).error);
     assert!(recorder(&a).settings().drums);
 }
+
+fn plus(a: &mut App) {
+    let mut state = std::mem::take(&mut a.patterns.recording);
+    assert!(!playing::button(
+        a,
+        state.session.as_mut().unwrap(),
+        window::Button::NewSound
+    ));
+    a.patterns.recording = state;
+}
+
+#[test]
+fn the_container_menu_plus_adds_a_container_without_patterns_and_plays_it() {
+    let mut a = app();
+    a.edit_tracks(|m| cat_smf_editor::score::pattern::operations::create_source(m).map(|_| ()))
+        .unwrap();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    assert_eq!(session(&a).sounds.len(), 1);
+    plus(&mut a);
+    let s = session(&a);
+    assert!(s.error.is_none(), "{:?}", s.error);
+    assert_eq!(s.sounds.len(), 2);
+    assert_eq!(s.selected, 1);
+    let (id, track) = (s.sounds[1].container.unwrap(), s.sounds[1].track);
+    assert_eq!(a.patterns.container, Some(id));
+    assert!(a.audition.live_active());
+    assert!(a.audition.live_patches.iter().any(|(t, _)| *t == track));
+    let music = &a.loaded.as_ref().unwrap().music;
+    assert!(Catalog::read(music).unwrap().patterns.is_empty());
+    assert_eq!(music.tracks[track].name().as_deref(), Some("Init Saw 2"));
+    // The next frames neither list it twice nor close the keyboard.
+    frame(&mut a, &ctx, vec![key(Key::Z, true, Modifiers::NONE)], true);
+    assert!(a.patterns.recording.is_open());
+    assert_eq!(session(&a).sounds.len(), 2);
+    assert!(recorder(&a).sounding(60));
+    assert!(a.undo.available());
+}
+
+#[test]
+fn the_container_menu_plus_turns_the_stand_in_sound_into_the_new_container() {
+    let mut a = app();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    assert_eq!(session(&a).sounds[0].container, None);
+    plus(&mut a);
+    let s = session(&a);
+    assert!(s.error.is_none(), "{:?}", s.error);
+    assert_eq!(s.sounds.len(), 1);
+    assert_eq!(s.sounds[0].container, a.patterns.container);
+    assert!(s.sounds[0].container.is_some());
+}
+
+#[test]
+fn a_container_added_elsewhere_joins_the_keyboard_without_taking_the_selection() {
+    let mut a = app();
+    a.edit_tracks(|m| cat_smf_editor::score::pattern::operations::create_source(m).map(|_| ()))
+        .unwrap();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    let id = crate::view::patterns::library::new_container(&mut a, false).unwrap();
+    frame(&mut a, &ctx, vec![], true);
+    let s = session(&a);
+    assert!(a.patterns.recording.is_open());
+    assert_eq!(s.sounds.len(), 2);
+    assert_eq!(s.sounds[1].container, Some(id));
+    assert_eq!(s.selected, 0);
+    assert!(a
+        .audition
+        .live_patches
+        .iter()
+        .any(|(t, _)| *t == s.sounds[1].track));
+}

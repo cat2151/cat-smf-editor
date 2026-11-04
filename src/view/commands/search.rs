@@ -74,6 +74,8 @@ impl Command {
             "new" => "new file",
             "add-track" => "add insert track",
             "create-pattern" => "add create pattern",
+            "new-container" | "new-drum-container" => "add create container track コンテナ",
+            "pattern-midi-baseline" => "midi baseline cc bend",
             "set-pattern-preview-track" => "move pattern to container sound",
             "open-song-matrix" => "edit scene order song matrix",
             "arrangement-play-song" => "play scene order song",

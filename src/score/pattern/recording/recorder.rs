@@ -210,8 +210,14 @@ impl Recorder {
             self.laps.push(next);
         }
     }
-    /// One pattern per lap that holds notes, created in lap order; the caller supplies a clone.
-    pub fn commit(&self, music: &mut Music, source: Option<usize>) -> Result<Vec<u64>, String> {
+    /// One pattern per lap that holds notes, created in lap order, with the CC1 of a sweep
+    /// started at `sweep`; the caller supplies a clone.
+    pub fn commit(
+        &self,
+        music: &mut Music,
+        source: Option<usize>,
+        sweep: Duration,
+    ) -> Result<Vec<u64>, String> {
         if !self.held.is_empty() || self.laps.iter().any(|l| l.on.iter().any(Option::is_some)) {
             return Err("録音中に押さえたままのnoteがあります".into());
         }
@@ -248,14 +254,19 @@ impl Recorder {
             };
             let start = self.length().map_or(0, |l| i as u64 * l);
             // CC1 first, so a value on a note's tick reaches the note.
-            let mut events = self.controls(start, start + count * measure)?;
+            let mut events = self.controls(sweep, start, start + count * measure)?;
             events.extend(notes);
             write(music, source, count, events)
         })
         .collect()
     }
     /// CC1 from tick `start` to `end` after the origin, at ticks from `start`.
-    fn controls(&self, start: u64, end: u64) -> Result<Vec<crate::model::Event>, String> {
+    fn controls(
+        &self,
+        sweep: Duration,
+        start: u64,
+        end: u64,
+    ) -> Result<Vec<crate::model::Event>, String> {
         let Some(origin) = self.origin else {
             return Ok(vec![]);
         };
@@ -268,7 +279,11 @@ impl Recorder {
                 )
         };
         let mut events = vec![];
-        for (at, value) in self.settings.modulation.changes(time(start), time(end)) {
+        for (at, value) in self
+            .settings
+            .modulation
+            .changes(sweep, time(start), time(end))
+        {
             let tick = ticks(self.division, self.settings.tempo, origin, at)?.unwrap_or(0);
             if (start..end).contains(&tick) {
                 control(&mut events, tick - start, value);

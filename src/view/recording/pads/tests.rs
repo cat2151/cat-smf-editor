@@ -67,7 +67,7 @@ fn event(key: Key, physical_key: Option<Key>) -> egui::Event {
     }
 }
 
-fn convert(e: &egui::Event, layout: Layout, held: &HashSet<Pad>, down: &[u8]) -> Option<Pad> {
+fn convert(e: &egui::Event, mode: Mode, held: &HashSet<Pad>, down: &[u8]) -> Option<Pad> {
     let egui::Event::Key {
         key,
         physical_key,
@@ -78,7 +78,7 @@ fn convert(e: &egui::Event, layout: Layout, held: &HashSet<Pad>, down: &[u8]) ->
         unreachable!()
     };
     pad(
-        layout,
+        mode,
         key,
         physical_key,
         pressed,
@@ -109,7 +109,7 @@ fn all_48_measured_keys_are_distinct_pads_in_row_order() {
                 "\\ upper" => &[0xDC],
                 _ => &[],
             };
-            convert(&event(key, physical), Layout::Rows, &HashSet::new(), down)
+            convert(&event(key, physical), Mode::Note, &HashSet::new(), down)
                 .unwrap_or_else(|| panic!("{name} has no pad"))
         })
         .collect::<Vec<_>>();
@@ -121,22 +121,22 @@ fn all_48_measured_keys_are_distinct_pads_in_row_order() {
 fn backslash_side_comes_from_win32_and_is_ignored_when_neither_is_down() {
     let none = HashSet::new();
     let press = event(Key::Backslash, None);
-    assert_eq!(convert(&press, Layout::Rows, &none, &[]), None);
+    assert_eq!(convert(&press, Mode::Note, &none, &[]), None);
     assert_eq!(
-        convert(&press, Layout::Rows, &none, &[0xE2]),
+        convert(&press, Mode::Note, &none, &[0xE2]),
         Some(LOWER_BACKSLASH.1)
     );
     assert_eq!(
-        convert(&press, Layout::Rows, &none, &[0xDC]),
+        convert(&press, Mode::Note, &none, &[0xDC]),
         Some(UPPER_BACKSLASH.1)
     );
     // Lower already sounding: a second press while both are down is the upper key.
     let lower = HashSet::from([LOWER_BACKSLASH.1]);
     assert_eq!(
-        convert(&press, Layout::Rows, &lower, &[0xE2, 0xDC]),
+        convert(&press, Mode::Note, &lower, &[0xE2, 0xDC]),
         Some(UPPER_BACKSLASH.1)
     );
-    assert_eq!(convert(&press, Layout::Rows, &lower, &[0xE2]), None);
+    assert_eq!(convert(&press, Mode::Note, &lower, &[0xE2]), None);
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn backslash_release_picks_the_held_side_or_the_one_win32_reports_up() {
         repeat: false,
         modifiers: Modifiers::NONE,
     };
-    let rows = Layout::Rows;
+    let rows = Mode::Note;
     assert_eq!(convert(&release, rows, &HashSet::new(), &[]), None);
     let upper = HashSet::from([UPPER_BACKSLASH.1]);
     assert_eq!(
@@ -170,14 +170,14 @@ fn backslash_release_picks_the_held_side_or_the_one_win32_reports_up() {
 fn letters_layout_maps_only_c_to_b() {
     let none = HashSet::new();
     let letters = [Key::C, Key::D, Key::E, Key::F, Key::G, Key::A, Key::B]
-        .map(|k| convert(&event(k, Some(k)), Layout::Letters, &none, &[]));
+        .map(|k| convert(&event(k, Some(k)), Mode::Letters, &none, &[]));
     assert_eq!(letters, std::array::from_fn(|i| Some(Pad::Letter(i as u8))));
     assert_eq!(
-        convert(&event(Key::Z, Some(Key::Z)), Layout::Letters, &none, &[]),
+        convert(&event(Key::Z, Some(Key::Z)), Mode::Letters, &none, &[]),
         None
     );
     assert_eq!(
-        convert(&event(Key::H, Some(Key::H)), Layout::Rows, &none, &[]),
+        convert(&event(Key::H, Some(Key::H)), Mode::Note, &none, &[]),
         Some(Pad::Row { row: 1, column: 5 })
     );
 }

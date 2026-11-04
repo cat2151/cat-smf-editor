@@ -1,10 +1,6 @@
 //! A pulsing frame on the next step while the only pattern is unfinished.
-use crate::app::App;
-use cat_smf_editor::score::{
-    note_view::note_on,
-    pattern::{body, Catalog},
-    scene,
-};
+use crate::app::{App, Loaded};
+use cat_smf_editor::score::{note_view::note_on, pattern::body};
 use eframe::egui::{self, Stroke};
 
 /// The next step shown on the only pattern candidate of Song.
@@ -15,28 +11,27 @@ pub enum Step {
 }
 
 pub fn step(a: &App) -> Option<Step> {
-    let m = &a.loaded.as_ref()?.music;
-    let catalog = Catalog::read(m).ok()?;
-    let arrangement = scene::read(m).ok()?;
+    let l = a.loaded.as_ref()?;
+    let (catalog, arrangement) = l.arrangement.as_ref()?;
     let [p] = catalog.patterns.values().collect::<Vec<_>>()[..] else {
         return None;
     };
     if !arrangement.scenes.is_empty() {
         return None;
     }
-    if empty(m, p.id) {
+    if empty(l, p.id) {
         Some(Step::Edit(p.id))
     } else {
         arrangement.song.is_empty().then_some(Step::Place(p.id))
     }
 }
 
-pub fn empty(m: &cat_smf_editor::model::Music, id: u64) -> bool {
-    Catalog::read(m)
-        .ok()
-        .and_then(|c| {
+pub fn empty(l: &Loaded, id: u64) -> bool {
+    l.arrangement
+        .as_ref()
+        .and_then(|(c, _)| {
             let p = c.patterns.get(&id)?;
-            let events = body::extract(&m.tracks[p.track].events, p.range().ok()?).ok()?;
+            let events = body::extract(&l.music.tracks[p.track].events, p.range().ok()?).ok()?;
             Some(!events.iter().any(note_on))
         })
         .unwrap_or(false)

@@ -1,6 +1,7 @@
 use super::*;
 mod candidates;
 mod drawing;
+mod playhead;
 mod scrolling;
 use drawing::{cell, measure_in_block, paint_part, place_beacon, trash, Block};
 /// A placement being dragged: its row and first measure.
@@ -36,13 +37,12 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
         ui.disable();
     }
     let Some(l) = &a.loaded else { return };
-    let c = match scene::read(&l.music).and_then(|c| Catalog::read(&l.music).map(|_| c)) {
-        Ok(c) => c,
-        Err(e) => {
-            ui.colored_label(ui.visuals().error_fg_color, e);
-            return;
-        }
+    let Some((_, c)) = &l.arrangement else {
+        let e = Catalog::read(&l.music).err().unwrap_or_default();
+        ui.colored_label(ui.visuals().error_fg_color, e);
+        return;
     };
+    let c = c.clone();
     if p == Pane::Scene
         && !c
             .scenes
@@ -78,7 +78,11 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
         s.measure = s.measure.min(len).max(1);
     }
 
+    // The Scene window runs this body too; its time is not Song's.
+    let song_span = |name| (p == Pane::Song).then(|| crate::frame_trace::span(name));
+    let minimap_span = song_span("song/ui/minimap");
     super::minimap::show(a, ui, p);
+    drop(minimap_span);
     ui.horizontal(|ui| {
         if p == Pane::Scene {
             let mut selected = id;
@@ -133,7 +137,11 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     if let Some(e) = &a.patterns.workspace.error {
         ui.colored_label(ui.visuals().error_fg_color, e);
     }
-    let c = scene::read(&a.loaded.as_ref().unwrap().music).unwrap_or(c);
+    let l = a.loaded.as_ref().unwrap();
+    let Some((catalog, c)) = &l.arrangement else {
+        return;
+    };
+    let c = c.clone();
     let id = scene_id(a, p);
     let count = if p == Pane::Scene && id.is_none() {
         0
@@ -146,7 +154,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     } else {
         1.0
     };
-    let cell_width = (90.0 * zoom).max(2.0);
+    let cell_width = super::timeline::CELL * zoom;
     let columns = ((ui.available_width() / cell_width).ceil() as u64).max(12);
     let end = length.map_or_else(
         || {
@@ -159,11 +167,9 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                 .max()
                 .unwrap_or(1)
                 .max(
-                    cat_smf_editor::score::musical_time::MusicalTime::new(
-                        &a.loaded.as_ref().unwrap().music,
-                    )
-                    .map(0)
-                    .map_or(1, |map| map.position(c.song_length).measure as u64 + 1),
+                    cat_smf_editor::score::musical_time::MusicalTime::new(&l.music)
+                        .map(0)
+                        .map_or(1, |map| map.position(c.song_length).measure as u64 + 1),
                 )
                 .max(s.measure.saturating_add(columns))
         },
@@ -172,9 +178,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     let position = (s.row, s.measure);
     let selected = s.cells(p).then_some((s.row, s.measure));
     let choices = choices(a, p);
-    let music = &a.loaded.as_ref().unwrap().music;
-    let keys = &a.loaded.as_ref().unwrap().keys;
-    let catalog = Catalog::read(music).unwrap_or_default();
+    let (music, keys) = (&l.music, &l.keys);
     let lanes = lanes(&c, id);
     let beacon = (p == Pane::Song)
         .then(|| super::super::beacon::step(a))
@@ -185,21 +189,30 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     let mut moved = None;
     let mut commented = None;
     let mut scrolling = scrolling::Matrix::new(ui, p, position, end, cell_width);
+    let head = playhead::x(a, &c, p, cell_width, scrolling.label());
     let timeline = if p == Pane::Song {
         &mut a.patterns.workspace.timeline
     } else {
         &mut a.patterns.workspace.scene_timeline
     };
-    if let Some(offset) = timeline.viewport.pending.take() {
-        scrolling.offset = offset.x;
+    let pending = timeline.viewport.pending.take();
+    scrolling.turn_page(ui, head, pending.is_none());
+    if let Some(offset) = pending {
+        // The viewport scales the whole offset, but the row label before measure one keeps its width.
+        let scale = timeline
+            .cells
+            .map_or(1.0, |(stride, _)| cell_width / stride);
+        scrolling.offset = (offset.x + scrolling.label() * (1.0 - scale)).max(0.0);
     }
     let mut repeat_action = None;
+    let matrix_span = song_span("song/ui/matrix");
     let output = egui::ScrollArea::both()
         .drag_to_scroll(false)
         .id_salt((p.title(), "matrix"))
         .max_height(160.0)
         .horizontal_scroll_offset(scrolling.offset)
         .show_viewport(ui, |ui, viewport| {
+            let origin = ui.max_rect().left();
             let (area, first, end) = scrolling.visible(ui, viewport);
             if p == Pane::Song {
                 repeat_action = scrolling.repeat(
@@ -213,7 +226,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
             if p == Pane::Song {
                 area.min.y = ui.cursor().top();
             }
-            ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
+            let cells = ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
                 egui::Grid::new((p.title(), "cells"))
                     .min_col_width(0.0)
                     .spacing(egui::vec2(0.0, ui.spacing().item_spacing.y))
@@ -286,7 +299,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                                                 area,
                                                 music,
                                                 keys,
-                                                &catalog,
+                                                catalog,
                                                 &c,
                                                 part,
                                                 Some((k, k + 1)),
@@ -329,7 +342,11 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                         }
                     });
             });
+            if let Some(x) = head {
+                playhead::paint(ui, origin + x, cells.response.rect);
+            }
         });
+    drop(matrix_span);
     scrolling.finish(ui, p, &output);
     let timeline = if p == Pane::Song {
         &mut a.patterns.workspace.timeline
@@ -395,5 +412,6 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     if deleted {
         return;
     }
+    let _candidates_span = song_span("song/ui/candidates");
     candidates::show(a, ui, p, &c, first_cell, beacon, (ime, was_focused));
 }

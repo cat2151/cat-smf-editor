@@ -2,7 +2,11 @@
 use super::*;
 use crate::view::{timeline_minimap, timeline_repeat as repeat, timeline_zoom};
 mod axis;
-pub(super) use axis::{Cells, SceneCells};
+pub(super) use axis::{scene_boundaries, Cells, SceneCells};
+
+/// Width of a Song measure at zoom 1, and the narrowest it is drawn.
+pub(super) const CELL: f32 = 90.0;
+const MIN_CELL: f32 = 2.0;
 
 #[derive(Default)]
 pub(super) struct State {
@@ -26,10 +30,12 @@ impl State {
 
 pub(super) fn show(a: &mut App, ui: &mut egui::Ui) {
     let Some(l) = &a.loaded else { return };
-    let Ok((occurrences, end)) = model::occurrences(&l.music, None) else {
+    let Some((catalog, collection)) = &l.arrangement else {
         return;
     };
-    let catalog = Catalog::read(&l.music).unwrap_or_default();
+    let Ok((occurrences, end)) = model::occurrences_in(&l.music, catalog, collection, None) else {
+        return;
+    };
     let time = cat_smf_editor::score::musical_time::MusicalTime::new(&l.music);
     let Some(map) = time.map(0) else { return };
     let playing = a
@@ -42,6 +48,7 @@ pub(super) fn show(a: &mut App, ui: &mut egui::Ui) {
     state
         .viewport
         .begin(crate::view::timeline_controls::Screen::Song);
+    state.viewport.min_time_zoom = MIN_CELL / CELL;
     let height = timeline_minimap::height(ui.available_height());
     let (outer, _) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), timeline_zoom::BAR + height),

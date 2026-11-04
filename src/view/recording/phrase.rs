@@ -241,7 +241,7 @@ fn follow_capture(a: &mut App, s: &mut Session, i: usize) {
     let controls = s
         .settings()
         .modulation
-        .changes(*origin, *origin + length)
+        .changes(s.sweep_start(), *origin, *origin + length)
         .into_iter()
         .map(|(at, value)| (at - *origin, value))
         .collect::<Vec<_>>();
@@ -463,6 +463,53 @@ pub(super) fn to_song(a: &mut App, s: &mut Session) -> Result<(), String> {
     Ok(())
 }
 
+/// Containers new to the song join the keyboard in track order, the first in place of the
+/// sound standing in for a song without containers; `true` when any joined.
+pub(super) fn adopt(a: &App, s: &mut Session) -> bool {
+    let Some(loaded) = a.loaded.as_ref() else {
+        return false;
+    };
+    let Ok(catalog) = Catalog::read(&loaded.music) else {
+        return false;
+    };
+    let mut new: Vec<_> = catalog
+        .tracks
+        .iter()
+        .filter(|(id, t)| {
+            catalog.sources.contains(t) && !s.sounds.iter().any(|x| x.container == Some(**id))
+        })
+        .map(|(&id, &track)| (track, id))
+        .collect();
+    if new.is_empty() {
+        return false;
+    }
+    new.sort();
+    for (track, id) in new {
+        let sound = Sound {
+            container: Some(id),
+            track,
+            patch: loaded.patches[track].clone(),
+            name: cat_smf_editor::score::pattern::container_name(&loaded.music, id, track),
+            live: live::Live::default(),
+            looper: if a.config.phrase_loop {
+                Looper::Waiting
+            } else {
+                Looper::Off
+            },
+        };
+        match s.sounds.iter_mut().find(|x| x.container.is_none()) {
+            Some(standing) => {
+                standing.container = sound.container;
+                standing.track = sound.track;
+                standing.patch = sound.patch;
+                standing.name = sound.name;
+            }
+            None => s.sounds.push(sound),
+        }
+    }
+    true
+}
+
 /// Follows edits of the song without stopping the phrases: the Loop patterns, the containers'
 /// moves, patches and renames. `true` when a container the keyboard plays is gone.
 pub(super) fn follow_patch(a: &mut App, s: &mut Session) -> bool {
@@ -487,7 +534,8 @@ pub(super) fn follow_patch(a: &mut App, s: &mut Session) -> bool {
                 sound.track = track;
                 changed = true;
             }
-            sound.name = super::container_name(&loaded.music, id, sound.track);
+            sound.name =
+                cat_smf_editor::score::pattern::container_name(&loaded.music, id, sound.track);
         }
         if let Some(patch) = sound
             .container
@@ -498,10 +546,18 @@ pub(super) fn follow_patch(a: &mut App, s: &mut Session) -> bool {
             changed = true;
         }
     }
+    if adopt(a, s) || changed {
+        retune(a, s);
+    }
+    false
+}
+
+/// The playing instruments take the containers' current sounds.
+pub(super) fn retune(a: &mut App, s: &mut Session) {
     let Some(click) = &s.click else {
-        return false;
+        return;
     };
-    if changed && !a.audition.retune_live(&super::play::sounds(s), click) {
+    if !a.audition.retune_live(&super::play::sounds(s), click) {
         s.error = Some(
             a.audition
                 .error()
@@ -509,7 +565,6 @@ pub(super) fn follow_patch(a: &mut App, s: &mut Session) -> bool {
                 .to_owned(),
         );
     }
-    false
 }
 
 /// What the panel shows: the patch name, or the layer count of a layered container.

@@ -148,7 +148,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) -> bool {
     if !blocked && let Some(mid) = app.player_selection.setup.initial.take() {
         app.open_initial(mid);
         crate::view::analysis::restore(app);
-        crate::play::playback::start(app, crate::play::playback::Mode::AllTracks);
+        app.start_initial_playback();
     }
     blocked
 }

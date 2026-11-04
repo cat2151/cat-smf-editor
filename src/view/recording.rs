@@ -18,6 +18,7 @@ use cat_smf_editor::score::{
 use eframe::egui::{self, Key, Modifiers};
 use std::time::Instant;
 mod capture;
+mod choices;
 mod companions;
 mod pads;
 mod panel;
@@ -26,6 +27,7 @@ mod piano;
 mod play;
 mod resume;
 mod setup;
+mod sweep;
 mod take;
 #[cfg(test)]
 mod tests;
@@ -105,6 +107,8 @@ struct Session {
     mouse: [Option<recording::Pad>; 2],
     /// Present while playing.
     recorder: Option<Recorder>,
+    /// Session time the CC1 sweep started, while the keys are recorded.
+    sweep: Option<std::time::Duration>,
     /// The recording voice's metronome, present while the instruments play; its first click
     /// fixes the loop origin.
     click: Option<std::sync::Arc<crate::play::audition::click::Click>>,
@@ -209,15 +213,9 @@ fn song_key(music: &cat_smf_editor::model::Music) -> recording::Key {
     }))
 }
 
-fn container_name(music: &cat_smf_editor::model::Music, id: u64, track: usize) -> String {
-    music.tracks[track]
-        .name()
-        .unwrap_or_else(|| format!("Container {id}"))
-}
-
 fn open(a: &mut App, ctx: &egui::Context) -> Result<(), String> {
     let pane = super::patterns::workspace::pane(ctx);
-    open_from(a, ctx, ctx.viewport_id(), pane)
+    open_from(a, ctx, ctx.viewport_id(), pane, true)
 }
 
 /// Opens as Shift+R in `origin`, which is `pane` when that is a pattern window.
@@ -226,6 +224,7 @@ fn open_from(
     ctx: &egui::Context,
     origin: egui::ViewportId,
     pane: Option<Pane>,
+    stop_playback: bool,
 ) -> Result<(), String> {
     if let Some(s) = a.patterns.recording.session.as_mut() {
         s.origin = origin;
@@ -263,7 +262,7 @@ fn open_from(
             container: Some(id),
             track,
             patch: loaded.patches[track].clone(),
-            name: container_name(&loaded.music, id, track),
+            name: cat_smf_editor::score::pattern::container_name(&loaded.music, id, track),
             live: live::Live::default(),
             looper: looper(),
         })
@@ -297,10 +296,10 @@ fn open_from(
     {
         settings.set_voicing(*v);
     }
-    // No container is implied, so the settings open on the container row.
-    let ambiguous = selected.is_none() && sounds.len() > 1;
     let division = loaded.music.division;
-    crate::play::transport::stop(a);
+    if stop_playback {
+        crate::play::transport::stop(a);
+    }
     super::piano_roll::cancel_keyboard(a, ctx);
     let mut session = Session {
         origin,
@@ -315,7 +314,7 @@ fn open_from(
         selected: index,
         settings,
         measures,
-        item: setup::Item::Sound,
+        item: setup::Item::Range,
         settings_open: false,
         piano_open: true,
         raise: false,
@@ -324,6 +323,7 @@ fn open_from(
         companions: companions::Places::default(),
         mouse: [None; 2],
         recorder: None,
+        sweep: None,
         click: None,
         generation: a.generation,
         pending: capture::Pending::new(),
@@ -345,11 +345,9 @@ fn open_from(
         }),
         down: pads::key_down,
     };
-    if !ambiguous {
-        session.item = setup::first(&session);
-    }
+    session.item = setup::first(&session);
     // Pads come first; a sound that cannot play opens the settings beside the error.
-    session.settings_open = !play::start(a, &mut session) || ambiguous;
+    session.settings_open = !play::start(a, &mut session);
     a.patterns.recording.session = Some(session);
     modal::mark_owned(ctx);
     modal::clear(ctx);
@@ -383,7 +381,9 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         .with_visible(window::shown(ctx));
     let mut moved = None;
     let song = a.song_id;
+    let window_span = crate::frame_trace::span("keyboard");
     let done = ctx.show_viewport_immediate(window::viewport(), builder, |ctx, class| {
+        let _span = crate::frame_trace::span("keyboard/ui");
         let native = class != egui::ViewportClass::Embedded;
         if native {
             moved = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min);
@@ -413,6 +413,7 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         }
         done
     });
+    drop(window_span);
     if let Some(at) = moved {
         companions::remember(a, companions::KEYBOARD, at);
     }

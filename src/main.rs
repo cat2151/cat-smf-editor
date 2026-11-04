@@ -3,13 +3,21 @@ mod app;
 mod cursor;
 #[path = "../../cat-plugin-player/shared/first_instrument_install.rs"]
 mod first_instrument_install;
+mod frame_trace;
+#[path = "../../cat-plugin-player/shared/main_reached.rs"]
+mod main_reached;
 mod play;
 mod player;
 mod store;
 mod view;
 
 fn main() -> eframe::Result<()> {
+    let log = store::config::directory()
+        .map(|directory| directory.join("startup.log"))
+        .ok_or_else(|| "LOCALAPPDATA is unavailable".to_owned());
+    main_reached::report(main_reached::since_process_creation_ms(), log);
     cat_smf_editor::startup_trace::init();
+    frame_trace::init();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         store::error_log::write("panic", &info.to_string());

@@ -5,7 +5,8 @@ const MOVE: Color32 = Color32::from_rgb(0x66, 0xd9, 0xef);
 const PLAY: Color32 = Color32::from_rgb(0xa6, 0xe2, 0x2e);
 const SOUND: Color32 = Color32::from_rgb(0xf9, 0x26, 0x72);
 
-/// Pads show their keys and the settings window its shortcuts, so only the rest is listed.
+/// Pads show their keys and the settings window the shortcuts of its rows, so only the rest is
+/// listed.
 pub(super) fn recording(ui: &mut egui::Ui) {
     ui.heading("Virtual MIDI keyboard");
     egui::Grid::new("recording-help").show(ui, |ui| {
@@ -16,12 +17,21 @@ pub(super) fn recording(ui: &mut egui::Ui) {
                     PLAY,
                     &[
                         ("Space", "録音開始"),
+                        ("Shift+Space", "録音停止"),
                         ("↑ ↓", "Octave"),
                         ("Ctrl+E", "Phrase loop"),
                         ("Ctrl+Enter", "to song"),
                     ],
                 ),
-                (SOUND, &[("← →", "Container"), ("Ctrl+T", "音色選択")]),
+                (
+                    SOUND,
+                    &[
+                        ("← → / Ctrl+P", "Container"),
+                        ("Ctrl+T", "音色選択"),
+                        ("Ctrl+V", "Velocity"),
+                        ("Ctrl+W", "Modulation"),
+                    ],
+                ),
                 (
                     EDIT,
                     &[

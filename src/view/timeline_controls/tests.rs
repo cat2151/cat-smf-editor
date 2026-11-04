@@ -36,8 +36,10 @@ fn binding_uses_content_axis_for_known_boundaries_and_limits() {
 
 #[test]
 fn horizontal_zoom_reuses_the_same_anchor_and_limits() {
-    assert_eq!(zoom(500.0, 400.0, 1.0, 1.5, 100.0), (1.5, 700.0));
-    assert_eq!(zoom(0.0, 400.0, 1.0, 0.5, -100.0), (0.5, 0.0));
+    assert_eq!(zoom(500.0, 400.0, 1.0, 1.5, 100.0, 200.0), (1.5, 700.0));
+    assert_eq!(zoom(0.0, 400.0, 1.0, 0.5, -100.0, 200.0), (0.5, 0.0));
+    // The wheel's target is its anchor: the content under the pointer stays there.
+    assert_eq!(zoom(500.0, 400.0, 1.0, 1.5, 100.0, 100.0), (1.5, 800.0));
 }
 
 mod fixtures;

@@ -4,7 +4,7 @@ use cat_smf_editor::score::pattern::recording::Modulation;
 use std::sync::atomic::AtomicBool;
 
 #[test]
-fn keys_carry_their_velocity_and_cc1_follows_the_choice_on_the_session_clock() {
+fn keys_carry_their_velocity_and_cc1_follows_the_choice_from_the_sweep_start() {
     use std::time::{Duration, Instant};
     let queue = Queue::default();
     push(&queue, &[64, 67], 93);
@@ -20,7 +20,12 @@ fn keys_carry_their_velocity_and_cc1_follows_the_choice_on_the_session_clock() {
     let mut out = [0u32; 4];
     // Off sends nothing.
     assert_eq!(keys.take(at(0), &mut out), 0);
-    keys.modulate(clock, Modulation::Sweep);
+    // Until the sweep starts it holds its first value.
+    keys.modulate(None, Modulation::Sweep);
+    assert_eq!(keys.take(at(1000), &mut out), 1);
+    assert_eq!(out[0], 0x20B0_0100);
+    assert_eq!(keys.take(at(3000), &mut out), 0);
+    keys.modulate(Some(clock), Modulation::Sweep);
     assert_eq!(keys.take(at(1000), &mut out), 1);
     assert_eq!(out[0], 0x20B0_0100 | 63);
     assert_eq!(keys.take(at(1005), &mut out), 0, "same value is not resent");
@@ -28,7 +33,7 @@ fn keys_carry_their_velocity_and_cc1_follows_the_choice_on_the_session_clock() {
     assert_eq!(keys.take(at(2000), &mut out), 2);
     assert_eq!(out[..2], [0x20B0_0100 | 127, word(60, 80)]);
     // Another choice is sent at once, even at the same value.
-    keys.modulate(clock, Modulation::Fixed(127));
+    keys.modulate(Some(clock), Modulation::Fixed(127));
     assert_eq!(keys.take(at(2000), &mut out), 1);
     assert_eq!(keys.take(at(3000), &mut out), 0);
 }

@@ -109,6 +109,7 @@ pub(crate) fn app(music: Music) -> App {
                     .map(|t| NoteView::new(&t.events))
                     .collect::<Vec<_>>(),
             ),
+            arrangement: crate::app::read_arrangement(&music),
             music,
             time,
             track_titles,

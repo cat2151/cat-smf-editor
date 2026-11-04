@@ -14,7 +14,9 @@ pub const NAMES: [&str; 4] = ["Kick", "Snare", "Hi-Hat", "Percussion"];
 #[cfg(test)]
 mod measure_tests;
 mod measures;
+mod patterns;
 pub use measures::{rebuild, toggle_measure, Measure};
+pub(crate) use patterns::{pattern_body, rebuild as rebuild_patterns};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -189,5 +191,7 @@ pub fn toggle(track: &mut Track, division: u16, row: usize, step: u64) -> Result
     edit::refresh_deltas(track)
 }
 
+#[cfg(test)]
+mod pattern_tests;
 #[cfg(test)]
 mod tests;

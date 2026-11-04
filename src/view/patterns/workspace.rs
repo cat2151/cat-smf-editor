@@ -129,11 +129,10 @@ pub fn scene_id(a: &App, p: Pane) -> Option<u64> {
 /// The keyboard's Loop leads its container.
 pub fn choices(a: &App, p: Pane) -> Vec<(PatternOrScene, String)> {
     use cat_smf_editor::score::pattern::Kind;
-    let Some(l) = &a.loaded else { return vec![] };
-    let Ok(c) = Catalog::read(&l.music) else {
+    let Some((catalog, collection)) = a.loaded.as_ref().and_then(|l| l.arrangement.as_ref()) else {
         return vec![];
     };
-    let mut patterns = c
+    let mut patterns = catalog
         .patterns
         .values()
         .filter(|p| p.kind != Kind::Capture)
@@ -143,10 +142,8 @@ pub fn choices(a: &App, p: Pane) -> Vec<(PatternOrScene, String)> {
         .into_iter()
         .map(|p| (PatternOrScene::Pattern(p.id), p.name.clone()))
         .collect::<Vec<_>>();
-    if p == Pane::Song
-        && let Ok(c) = scene::read(&l.music)
-    {
-        out.extend(c.scenes.iter().map(|s| {
+    if p == Pane::Song {
+        out.extend(collection.scenes.iter().map(|s| {
             (
                 PatternOrScene::Scene(s.id),
                 format!("{} · {} measures", s.name, s.meters.len()),
@@ -177,6 +174,7 @@ pub fn reset_windows(a: &mut App) {
     for p in [Pane::Scene, Pane::Song] {
         let s = a.patterns.workspace.selection_mut(p);
         s.owned = false;
+        s.opened = None;
         s.focus = false;
         s.composing = false;
     }
@@ -294,7 +292,7 @@ pub fn edit_choice(a: &mut App, ctx: &egui::Context, p: Pane) {
                 a.patterns.workspace.return_to = Some(p);
                 presentation::focus_root(a, ctx);
                 let l = a.loaded.as_ref().unwrap();
-                if !crate::view::drums::is_open(a) && super::beacon::empty(&l.music, id) {
+                if !crate::view::drums::is_open(a) && super::beacon::empty(l, id) {
                     crate::view::drums::input(a, ctx);
                 }
             }
@@ -381,14 +379,27 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
                 Pane::Scene => a.patterns.workspace.scene_timeline.suspend(),
             }
         }
+        let opened = super::windows::rect(a, p.title());
+        let opened = *a
+            .patterns
+            .workspace
+            .selection_mut(p)
+            .opened
+            .get_or_insert(opened);
+        let (window, ui) = match p {
+            Pane::Song => ("song", "song/ui"),
+            Pane::Scene => ("scene", "scene/ui"),
+        };
+        let window_span = crate::frame_trace::span(window);
         ctx.show_viewport_immediate(
             p.viewport(),
-            super::windows::builder(a, p.title())
+            super::windows::builder(opened)
                 .with_title(p.title())
                 .with_active(false)
                 .with_min_inner_size([500.0, 360.0])
                 .with_visible(visible),
             |ctx, class| {
+                let _span = crate::frame_trace::span(ui);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(visible));
                 if !visible {
                     return;
@@ -422,6 +433,7 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
                 }
             },
         );
+        drop(window_span);
         // Restored at startup, this window is under the editor until it is owned.
         #[cfg(windows)]
         if !a.patterns.workspace.selection(p).owned {

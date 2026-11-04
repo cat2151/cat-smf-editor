@@ -138,7 +138,7 @@ pub(super) fn list(ui: &mut egui::Ui, s: &Session, sounding: bool, bpm: f64) -> 
                 roll(ui.painter(), rect, p, color);
                 ui.label(name(p.container));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.button(TAKE)
+                    ui.button(TAKE).on_hover_text("Enter")
                 })
                 .inner
             });

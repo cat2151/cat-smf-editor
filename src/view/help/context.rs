@@ -32,6 +32,9 @@ pub(super) enum Target {
 pub struct State {
     pub(super) target: Target,
     pub(super) geometry: Option<[f32; 4]>,
+    /// Built when the window opens and kept while it lives: a changed builder
+    /// moves the native window, which would fight the user's drag.
+    pub(super) builder: Option<egui::ViewportBuilder>,
     /// Lifts the help window above the others at its next frame.
     pub(crate) raise: bool,
     /// When the frame started blinking, so that the summoned help is noticed.

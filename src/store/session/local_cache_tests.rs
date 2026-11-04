@@ -56,6 +56,20 @@ fn local_cache_restores_current_document_after_restart_without_player() {
             assert_eq!(actual.tick, expected.tick);
             assert_eq!(actual.split, expected.split);
             assert_eq!(actual.split_active, expected.split_active);
+            assert_eq!(actual.edited_pattern, expected.edited_pattern);
+            if let Some(id) = expected.edited_pattern {
+                assert_eq!(
+                    crate::view::patterns::mode::editing(&app, app.track)
+                        .unwrap()
+                        .pattern,
+                    id
+                );
+                assert_eq!(
+                    app.patterns.workspace.song_cell.choice,
+                    Some(cat_smf_editor::score::scene::arrangement::PatternOrScene::Pattern(id))
+                );
+                assert!(crate::view::drums::is_open(&app));
+            }
         }
         let loaded = app.loaded.as_ref().unwrap();
         assert_eq!(loaded.original, std::fs::canonicalize(&mid).unwrap());

@@ -2,7 +2,7 @@ use super::*;
 use cat_smf_editor::score::{
     drums,
     note_view::note_name,
-    pattern::recording::{pitches, Layout, Mode, Pad, Range, ROW_KEYS},
+    pattern::recording::{pitches, Mode, Modulation, Pad, Range, Velocity, ROW_KEYS},
 };
 use std::time::Duration;
 
@@ -41,7 +41,7 @@ pub(super) fn chord_name(notes: &[u8]) -> Option<String> {
 }
 
 /// Pad caption and whether its note or chord root is the tonic.
-fn caption(t: &Settings, pad: Pad) -> (String, bool) {
+pub(super) fn caption(t: &Settings, pad: Pad) -> (String, bool) {
     let notes = pitches(t, pad);
     if t.drums {
         let lane = notes
@@ -50,14 +50,15 @@ fn caption(t: &Settings, pad: Pad) -> (String, bool) {
         return (lane.map_or("", |i| drums::NAMES[i]).into(), false);
     }
     match (pad, t.mode.chord_notes()) {
-        (Pad::Row { column, .. }, Some(tones)) => {
+        (Pad::Row { .. }, Some(tones)) => {
+            // Same pad without inversions: root position, so the stack has a name.
             let mut root = *t;
             root.mode = if tones == 3 {
                 Mode::Triad
             } else {
                 Mode::Seventh
             };
-            let stack = pitches(&root, Pad::Row { row: 0, column });
+            let stack = pitches(&root, pad);
             let tonic = stack.first().is_some_and(|p| p % 12 == t.key().tonic);
             (chord_name(&stack).unwrap_or_default(), tonic)
         }
@@ -172,6 +173,10 @@ pub(super) enum Button {
     Stop,
     /// The container at this index of the session's sounds.
     Sound(usize),
+    /// A new Init Saw container, played at once.
+    NewSound,
+    Velocity(Velocity),
+    Modulation(Modulation),
     /// The phrase loop switch.
     Phrase,
     /// The patch browser, or the layer editor of a layered container.
@@ -190,6 +195,12 @@ fn transport(ui: &mut egui::Ui, s: &mut Session) {
         let (rect, response) =
             ui.allocate_exact_size(egui::vec2(BUTTON, BUTTON), egui::Sense::click());
         let enabled = rec != armed;
+        let tip = if rec {
+            "Rec  Space"
+        } else {
+            "Stop  Esc / Shift+Space"
+        };
+        let response = response.on_hover_text(tip).on_disabled_hover_text(tip);
         let response = if enabled {
             response.on_hover_cursor(egui::CursorIcon::PointingHand)
         } else {
@@ -249,51 +260,16 @@ fn menu(ui: &mut egui::Ui, s: &mut Session) {
     });
 }
 
-/// The playing container; until a take is armed, a click lists the others.
-fn container(ui: &mut egui::Ui, s: &mut Session) {
-    let name = &s.sounds[s.selected].name;
-    if play::armed(s) {
-        ui.label(name);
-        return;
-    }
-    let mut chosen = None;
-    ui.menu_button(name, |ui| {
-        for (i, sound) in s.sounds.iter().enumerate() {
-            if ui.selectable_label(i == s.selected, &sound.name).clicked() {
-                chosen = Some(i);
-                ui.close_menu();
-            }
-        }
-    });
-    if let Some(i) = chosen.filter(|&i| i != s.selected) {
-        s.clicked = Some(Button::Sound(i));
-    }
-}
-
-/// Provisional: the last press's velocity and the CC1 sent now.
-fn expression(ui: &mut egui::Ui, s: &Session) {
-    let now = s.clock.elapsed();
-    let velocity = super::phrase::replayed(s, now).or_else(|| {
-        s.recorder
-            .as_ref()
-            .map(Recorder::velocity)
-            .filter(|&v| v > 0)
-    });
-    let cc1 = s.settings().modulation.value(now);
-    let shown = |v: Option<u8>| v.map_or("-".into(), |v| v.to_string());
-    ui.monospace(format!("vel {:>3}  mod {:>3}", shown(velocity), shown(cc1)));
-}
-
 fn playing(ui: &mut egui::Ui, s: &mut Session) {
     let row = ui
         .horizontal(|ui| {
             transport(ui, s);
             super::panel::switch(ui, s);
             super::panel::to_song(ui, s);
-            container(ui, s);
+            super::choices::container(ui, s);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 menu(ui, s);
-                expression(ui, s);
+                super::choices::expression(ui, s);
             });
         })
         .response
@@ -302,8 +278,16 @@ fn playing(ui: &mut egui::Ui, s: &mut Session) {
     lap(ui, s);
     ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
     let mut keys = vec![];
-    match s.settings().layout {
-        Layout::Rows => {
+    match s.settings().mode {
+        Mode::Letters => {
+            ui.horizontal(|ui| {
+                for (i, label) in pads::LETTER_LABELS.iter().enumerate() {
+                    let at = Pad::Letter(i as u8);
+                    keys.push((at, pad(ui, s, at, label)));
+                }
+            });
+        }
+        _ => {
             for row in (0..4u8).rev() {
                 ui.horizontal(|ui| {
                     ui.add_space(PAD * STAGGER[usize::from(row)]);
@@ -314,14 +298,6 @@ fn playing(ui: &mut egui::Ui, s: &mut Session) {
                     }
                 });
             }
-        }
-        Layout::Letters => {
-            ui.horizontal(|ui| {
-                for (i, label) in pads::LETTER_LABELS.iter().enumerate() {
-                    let at = Pad::Letter(i as u8);
-                    keys.push((at, pad(ui, s, at, label)));
-                }
-            });
         }
     }
     let target = pointed(ui, &keys);

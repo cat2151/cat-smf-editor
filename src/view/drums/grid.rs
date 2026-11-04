@@ -1,6 +1,19 @@
 use super::{commands::Op, *};
 use egui::{Color32, Rect, Stroke};
 
+pub(super) fn cursor_stroke(ctx: &egui::Context, focused: bool) -> Stroke {
+    let orange = super::super::ACTIVE_PANE;
+    let color = if focused {
+        ctx.request_repaint_after(std::time::Duration::from_millis(33));
+        let phase = (ctx.input(|i| i.time) / 0.7).fract();
+        let blend = (0.5 - 0.5 * (phase * std::f64::consts::TAU).cos()) as f32;
+        orange.lerp_to_gamma(Color32::WHITE, blend)
+    } else {
+        orange
+    };
+    Stroke::new(if focused { 3.0_f32 } else { 2.0_f32 }, color)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn show(
     ui: &mut egui::Ui,
@@ -11,8 +24,10 @@ pub(super) fn show(
     measure: &drums::Measure,
     sounding: Option<usize>,
     beacon: bool,
+    focused: bool,
     action: &mut Option<Op>,
 ) {
+    let cursor = cursor_stroke(ui.ctx(), focused);
     let width = ui.available_width();
     let lane = (width * 0.14).clamp(56.0, 94.0);
     let instrument = (width * 0.23).clamp(64.0, 190.0);
@@ -87,9 +102,18 @@ pub(super) fn show(
             };
             let mut button = egui::Button::new(label).truncate().fill(fill);
             if state.row == row && state.field == field {
-                button = button.stroke(Stroke::new(2.0_f32, super::super::ACTIVE_PANE));
+                button = button.stroke(cursor);
             }
             let response = ui.put(bounds, button);
+            if focused && state.row == row && state.field == field {
+                // Separate the bright cursor from the green note fill.
+                ui.painter().rect_stroke(
+                    response.rect.shrink(cursor.width),
+                    2.0,
+                    Stroke::new(1.0_f32, Color32::from_gray(24)),
+                    egui::StrokeKind::Inside,
+                );
+            }
             if (2..6).contains(&field) {
                 beat = beat.union(response.rect);
             }

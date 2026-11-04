@@ -1,7 +1,7 @@
 //! Playing a session: pads sound and record, Esc commits or closes.
 use super::*;
 use crate::play::audition::click::Click;
-use cat_smf_editor::score::pattern::recording::{Layout, Mode, Pad, Range};
+use cat_smf_editor::score::pattern::recording::{Pad, Range};
 
 /// Every container as the audio thread plays it.
 pub(super) fn sounds(s: &Session) -> Vec<(usize, Patch, live::Live)> {
@@ -98,6 +98,28 @@ pub(super) fn button(a: &mut App, s: &mut Session, button: window::Button) -> bo
             setup::select(a, s, i);
             false
         }
+        window::Button::NewSound if !armed(s) => {
+            match super::super::patterns::library::new_container(a, false) {
+                Ok(id) => {
+                    if super::phrase::adopt(a, s) {
+                        super::phrase::retune(a, s);
+                    }
+                    if let Some(i) = s.sounds.iter().position(|x| x.container == Some(id)) {
+                        setup::select(a, s, i);
+                    }
+                }
+                Err(error) => s.error = Some(error),
+            }
+            false
+        }
+        window::Button::Velocity(v) => {
+            s.settings_mut().velocity = v;
+            false
+        }
+        window::Button::Modulation(m) => {
+            setup::modulate(a, s, m);
+            false
+        }
         window::Button::Phrase => {
             super::phrase::toggle(a, s);
             false
@@ -131,7 +153,7 @@ pub(super) fn follow_click(s: &mut Session) {
 
 fn octave(r: &mut Recorder, up: bool) {
     let t = r.settings_mut();
-    let base = if t.layout == Layout::Rows && t.mode != Mode::Note {
+    let base = if t.mode.chord_notes().is_some() {
         &mut t.chord_base
     } else {
         &mut t.note_base
@@ -247,15 +269,17 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
 
 /// `true` closes the window.
 pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool {
-    if let Some(q) = s.queue() {
-        q.lock().unwrap().modulate(s.clock, s.settings().modulation);
-    }
     follow_click(s);
     super::phrase::follow(a, s);
     if super::phrase::follow_patch(a, s) {
         return true;
     }
     let at = s.clock.elapsed();
+    // An ended Capture phrase takes the sweep it was played under.
+    if let Err(error) = super::capture::flush(a, s, false) {
+        s.error = Some(error);
+    }
+    super::sweep::follow(s, at);
     let focused = ctx.input(|i| {
         i.focused
             && !i
@@ -306,6 +330,12 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
                         arm(r, s.click.as_deref(), at);
                     }
                 }
+                // The Stop button's key; unlike Esc it never closes an unarmed window.
+                Key::Space if commands::matches(modifiers, Modifiers::SHIFT) => {
+                    if armed(s) && button(a, s, window::Button::Stop) {
+                        return true;
+                    }
+                }
                 Key::ArrowUp | Key::ArrowDown if plain => {
                     if let Some(r) = s.recorder.as_mut() {
                         octave(r, key == Key::ArrowUp);
@@ -323,7 +353,7 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
             continue;
         };
         let Some(pad) = pads::pad(
-            r.settings().layout,
+            r.settings().mode,
             key,
             physical_key,
             pressed,
@@ -337,5 +367,6 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
         }
         sound(s, pad, pressed, at);
     }
+    super::sweep::follow(s, at);
     false
 }

@@ -48,7 +48,7 @@ impl Velocity {
     }
 }
 
-/// CC1 of the keyboard, a function of the keyboard session's clock.
+/// CC1 of the keyboard, a function of the time since the sweep started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Modulation {
     /// Nothing is sent, so the patch keeps its own modulation wheel.
@@ -71,7 +71,7 @@ impl Modulation {
         }
     }
 
-    /// The value at `at` on the session clock; `None` sends nothing.
+    /// The value `at` after the sweep started; `None` sends nothing.
     pub fn value(self, at: Duration) -> Option<u8> {
         match self {
             Self::Off => None,
@@ -80,18 +80,20 @@ impl Modulation {
         }
     }
 
-    /// The value at `from`, then each change before `to`, as (time, value).
-    pub fn changes(self, from: Duration, to: Duration) -> Vec<(Duration, u8)> {
-        let Some(first) = self.value(from) else {
+    /// The value at `from`, then each change before `to`, as (time, value), of a sweep started
+    /// at `zero`; before `zero` the sweep holds its first value.
+    pub fn changes(self, zero: Duration, from: Duration, to: Duration) -> Vec<(Duration, u8)> {
+        let Some(first) = self.value(from.saturating_sub(zero)) else {
             return vec![];
         };
         let mut out = vec![(from, first)];
         if self == Self::Sweep {
-            let mut k = step(from) + 1;
+            let mut k = step(from.saturating_sub(zero)) + 1;
             loop {
-                let at = Duration::from_micros(
-                    (k * HALF_PERIOD_MICROS).div_ceil(127).min(u64::MAX as u128) as u64,
-                );
+                let at = zero
+                    + Duration::from_micros(
+                        (k * HALF_PERIOD_MICROS).div_ceil(127).min(u64::MAX as u128) as u64,
+                    );
                 if at >= to {
                     break;
                 }
@@ -103,7 +105,7 @@ impl Modulation {
     }
 }
 
-/// Sweep steps from the session clock's zero; one step per value.
+/// Sweep steps from its start; one step per value.
 fn step(at: Duration) -> u128 {
     at.as_micros() * 127 / HALF_PERIOD_MICROS
 }

@@ -12,7 +12,8 @@ impl Zoom {
         self.range
     }
 
-    /// Returns a factor and an anchor in the actual content viewport.
+    /// Returns a factor, and an anchor and its target in the actual content viewport:
+    /// clicks and ranges center their point, the wheel keeps the content under the pointer.
     pub fn show(
         &mut self,
         ui: &egui::Ui,
@@ -21,7 +22,7 @@ impl Zoom {
         enabled: bool,
         tint: egui::Color32,
         response: &egui::Response,
-    ) -> Option<(f32, f32)> {
+    ) -> Option<(f32, f32, f32)> {
         let (screen, content) = view;
         assert!(Screen::ALL.contains(&screen) && screen.has_bars());
         self.range = None;
@@ -74,6 +75,7 @@ impl Zoom {
                 action = Some((
                     content.width() * timeline_zoom::FIT / (start - end).abs(),
                     (start + end) / 2.0,
+                    content.width() / 2.0,
                 ));
             }
         }
@@ -88,6 +90,7 @@ impl Zoom {
                     1.0 / timeline_zoom::CLICK
                 },
                 local(pos),
+                content.width() / 2.0,
             ));
         }
         if response.hovered() {
@@ -101,8 +104,11 @@ impl Zoom {
                 i.raw_scroll_delta = egui::Vec2::ZERO;
                 d
             });
-            if delta != 0.0 && self.start.is_none() {
-                action = Some((timeline_zoom::wheel(delta), content.width() / 2.0));
+            if delta != 0.0
+                && self.start.is_none()
+                && let Some(pos) = ui.input(|i| i.pointer.hover_pos())
+            {
+                action = Some((timeline_zoom::wheel(delta), local(pos), local(pos)));
             }
         }
         if !ui.input(|i| i.pointer.any_down()) {

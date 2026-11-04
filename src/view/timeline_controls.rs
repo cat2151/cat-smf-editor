@@ -102,12 +102,20 @@ impl Binding<'_> {
     }
 }
 
-/// Recalculation shared by mouse, keyboard, fit-range and wheel zoom.
-pub(crate) fn zoom(scroll: f32, width: f32, from: f32, to: f32, anchor: f32) -> (f32, f32) {
+/// Recalculation shared by mouse, keyboard, fit-range and wheel zoom: the content at
+/// `anchor` px moves to `target` px, both from the visible start.
+pub(crate) fn zoom(
+    scroll: f32,
+    width: f32,
+    from: f32,
+    to: f32,
+    anchor: f32,
+    target: f32,
+) -> (f32, f32) {
     let to = timeline_zoom::clamp(to);
     (
         to,
-        timeline_zoom::rescroll(scroll, anchor.clamp(0.0, width), from, to, width),
+        timeline_zoom::rescroll(scroll, anchor.clamp(0.0, width), from, to, target),
     )
 }
 

@@ -1,7 +1,11 @@
 //! A transient local/destination projection mapped atomically to one stable pattern ID.
 use super::*;
 use crate::message;
-use crate::{edit, model::Track, score::note_view::note_off};
+use crate::{
+    edit,
+    model::Track,
+    score::{note_view::note_off, scene::Collection},
+};
 type EditRanges = (Definition, (u64, u64), (u64, u64));
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Context {
@@ -26,7 +30,15 @@ impl Context {
         Ok(())
     }
     fn ranges(&self, music: &Music) -> Result<EditRanges, String> {
-        let c = Catalog::read(music)?;
+        let collection = if self.standalone {
+            Collection::default()
+        } else {
+            crate::score::scene::read(music)?
+        };
+        self.ranges_in(&Catalog::read(music)?, &collection)
+    }
+    /// A standalone edit has no placement, so it ignores `collection`.
+    fn ranges_in(&self, c: &Catalog, collection: &Collection) -> Result<EditRanges, String> {
         let p = c
             .patterns
             .get(&self.pattern)
@@ -41,7 +53,6 @@ impl Context {
             return Ok((p, source, (0, length)));
         }
         let id = self.scene.ok_or("編集中のpatternに配置がありません")?;
-        let collection = crate::score::scene::read(music)?;
         let scene = collection
             .scenes
             .iter()
@@ -98,6 +109,14 @@ impl Context {
     pub fn edit_range(&self, music: &Music) -> Result<(u64, u64), String> {
         Ok(self.ranges(music)?.2)
     }
+    /// `edit_range` from an already read catalog and arrangement.
+    pub fn edit_range_in(
+        &self,
+        catalog: &Catalog,
+        collection: &Collection,
+    ) -> Result<(u64, u64), String> {
+        Ok(self.ranges_in(catalog, collection)?.2)
+    }
     pub fn project(&self, music: &Music) -> Result<Music, String> {
         let (p, source, dest) = self.ranges(music)?;
         if let Some(id) = self.scene {
@@ -122,7 +141,7 @@ impl Context {
                 edit::insert(&mut next.tracks[0], e.clone());
             }
         }
-        for mut e in body::extract(&music.tracks[p.track].events, source)? {
+        for mut e in crate::score::drums::pattern_body(music, &p)? {
             e.tick = dest.0 + (e.tick - source.0);
             edit::insert(&mut next.tracks[self.track], e);
         }

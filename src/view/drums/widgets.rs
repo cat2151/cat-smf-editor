@@ -28,18 +28,22 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
     }
     let measure = playback::measure(app);
     let soloable = playback::soloable(app);
+    let sounding_span = crate::frame_trace::span("contents/drums/sounding");
     let sounding = measure
         .as_ref()
         .ok()
         .and_then(|m| playback::sounding(app, m));
+    drop(sounding_span);
     let Some(loaded) = &app.loaded else {
         return;
     };
     let track = app.track;
     let beacon = crate::view::patterns::beacon::focused(ctx)
         && crate::view::patterns::mode::editing(app, track)
-            .is_some_and(|c| crate::view::patterns::beacon::empty(&loaded.music, c.pattern));
+            .is_some_and(|c| crate::view::patterns::beacon::empty(loaded, c.pattern));
     let patch = &loaded.patches[track];
+    let original_style = super::title::style(app, ctx);
+    let focused = super::title::active(app, ctx);
     let state = &mut app.drum_editor;
     let mut open = true;
     egui::Window::new(format!("Drum sequencer · {}", loaded.track_titles[track]))
@@ -52,6 +56,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
         .max_width((ctx.screen_rect().width() - 32.0).max(1.0))
         .default_width((ctx.screen_rect().width() - 32.0).clamp(1.0, 1080.0))
         .show(ctx, |ui| {
+            ui.set_style(original_style.clone());
             if let Some(Input::Note { text, focus }) = &mut state.input {
                 ui.label(format!("{} · Note", drums::NAMES[state.row]));
                 let response = ui.text_edit_singleline(text);
@@ -122,6 +127,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
                             measure,
                             sounding,
                             beacon,
+                            focused,
                             action,
                         );
                     }
@@ -134,6 +140,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
                 ui.colored_label(Color32::LIGHT_RED, error);
             }
         });
+    ctx.set_style(original_style);
     if !open {
         *action = Some(Op::Close);
     }

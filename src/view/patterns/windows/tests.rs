@@ -102,3 +102,52 @@ fn old_status_retains_settings_and_rejects_invalid_window_sizes() {
     assert!(!reopened.meta_text_visible);
     assert_eq!(reopened.analysis_window, Some([-10.0, 20.0, 700.0, 250.0]));
 }
+
+/// eframe applies `previous.patch(next)` to a live native window every frame.
+fn moves(previous: &ViewportBuilder, next: &ViewportBuilder) -> Vec<ViewportCommand> {
+    previous
+        .clone()
+        .patch(next.clone())
+        .0
+        .into_iter()
+        .filter(|c| {
+            matches!(
+                c,
+                ViewportCommand::OuterPosition(_) | ViewportCommand::InnerSize(_)
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn dragging_a_native_window_is_never_pulled_back_to_the_previous_frame() {
+    let root = tempfile::tempdir().unwrap();
+    let c = harness::context();
+    let mut a = app();
+    a.config = Store::open(root.path().join("status.json"));
+    let builder = |c: &egui::Context, id| {
+        c.data(|d| d.get_temp::<ViewportBuilder>(egui::Id::new(("window-builder", id))))
+            .unwrap()
+    };
+    let mut previous = None;
+    for step in 0..6 {
+        let shift = step as f32 * 7.0;
+        for id in ids() {
+            let rect = [100.0 + shift, 50.0 + shift, 800.0 + shift, 500.0 + shift];
+            c.data_mut(|d| d.insert_temp(egui::Id::new(("window-geometry", id)), rect));
+        }
+        harness::frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+        let now = ids().map(|id| builder(&c, id));
+        if let Some(previous) = &previous {
+            for (p, n) in std::iter::zip(previous, &now) {
+                assert_eq!(moves(p, n), vec![], "step {step}");
+            }
+        }
+        previous = Some(now);
+    }
+    // The dragged place is still what the next run opens at.
+    assert_eq!(
+        a.config.pattern_windows["Scene"],
+        [135.0, 85.0, 835.0, 535.0]
+    );
+}

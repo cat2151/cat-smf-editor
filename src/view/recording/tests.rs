@@ -1,7 +1,9 @@
 use super::*;
 use cat_smf_editor::{edit, score::pattern::body};
 use std::time::Duration;
+mod captions;
 mod capture;
+mod expression;
 mod layered;
 mod loop_takes;
 mod mouse;
@@ -208,7 +210,7 @@ fn empty_cancel_repeat_and_focus_loss_do_not_stick_notes_or_leak_keys() {
 }
 
 #[test]
-fn ambiguous_container_choice_is_keyboard_operable_and_cancel_is_atomic() {
+fn ctrl_p_chooses_the_container_on_the_keyboard_and_cancel_is_atomic() {
     let mut a = app();
     let mut first = 0;
     let mut second = 0;
@@ -221,8 +223,7 @@ fn ambiguous_container_choice_is_keyboard_operable_and_cancel_is_atomic() {
     a.track = 0;
     let ctx = egui::Context::default();
     open_key(&mut a, &ctx);
-    assert!(session(&a).settings_open);
-    assert_eq!(session(&a).item, setup::Item::Sound);
+    assert!(!session(&a).settings_open);
     frame(&mut a, &ctx, vec![key(Key::P, true, Modifiers::CTRL)], true);
     assert!(!a.patterns.recording.preparing());
     assert_eq!(

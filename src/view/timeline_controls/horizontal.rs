@@ -63,8 +63,13 @@ impl Horizontal {
         self.width = rect.width().max(0.0);
         self.viewport = Some(rect);
     }
+    /// Zooms and centers the content at `anchor`.
     pub fn zoom_time(&mut self, to: f32, anchor: f32) {
-        let (next, offset) = super::zoom(self.scroll, self.width, self.zoom, to, anchor);
+        self.zoom_time_to(to, anchor, self.width / 2.0);
+    }
+    /// Zooms and moves the content at `anchor` to `target`.
+    pub fn zoom_time_to(&mut self, to: f32, anchor: f32, target: f32) {
+        let (next, offset) = super::zoom(self.scroll, self.width, self.zoom, to, anchor, target);
         self.zoom = next;
         self.pending_scroll = Some(offset);
     }

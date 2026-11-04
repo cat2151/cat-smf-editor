@@ -8,6 +8,9 @@ pub struct Selection {
     pub search: crate::view::commands::SearchQuery,
     pub focus: bool,
     pub owned: bool,
+    /// Where the native window opened. The builder keeps it while the window lives:
+    /// a changed builder moves the window, which would fight the user's drag.
+    pub opened: Option<[f32; 4]>,
     pub composing: bool,
     /// Song enters from the library; cell position and chosen part survive a return.
     pub placing: bool,
@@ -23,6 +26,7 @@ impl Default for Selection {
             search: Default::default(),
             focus: false,
             owned: false,
+            opened: None,
             composing: false,
             placing: false,
             reveal_choice: true,

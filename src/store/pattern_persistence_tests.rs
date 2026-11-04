@@ -99,7 +99,8 @@ fn pattern_saved_document_and_two_startups_keep_definitions_not_expanded_notes()
             cat_smf_editor::smf_io::encode(&restored.loaded.as_ref().unwrap().music).unwrap(),
             expected
         );
-        assert!(restored.patterns.editing.is_none());
+        assert_eq!(restored.patterns.editing.as_ref().unwrap().pattern, id);
+        assert_eq!(restored.session().unwrap().edited_pattern, Some(id));
         assert_eq!(
             crate::play::playback::location(&restored)
                 .1
@@ -107,9 +108,12 @@ fn pattern_saved_document_and_two_startups_keep_definitions_not_expanded_notes()
                 .measure,
             1
         );
+        // The restored body auditions itself; the saved song still renders its own repeats.
+        let preview = crate::view::patterns::preview::prepare(&restored, id).unwrap();
+        assert_eq!(preview.parts[0].2.notes[0].pitch, 72);
+        let song = crate::view::tests::app(restored.loaded.as_ref().unwrap().music.clone());
         let prepared =
-            crate::play::transport::prepare(&restored, crate::play::playback::Mode::AllTracks)
-                .unwrap();
+            crate::play::transport::prepare(&song, crate::play::playback::Mode::AllTracks).unwrap();
         assert_eq!(prepared.parts.len(), 1);
         assert_eq!(
             prepared.parts[0]

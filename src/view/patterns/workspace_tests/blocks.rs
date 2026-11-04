@@ -32,6 +32,7 @@ fn one_placement_is_one_frame_and_repeats_stay_apart() {
         Some(PatternOrScene::Pattern(second)),
     )
     .unwrap();
+    a.loaded.as_mut().unwrap().refresh();
     cell(&mut a, &c, Pane::Song, lane, 6);
     frame(&mut a, &c, Pane::Song.viewport(), vec![]);
     let long = cell_rect(&c, 0, 1).union(cell_rect(&c, 0, 2));

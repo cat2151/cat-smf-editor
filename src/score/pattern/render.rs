@@ -2,7 +2,7 @@
 use super::*;
 use crate::edit::parameter_curve::{Curve, Target};
 use automation::Baseline;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 #[derive(Clone, Debug)]
 pub struct ParameterInterval {
     pub start: u64,
@@ -48,6 +48,17 @@ fn midi_control(e: &Event, container: u64) -> Result<Option<Control>, String> {
     };
     Ok(Some(Control::Midi(container, e.status & 15, controller)))
 }
+/// The kind and the name a person reads in the overlap error.
+fn midi_label(controller: Option<u8>) -> (&'static str, String) {
+    match controller {
+        Some(cc) => (
+            "CC",
+            crate::score::event_content::cc_name(cc)
+                .map_or(format!("CC{cc}"), |name| format!("CC{cc} {name}")),
+        ),
+        None => ("pitch bend", "pitch bend".into()),
+    }
+}
 fn midi_event(tick: u64, channel: u8, controller: Option<u8>, value: u16) -> Event {
     let (status, data) = if let Some(cc) = controller {
         (0xb0 | channel, vec![cc, value as u8])
@@ -77,7 +88,7 @@ pub fn expand(
     };
     let mut occurrences = occurrences.to_vec();
     occurrences.sort_by_key(|&(id, start)| (start, id));
-    let mut occupied = BTreeMap::<Control, Vec<(u64, u64)>>::new();
+    let mut occupied = BTreeMap::<Control, Vec<(u64, u64, &str)>>::new();
     let mut midi_intervals = vec![];
     for (id, start) in occurrences {
         let p = c
@@ -90,9 +101,9 @@ pub fn expand(
         if until > end {
             return Err("patternの出現箇所が宣言した長さを超えています".into());
         }
-        let body = body::extract(&m.tracks[p.track].events, p.range()?)?;
+        let body = crate::score::drums::pattern_body(m, p)?;
         let baselines = automation::baselines(m, p.track)?;
-        let mut controls = BTreeSet::new();
+        let mut controls = BTreeMap::new();
         for curve in automation::curves(m, p)? {
             let baseline = baselines
                 .iter()
@@ -103,7 +114,10 @@ pub fn expand(
                     _ => None,
                 })
                 .ok_or("containerのparameter基準値が見つかりません")?;
-            controls.insert(Control::Parameter(curve.target.clone()));
+            controls.insert(
+                Control::Parameter(curve.target.clone()),
+                ("parameter", curve.name.clone()),
+            );
             result
                 .parameters
                 .entry(p.track)
@@ -118,7 +132,10 @@ pub fn expand(
         let output = result.events.entry(p.track).or_default();
         for e in &body {
             if let Some(control) = midi_control(e, p.container)? {
-                controls.insert(control);
+                let Control::Midi(_, _, controller) = control else {
+                    unreachable!()
+                };
+                controls.insert(control, midi_label(controller));
             }
             if matches!(e.status, 0xf0 | 0xf7) {
                 return Err(
@@ -134,12 +151,18 @@ pub fn expand(
                 .ok_or("patternのeventが上限を超えました")?;
             output.push(e);
         }
-        for control in controls {
+        for (control, (kind, label)) in controls {
             let intervals = occupied.entry(control.clone()).or_default();
-            if intervals.iter().any(|&(a, b)| start < b && until > a) {
-                return Err(format!("patternのcontrolが重なっています {control:?}"));
+            if let Some(&(_, _, other)) =
+                intervals.iter().find(|&&(a, b, _)| start < b && until > a)
+            {
+                return Err(format!(
+                    "ERROR : {kind}重複 : {other}と{}は、{}に同じ時間帯に同じ{label}を送信しています",
+                    p.name,
+                    container_name(m, p.container, p.track)
+                ));
             }
-            intervals.push((start, until));
+            intervals.push((start, until, &p.name));
             if let Control::Midi(_, channel, controller) = control {
                 let value = baselines
                     .iter()

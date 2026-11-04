@@ -7,7 +7,7 @@ fn ms(n: u64) -> Duration {
 /// Free range on the letter pads, whose `Letter(i)` is C4..B4.
 fn free(division: u16, tempo: u32) -> Recorder {
     let mut s = Settings::new(Key::from_signature(None), tempo);
-    s.layout = Layout::Letters;
+    s.mode = Mode::Letters;
     // CC1 has its own test; these compare notes only.
     s.modulation = Modulation::Off;
     Recorder::new(division, s).unwrap()
@@ -28,7 +28,7 @@ fn rec_origin_polyphony_fixed_tempo_and_round_trip() {
     take.release_all(ms(30000)).unwrap(); // Esc silence is not pattern length.
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let id = take.commit(&mut m, None).unwrap()[0];
+    let id = take.commit(&mut m, None, Duration::ZERO).unwrap()[0];
     let c = Catalog::read(&m).unwrap();
     let p = &c.patterns[&id];
     assert_eq!(p.meters.len(), 2);
@@ -67,7 +67,7 @@ fn short_retrigger_is_ordered_and_never_overlaps_itself() {
     take.press(C, ms(0)).unwrap();
     take.release_all(ms(0)).unwrap();
     let mut m = edit::tracks::new_song();
-    let id = take.commit(&mut m, None).unwrap()[0];
+    let id = take.commit(&mut m, None, Duration::ZERO).unwrap()[0];
     let p = Catalog::read(&m).unwrap().patterns[&id].clone();
     let b = body::extract(&m.tracks[p.track].events, p.range().unwrap()).unwrap();
     assert_eq!(
@@ -89,7 +89,7 @@ fn existing_container_and_pattern_bytes_survive_long_recording() {
     take.start(ms(0));
     take.press(B, ms(0)).unwrap();
     take.release_all(ms(4000)).unwrap();
-    let id = take.commit(&mut m, Some(t)).unwrap()[0];
+    let id = take.commit(&mut m, Some(t), Duration::ZERO).unwrap()[0];
     let c = Catalog::read(&m).unwrap();
     assert_eq!(c.sources.len(), 1);
     assert_eq!(c.patterns[&existing].meters.len(), 1);
@@ -111,11 +111,11 @@ fn empty_unfinished_and_smpte_takes_are_rejected() {
     let mut m = edit::tracks::new_song();
     let mut take = free(m.division, 500_000);
     assert!(!take.recorded());
-    assert!(take.commit(&mut m, None).is_err());
+    assert!(take.commit(&mut m, None, Duration::ZERO).is_err());
     take.start(ms(0));
     take.press(C, ms(0)).unwrap();
     assert!(take.recorded());
-    assert!(take.commit(&mut m, None).is_err());
+    assert!(take.commit(&mut m, None, Duration::ZERO).is_err());
     assert_eq!(Catalog::read(&m).unwrap().sources.len(), 0);
 }
 
@@ -127,7 +127,7 @@ fn tempo_sets_the_tick_scale() {
     take.release(C, ms(1100)).unwrap();
     let mut m = edit::tracks::new_song();
     m.division = 480;
-    let id = take.commit(&mut m, None).unwrap()[0];
+    let id = take.commit(&mut m, None, Duration::ZERO).unwrap()[0];
     let p = Catalog::read(&m).unwrap().patterns[&id].clone();
     let b = body::extract(&m.tracks[p.track].events, p.range().unwrap()).unwrap();
     assert_eq!(

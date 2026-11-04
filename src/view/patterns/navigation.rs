@@ -92,13 +92,18 @@ pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
         .ok_or(message::MISSING_PATTERN_METER)?;
     let tick = cat_smf_editor::score::same_measure::bounds(map, 1)?.0;
 
-    crate::play::transport::stop(a);
+    if !a.startup.restoring {
+        crate::play::transport::stop(a);
+    }
     crate::view::drums::close(a);
     a.note_mode = true;
     a.patterns.raw_context = None;
     a.set_track(context.track);
     a.patterns.container = Some(container);
     a.patterns.selected = Some(id);
+    a.patterns.workspace.song_cell.choice =
+        Some(cat_smf_editor::score::scene::arrangement::PatternOrScene::Pattern(id));
+    a.patterns.workspace.song_cell.reveal_choice = true;
     a.patterns.navigation.last.insert(container, id);
     a.patterns.editing = Some(context);
     a.patterns.edit_song = a.song_id;

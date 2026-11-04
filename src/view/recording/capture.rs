@@ -45,6 +45,13 @@ pub(super) fn record(s: &mut Session, pitches: &[u8], velocity: u8, at: Duration
     }
 }
 
+/// A phrase goes on that silence has not ended yet.
+pub(super) fn playing(s: &Session, at: Duration) -> bool {
+    s.pending
+        .keys
+        .playing(s.pending.base + at.as_millis() as u64, GAP)
+}
+
 /// Puts the ended phrases, or with `all` every phrase, in the song without an undo step.
 pub(super) fn flush(a: &mut App, s: &mut Session, all: bool) -> Result<(), String> {
     let phrases = if all {
@@ -68,7 +75,11 @@ fn append(a: &mut App, s: &mut Session, phrase: &Phrase) -> Result<(), String> {
     let controls: Vec<(u64, u8)> = s
         .settings()
         .modulation
-        .changes(from, from + Duration::from_millis(phrase.end()))
+        .changes(
+            s.sweep_start(),
+            from,
+            from + Duration::from_millis(phrase.end()),
+        )
         .into_iter()
         .map(|(at, value)| ((at - from).as_millis() as u64, value))
         .collect();
@@ -256,7 +267,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
         let other = s
             .companions
             .settings
-            .map(|at| (at, companions::SETTINGS_SIZE));
+            .map(|at| (at, s.companions.settings_size()));
         companions::place(a, ctx, keyboard, other, SIZE)
     });
     let b = s.capture.as_mut().unwrap();
@@ -270,7 +281,9 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
         .with_inner_size(SIZE)
         .with_visible(window::shown(ctx));
     let mut clicked = None;
+    let _window_span = crate::frame_trace::span("capture");
     ctx.show_viewport_immediate(viewport(), builder, |ctx, class| {
+        let _span = crate::frame_trace::span("capture/ui");
         if class == egui::ViewportClass::Embedded {
             let sounding = auditioning(a, s);
             let bpm = a.patterns.tempo.0;

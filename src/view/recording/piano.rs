@@ -2,7 +2,7 @@
 use super::*;
 use cat_smf_editor::score::{
     note_view::note_name,
-    pattern::recording::{pitches, Layout, Pad, ROW_KEYS},
+    pattern::recording::{pitches, Mode, Pad, ROW_KEYS},
 };
 
 /// A0 and C8.
@@ -24,9 +24,14 @@ fn black(pitch: u8) -> bool {
     matches!(pitch % 12, 1 | 3 | 6 | 8 | 10)
 }
 
-fn pads(layout: Layout) -> Vec<(Pad, &'static str)> {
-    match layout {
-        Layout::Rows => (0..4u8)
+fn pads(mode: Mode) -> Vec<(Pad, &'static str)> {
+    match mode {
+        Mode::Letters => super::pads::LETTER_LABELS
+            .iter()
+            .enumerate()
+            .map(|(i, &label)| (Pad::Letter(i as u8), label))
+            .collect(),
+        _ => (0..4u8)
             .flat_map(|row| {
                 (0..ROW_KEYS[usize::from(row)]).map(move |column| {
                     (
@@ -36,11 +41,6 @@ fn pads(layout: Layout) -> Vec<(Pad, &'static str)> {
                 })
             })
             .collect(),
-        Layout::Letters => super::pads::LETTER_LABELS
-            .iter()
-            .enumerate()
-            .map(|(i, &label)| (Pad::Letter(i as u8), label))
-            .collect(),
     }
 }
 
@@ -48,7 +48,7 @@ fn pads(layout: Layout) -> Vec<(Pad, &'static str)> {
 pub(super) fn playable(t: &Settings) -> ([bool; 128], [Option<&'static str>; 128]) {
     let mut playable = [false; 128];
     let mut labels = [None; 128];
-    for (pad, label) in pads(t.layout) {
+    for (pad, label) in pads(t.mode) {
         let notes = pitches(t, pad);
         for &p in &notes {
             playable[usize::from(p)] = true;

@@ -66,6 +66,36 @@ fn space_in_free_range_starts_the_clock_like_rec() {
 }
 
 #[test]
+fn shift_space_stops_like_the_stop_button_and_is_inert_until_armed() {
+    let mut a = app();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    let before = patterns(&a);
+    let shift_space = || {
+        vec![
+            key(Key::Space, true, Modifiers::SHIFT),
+            key(Key::Space, false, Modifiers::SHIFT),
+        ]
+    };
+    frame(&mut a, &ctx, shift_space(), true);
+    assert!(a.patterns.recording.is_open() && !playing::armed(session(&a)));
+    assert!(!click(&mut a, Button::Rec));
+    crate::view::recording::rewind(&mut a, Duration::from_millis(500));
+    frame(&mut a, &ctx, vec![key(Key::Z, true, Modifiers::NONE)], true);
+    crate::view::recording::rewind(&mut a, Duration::from_millis(250));
+    frame(
+        &mut a,
+        &ctx,
+        vec![key(Key::Z, false, Modifiers::NONE)],
+        true,
+    );
+    assert!(playing::armed(session(&a)));
+    frame(&mut a, &ctx, shift_space(), true);
+    assert!(a.patterns.recording.is_open() && !playing::armed(session(&a)));
+    assert_eq!(patterns(&a), before + 1);
+}
+
+#[test]
 fn stop_is_inert_until_armed_and_loop_rec_counts_in_once() {
     let mut a = app();
     let ctx = egui::Context::default();

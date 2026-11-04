@@ -116,7 +116,7 @@ impl Viewport {
             if edge == 0 {
                 let screen = self.screen.expect("register timeline before zoom input");
                 if let Some(panel) = self.tempo_rect
-                    && let Some((factor, anchor)) = self.horizontal_zoom.show(
+                    && let Some((factor, anchor, target)) = self.horizontal_zoom.show(
                         ui,
                         rect,
                         (screen, panel),
@@ -125,7 +125,8 @@ impl Viewport {
                         &response,
                     )
                 {
-                    self.zoom_time(self.zoom * factor, anchor);
+                    self.horizontal
+                        .zoom_time_to(self.zoom * factor, anchor, target);
                 }
                 continue;
             }

@@ -24,6 +24,9 @@ pub struct Session {
     /// Focused slot of `split`; both slots may show the same track.
     #[serde(default)]
     pub split_active: usize,
+    /// Stable identity of the independently edited pattern; ticks alone cannot identify it.
+    #[serde(default)]
+    pub edited_pattern: Option<u64>,
 }
 
 /// Which tracks `t` changes.

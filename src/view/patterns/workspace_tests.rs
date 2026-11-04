@@ -11,11 +11,14 @@ use cat_smf_editor::score::{
 use eframe::egui::{self, Key, Modifiers};
 mod arrange;
 mod blocks;
+mod candidates;
 mod comment_out;
 mod deletion;
+mod edit_refresh;
 mod input;
 mod keyboard;
 mod minimap;
+mod playhead;
 mod recording;
 mod resume;
 mod scrolling;
@@ -266,6 +269,7 @@ pub(crate) fn lengthen_song(a: &mut App, pattern: u64, measures: u64) {
         Some(PatternOrScene::Pattern(pattern)),
     )
     .unwrap();
+    a.loaded.as_mut().unwrap().refresh();
 }
 pub(crate) fn verification_song() -> (App, egui::Context, u64, u64, u64) {
     let mut a = crate::view::tests::app(cat_smf_editor::edit::tracks::new_song());

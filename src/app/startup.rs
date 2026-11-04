@@ -14,6 +14,8 @@ use std::{
 #[derive(Default)]
 pub struct State {
     pub pending: bool,
+    /// Deferred editor navigation must leave the already started song running.
+    pub restoring: bool,
     restore_position: bool,
     initial: Option<PathBuf>,
     started: Option<Instant>,
@@ -35,6 +37,7 @@ impl App {
         app.config.path = root.as_ref().map(|p| p.join("status.json"));
         app.startup = State {
             pending: true,
+            restoring: false,
             restore_position: mid.is_none(),
             initial: mid.clone(),
             started: Some(Instant::now()),
@@ -76,7 +79,7 @@ impl App {
                     .and_then(|config| config.voicevox_engine);
             }
             if app.loaded.is_some() {
-                playback::start(&mut app, playback::Mode::AllTracks);
+                app.start_initial_playback();
                 transport::advance(&mut app);
                 // A started stream can still be waiting for its first callback.
                 // Do not compete with it by starting GUI/font/status I/O yet.
@@ -120,10 +123,23 @@ impl App {
                 self.player_selection.setup.initial = Some(mid);
             } else if self.loaded.is_none() {
                 self.open_initial(mid);
-                playback::start(&mut self, playback::Mode::AllTracks);
+                self.start_initial_playback();
             }
         }
         self
+    }
+
+    pub(crate) fn start_initial_playback(&mut self) {
+        let has_patterns = self.loaded.as_ref().is_some_and(|l| {
+            cat_smf_editor::score::pattern::Catalog::read(&l.music)
+                .is_ok_and(|c| !c.patterns.is_empty())
+        });
+        if has_patterns {
+            // Start the Song even when the restored editor targets a standalone pattern.
+            crate::play::arrangement::start(self, None);
+        } else {
+            playback::start(self, playback::Mode::AllTracks);
+        }
     }
 
     /// Until this completes, only startup/setup handling may access the document.
@@ -161,6 +177,7 @@ impl App {
 
     fn finish_startup(&mut self, ctx: &egui::Context) {
         let startup = std::mem::take(&mut self.startup);
+        self.startup.restoring = true;
         let _span = cat_smf_editor::startup_trace::span("deferred_restore");
         let current = self.loaded.as_ref().map(|l| l.original.clone());
         let status_span = cat_smf_editor::startup_trace::span("status_read");
@@ -235,6 +252,7 @@ impl App {
         drop(font_span);
         crate::view::analysis::restore(self);
         crate::view::recording::resume(self);
+        self.startup.restoring = false;
         cat_smf_editor::startup_trace::restored();
     }
 }

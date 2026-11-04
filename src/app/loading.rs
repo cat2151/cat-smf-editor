@@ -138,6 +138,7 @@ impl App {
             time,
             note_views,
             expansions,
+            arrangement: read_arrangement(&music),
             track_titles: Vec::new(),
             display_rows: Vec::new(),
             time_columns: Vec::new(),
