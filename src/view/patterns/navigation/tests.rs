@@ -112,7 +112,7 @@ fn escape_returns_to_library_and_stays_closed_until_explicit_reselection() {
     let before = bytes(&a);
     press(&mut a, &c, Key::Escape);
     assert!(!drums::is_open(&a));
-    assert!(a.patterns.editing.is_none());
+    assert_eq!(mode::editing(&a, track).unwrap().pattern, ids[0]);
     assert!(mode::workspace_open(&a));
     assert_eq!(
         a.patterns.workspace.song_cell.choice,
@@ -243,7 +243,7 @@ fn keyboard_track_navigation_raw_and_reentry_keep_the_body_and_key_owner_in_sync
     assert_body(&a, &c, ids[0]);
     key(&mut a, Key::Escape, egui::Modifiers::NONE);
     assert!(!drums::is_open(&a));
-    assert!(a.patterns.editing.is_none());
+    assert_eq!(mode::editing(&a, track).unwrap().pattern, ids[0]);
     let song = workspace::Pane::Song;
     a.patterns.workspace.selection_mut(song).choice = Some(PatternOrScene::Pattern(ids[0]));
     super::super::workspace_tests::key(&mut a, &c, song.viewport(), Key::E, egui::Modifiers::SHIFT);
@@ -266,4 +266,26 @@ fn track_insertion_and_undo_rebind_the_visible_editor_by_pattern_identity() {
     a.undo_music().unwrap();
     assert_eq!(a.track, track);
     assert_body(&a, &c, ids[1]);
+}
+
+#[test]
+fn the_drum_grid_moves_with_a_running_song_and_keeps_what_is_open_beside_it() {
+    let (mut a, track, ids) = fixture();
+    let c = super::super::workspace_tests::context();
+    a.edit_tracks(|m| {
+        let lane = arrangement::add_lane(m, None)?;
+        arrangement::place(m, None, lane, 1, Some(PatternOrScene::Pattern(ids[0])))?;
+        arrangement::place(m, None, lane, 2, Some(PatternOrScene::Pattern(ids[1])))
+    })
+    .unwrap();
+    a.select_track(track);
+    assert_body(&a, &c, ids[0]);
+    a.playback.mixer_open = true;
+    crate::play::arrangement::start(&mut a, None);
+    crate::play::transport::advance(&mut a);
+    a.audition.set_test_seconds(2.5);
+    super::super::workspace_tests::frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    assert!(drums::is_open(&a), "{:?}", a.load_error);
+    assert_eq!(mode::editing(&a, track).unwrap().pattern, ids[1]);
+    assert!(a.playback.active.is_some() && a.playback.mixer_open);
 }

@@ -43,6 +43,11 @@ fn capture(music: &cat_smf_editor::model::Music, id: u64) -> bool {
         .and_then(|c| c.patterns.get(&id).map(|p| p.kind))
         == Some(cat_smf_editor::score::pattern::Kind::Capture)
 }
+/// The other column of a split view: a projection covers only the current track, and Notes never
+/// shows a container's storage timeline.
+pub fn unprojected(a: &App, track: usize) -> bool {
+    a.note_mode && track != a.track && actual_source(a, track)
+}
 /// The same live projection authorizes edits and supplies pattern identity.
 pub fn editing(a: &App, track: usize) -> Option<&cat_smf_editor::score::pattern::editing::Context> {
     a.patterns.editing.as_ref().filter(|c| {

@@ -1,6 +1,7 @@
 //! Read-only arrangement cards and drag/drop affordances.
 use super::*;
-/// The notes of `measures` (part-relative, half-open) of a pattern, or of a scene in the minimap colors.
+/// The notes of `measures` (part-relative, half-open) of a pattern in its container's color,
+/// or of a scene in the minimap colors.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn paint_part(
     painter: &egui::Painter,
@@ -16,10 +17,8 @@ pub(super) fn paint_part(
     match part {
         PatternOrScene::Pattern(id) => {
             if let Some(def) = catalog.patterns.get(&id) {
-                let gray = |_, e: &cat_smf_editor::model::Event| {
-                    crate::view::pitch_keyboard::note_color(e.data[0], None)
-                };
-                cards::paint_notes(painter, area, music, def, measures, &gray);
+                let color = crate::view::track_color(def.track);
+                cards::paint_container_notes(painter, area, music, def, measures, color);
             }
         }
         PatternOrScene::Scene(id) => {
@@ -29,6 +28,17 @@ pub(super) fn paint_part(
             }
         }
     }
+}
+const PLACED_FILL_OPACITY: f32 = 0.18;
+/// Background of a placed part: its container's color, or the plain cell for a scene.
+pub(super) fn placed_fill(ui: &egui::Ui, catalog: &Catalog, part: PatternOrScene) -> egui::Color32 {
+    match part {
+        PatternOrScene::Pattern(id) => catalog.patterns.get(&id).map(|p| p.track),
+        PatternOrScene::Scene(_) => None,
+    }
+    .map_or(ui.visuals().faint_bg_color, |track| {
+        crate::view::track_color(track).gamma_multiply(PLACED_FILL_OPACITY)
+    })
 }
 /// The only pattern, its first cell and a drag arrow between them.
 pub(super) fn place_beacon(ui: &egui::Ui, card: egui::Rect, target: egui::Rect, cells: bool) {
@@ -56,7 +66,7 @@ pub(super) fn trash(ui: &mut egui::Ui, p: Pane) -> Option<Discard> {
         && r.dnd_hover_payload::<PatternOrScene>()
             .is_some_and(|part| matches!(*part, PatternOrScene::Pattern(_)));
     let hovered = r.dnd_hover_payload::<Placed>().is_some() || pattern;
-    cell(ui, rect, "", hovered, false, |painter, area| {
+    cell(ui, rect, "", hovered, |painter, area| {
         painter.text(
             area.center(),
             egui::Align2::CENTER_CENTER,
@@ -95,18 +105,27 @@ pub(super) struct Block<'l> {
     rect: egui::Rect,
     bars: Vec<f32>,
     background: egui::layers::ShapeIdx,
+    fill: egui::Color32,
     selected: bool,
     faded: bool,
     label: &'l str,
 }
 impl<'l> Block<'l> {
     /// Reserves the background below the measures painted next.
-    pub fn begin(ui: &egui::Ui, start: u64, rect: egui::Rect, label: &'l str, faded: bool) -> Self {
+    pub fn begin(
+        ui: &egui::Ui,
+        start: u64,
+        rect: egui::Rect,
+        label: &'l str,
+        fill: egui::Color32,
+        faded: bool,
+    ) -> Self {
         Self {
             start,
             rect,
             bars: Vec::new(),
             background: ui.painter().add(egui::Shape::Noop),
+            fill,
             selected: false,
             faded,
             label,
@@ -126,7 +145,15 @@ impl<'l> Block<'l> {
             .with_clip_rect(ui.clip_rect().intersect(self.rect));
         painter.set(
             self.background,
-            egui::Shape::rect_filled(self.rect, 3.0, v.faint_bg_color),
+            egui::Shape::rect_filled(
+                self.rect,
+                3.0,
+                if self.faded {
+                    self.fill.gamma_multiply(0.3)
+                } else {
+                    self.fill
+                },
+            ),
         );
         let bar = v.widgets.noninteractive.bg_stroke.color.gamma_multiply(0.5);
         for x in self.bars {
@@ -139,26 +166,37 @@ impl<'l> Block<'l> {
         painter.rect_stroke(
             self.rect,
             3.0,
-            if self.selected {
-                egui::Stroke::new(2.0_f32, v.selection.stroke.color)
-            } else {
-                egui::Stroke::new(1.0_f32, v.widgets.noninteractive.bg_stroke.color)
-            },
+            frame(v, self.selected),
             egui::StrokeKind::Inside,
         );
-        let text = v.text_color();
-        painter.text(
-            self.rect.min + egui::vec2(4.0, 2.0),
-            egui::Align2::LEFT_TOP,
-            self.label,
-            egui::TextStyle::Small.resolve(ui.style()),
-            if self.faded {
-                text.gamma_multiply(0.3)
-            } else {
-                text
-            },
-        );
+        let opacity = if self.faded { 0.3 } else { 1.0 };
+        name_tag(ui, &painter, self.rect, self.label, opacity);
     }
+}
+fn frame(v: &egui::Visuals, selected: bool) -> egui::Stroke {
+    if selected {
+        egui::Stroke::new(2.0_f32, v.selection.stroke.color)
+    } else {
+        egui::Stroke::new(1.0_f32, v.widgets.noninteractive.bg_stroke.color)
+    }
+}
+/// The notes span the part's height, so its name needs its own ground.
+fn name_tag(ui: &egui::Ui, painter: &egui::Painter, rect: egui::Rect, label: &str, opacity: f32) {
+    let v = ui.visuals();
+    let text = v.strong_text_color().gamma_multiply(opacity);
+    let font = egui::TextStyle::Small.resolve(ui.style());
+    let galley = painter.layout_no_wrap(label.to_owned(), font, text);
+    let at = rect.min + egui::vec2(4.0, 2.0);
+    painter.rect_filled(
+        egui::Rect::from_min_size(at, galley.size()).expand(1.0),
+        2.0,
+        v.panel_fill.gamma_multiply(0.7 * opacity),
+    );
+    painter.galley(at, galley, text);
+}
+/// No side inset: an inset would read as a rest at every bar line.
+fn notes_area(rect: egui::Rect) -> egui::Rect {
+    rect.shrink2(egui::vec2(0.0, rect.height() * 0.05))
 }
 /// One measure inside a [`Block`]: the cursor's measure is tinted, a drop target framed.
 pub(super) fn measure_in_block(
@@ -186,36 +224,48 @@ pub(super) fn measure_in_block(
         painter.multiply_opacity(0.3);
     }
     if rect.width() > 6.0 && rect.height() > 6.0 {
-        // No side inset: an inset would read as a rest at every bar line.
-        notes(&painter, rect.shrink2(egui::vec2(0.0, 3.0)));
+        notes(&painter, notes_area(rect));
     }
 }
-/// A part's name over its notes; selection is the frame and commenting out is faded
-/// contents, not text.
+/// A candidate, drawn like its placement in the matrix.
+pub(super) fn part_card(
+    ui: &egui::Ui,
+    rect: egui::Rect,
+    label: &str,
+    fill: egui::Color32,
+    selected: bool,
+    notes: impl FnOnce(&egui::Painter, egui::Rect),
+) {
+    let painter = ui.painter_at(rect);
+    painter.rect(
+        rect,
+        3.0,
+        fill,
+        frame(ui.visuals(), selected),
+        egui::StrokeKind::Inside,
+    );
+    if rect.width() > 6.0 && rect.height() > 6.0 {
+        notes(&painter, notes_area(rect));
+    }
+    name_tag(ui, &painter, rect, label, 1.0);
+}
+/// A plain cell: an empty matrix position or the trash.
 pub(super) fn cell(
     ui: &egui::Ui,
     rect: egui::Rect,
     label: &str,
     selected: bool,
-    faded: bool,
     notes: impl FnOnce(&egui::Painter, egui::Rect),
 ) {
     let v = ui.visuals();
-    let mut painter = ui.painter_at(rect);
+    let painter = ui.painter_at(rect);
     painter.rect(
         rect,
         3.0,
         v.faint_bg_color,
-        if selected {
-            egui::Stroke::new(2.0_f32, v.selection.stroke.color)
-        } else {
-            egui::Stroke::new(1.0_f32, v.widgets.noninteractive.bg_stroke.color)
-        },
+        frame(v, selected),
         egui::StrokeKind::Inside,
     );
-    if faded {
-        painter.multiply_opacity(0.3);
-    }
     if rect.width() > 6.0 && rect.height() > 6.0 {
         notes(&painter, rect.shrink(3.0));
     }

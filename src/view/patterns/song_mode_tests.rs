@@ -35,11 +35,6 @@ fn source_frame_precedes_edit_target() {
     track_selected(&mut a);
     assert!(mode::workspace_open(&a));
     assert!(framed(&a, source));
-    assert!(a.patterns.editing.is_none());
-    assert!(presentation::name(&a, source).is_none());
-    assert!(!a.can_edit_notes(source));
-    assert!(a.edit_music(|_| Ok(())).is_err());
-    library::edit(&mut a, id).unwrap();
     assert_eq!(mode::editing(&a, source).unwrap().pattern, id);
     assert!(framed(&a, source) && a.can_edit_notes(source));
     press(&mut a, &c, Key::I);
@@ -54,19 +49,12 @@ fn source_frame_precedes_edit_target() {
     a.select_track(source);
     track_selected(&mut a);
     assert!(framed(&a, source));
-    assert!(!a.can_edit_notes(source));
+    assert!(a.can_edit_notes(source));
 }
 
 #[test]
 fn losing_a_target_never_changes_song_lifetime_or_its_source_frame() {
     let (mut a, source, id) = edit_tests::fixture();
-    library::edit(&mut a, id).unwrap();
-    crate::cursor::moves::at_tick(&mut a, 3840);
-    validate(&mut a);
-    assert!(a.patterns.editing.is_none());
-    assert!(mode::workspace_open(&a) && framed(&a, source));
-    assert!(!a.can_edit_notes(source));
-    assert!(mode::workspace_open(&a));
     library::edit(&mut a, id).unwrap();
     a.patterns.edit_song = a.song_id.wrapping_add(1);
     assert!(framed(&a, source), "a stale target is not a window close");
@@ -99,7 +87,7 @@ fn raw_ends_the_projection_and_actual_source_edits_do_not_depend_on_a_frame() {
 }
 
 #[test]
-fn shrinking_the_edited_pattern_releases_a_cursor_past_its_new_end() {
+fn shrinking_the_edited_pattern_brings_a_cursor_past_its_new_end_back() {
     use cat_smf_editor::score::pattern::operations::resize;
     let (mut a, _, _) = edit_tests::fixture();
     let id = last_pattern(&a);
@@ -111,7 +99,8 @@ fn shrinking_the_edited_pattern_releases_a_cursor_past_its_new_end() {
     workspace::mutate(&mut a, |m| resize(m, id, bars(1))).unwrap();
     crate::cursor::moves::at_tick(&mut a, BAR + 480);
     validate(&mut a);
-    assert!(a.patterns.editing.is_none());
+    assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
+    assert!(crate::play::playback::location(&a).0 < BAR);
 }
 
 #[test]

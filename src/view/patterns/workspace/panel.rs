@@ -1,9 +1,12 @@
 use super::*;
 mod candidates;
 mod drawing;
+pub(super) mod labels;
 mod playhead;
 mod scrolling;
-use drawing::{cell, measure_in_block, paint_part, place_beacon, trash, Block};
+use drawing::{
+    cell, measure_in_block, paint_part, part_card, place_beacon, placed_fill, trash, Block,
+};
 /// A placement being dragged: its row and first measure.
 #[derive(Clone, Copy)]
 struct Placed(usize, u64);
@@ -177,7 +180,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     );
     let position = (s.row, s.measure);
     let selected = s.cells(p).then_some((s.row, s.measure));
-    let choices = choices(a, p);
+    let labels = labels::cells(a, p);
     let (music, keys) = (&l.music, &l.keys);
     let lanes = lanes(&c, id);
     let beacon = (p == Pane::Song)
@@ -279,11 +282,12 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                                     let faded = lane
                                         .is_some_and(|l| model::commented_out(&c, id, l, measure));
                                     let b = block.get_or_insert_with(|| {
-                                        let label = choices
+                                        let label = labels
                                             .iter()
                                             .find(|(p, _)| *p == part)
                                             .map_or("", |(_, s)| s.as_str());
-                                        Block::begin(ui, start, rect, label, faded)
+                                        let fill = placed_fill(ui, catalog, part);
+                                        Block::begin(ui, start, rect, label, fill, faded)
                                     });
                                     b.extend(rect, cursor);
                                     let k = (measure - start) as usize;
@@ -307,7 +311,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                                         },
                                     );
                                 } else {
-                                    cell(ui, rect, "·", cursor || target, false, |_, _| {});
+                                    cell(ui, rect, "·", cursor || target, |_, _| {});
                                 }
                                 if selected == Some((row, measure))
                                     || selected.is_none() && (row, measure) == (0, 1)

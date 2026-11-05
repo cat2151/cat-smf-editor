@@ -40,13 +40,6 @@ fn track_changes_revoke_projection_and_source_authority_before_next_frame() {
     assert!(a.patterns.editing.is_none());
     assert!(a.loaded.as_ref().unwrap().display_music.is_none());
     a.select_track(source);
-    assert!(!a.can_edit_notes(source));
-    assert!(presentation::name(&a, source).is_none());
-    assert!(a.edit_music(|_| Ok(())).is_err());
-    let c = egui::Context::default();
-    track_selected(&mut a);
-    frame(&mut a, &c, vec![]);
-    library::edit(&mut a, id).unwrap();
     assert!(a.can_edit_notes(source));
     assert!(presentation::name(&a, source).is_some());
     assert!(a.loaded.as_ref().unwrap().display_music.is_some());

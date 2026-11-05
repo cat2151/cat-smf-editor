@@ -56,7 +56,9 @@ pub(super) fn body(
             chars(3),
         ]
     };
-    let row_count = if app.note_mode {
+    let row_count = if crate::view::patterns::mode::unprojected(app, track) {
+        0
+    } else if app.note_mode {
         display.len()
     } else {
         events.len()

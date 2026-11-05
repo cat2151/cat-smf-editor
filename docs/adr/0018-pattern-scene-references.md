@@ -1,7 +1,7 @@
 # ADR 0018: same measure・pattern・Scene／SongをSMF内の参照として扱う
 
 - 状態: 採用
-- 決定者: user（同じ小節への参照、take比較、3窓の作業領域、音色入れ物とpatternの所属、専用trackへの保存、配置レーン・Scene・Songをconductorのmeta 1個に集約、発音単位、演奏表現と競合・復元・移動の規則、patternが無い曲での開始、候補patternのクリックによる単体再生と本体表示、Song窓とkeyboard窓を閉じない寿命、窓の開閉を他の機能のきっかけにしない）
+- 決定者: user（同じ小節への参照、take比較、3窓の作業領域、音色入れ物とpatternの所属、専用trackへの保存、配置レーン・Scene・Songをconductorのmeta 1個に集約、発音単位、演奏表現と競合・復元・移動の規則、patternが無い曲での開始、候補patternのクリックによる単体再生と本体表示、Song窓とkeyboard窓を閉じない寿命、窓の開閉を他の機能のきっかけにしない、Notesの入れ物は1つのpatternだけを映し、Song再生中は鳴っているpatternに従い、候補クリックはその候補に従う）
 - 関連: [0006: instrument layerと音色参照](0006-instrument-layers-and-patch-state-cache.md)、[0010: 通常のMML・コード入力](0010-mml-chord-note-insertion.md)、[0013: 安定した所有元への参照](0013-instrument-parameter-automation.md)、[0017: ドラム編集](0017-drum-sequencer.md)
 
 ## 参照を保存し、本体の変更へ追従する
@@ -35,6 +35,16 @@ Song窓は、曲にpatternの入れ物がある間だけ存在し、Notes／Raw�
 Notesではpatternの本体範囲を通常編集へ投影し、本体への対応を通して書き戻す。一方、Rawは保存用SMFの実eventを直接編集する。表示列だけをRawへ変えて投影を残す方式は、表示と編集先を食い違わせるため採らない。表示・実eventの対応・編集権限を共通の境界で決め、mode切替だけでは曲やUndoを変えない。
 
 編集Contextや独立した表示フラグだけでmodeを決めると、表示切替やtrack移動でNotesと実trackの役割が食い違うため、両者からpattern modeを導出する。有効な本体と対応付けを要求する編集権限は別に保ち、modeが有効なだけで本体の保存用trackへ直接書き込めるようにはしない。
+
+## Notesの入れ物は常に1つのpatternを映す
+
+入れ物trackは本体を格納座標へ詰めて持つので、そのまま映しても音楽としての意味が無い。Notesの入れ物は常に1つのpatternの投影を映し、track全体を映すのはRawだけとする（user）。映すpatternは次の順で決める。Song／Sceneの再生中は、今の入れ物でいま鳴っているpattern（user）。それ以外は、その入れ物で最後に映したpattern。候補クリックは候補を映す（user）ので、この「最後に映した」に含まれる。どちらも無ければ入れ物の先頭のpatternとする。
+
+投影を開く操作ごとに表示を決める方式は採らない。開く経路だけが投影を作ると、track移動、Rawからの復帰、本体の範囲外へのカーソル移動、本体の削除で投影が落ち、track全体が映る（user報告）。そのため投影の有無を操作の結果とせず、上の順序で毎frame導く。本体の範囲外へ出たカーソルは投影を閉じず、範囲内へ戻す。
+
+再生に従って映す先が変わっても、再生は止めず、候補も動かさない。候補を動かすと、再生中の配置でたまたま鳴っているpatternを置くことになるためである。入力やドラッグの最中は、掴んでいる行が別のpatternの行に化けるため、終わるまで切り替えを待つ。同じ入れ物のpatternが同時に鳴るときは、映しているpatternが鳴っている間はそれを保つ。止めると最後に映したpatternに留まる。
+
+2列表示で今のtrackでない側に入れ物を置いたときは、本体を映さない。投影は曲の拍子をpatternの拍子へ置き換えるので、拍子の異なる2つのpatternを1つの表示用の曲へ投影できないためである。
 
 ## 音色入れ物がpatternを所有する
 

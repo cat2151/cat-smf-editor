@@ -18,6 +18,7 @@ mod edit_refresh;
 mod input;
 mod keyboard;
 mod minimap;
+mod placed;
 mod playhead;
 mod recording;
 mod resume;

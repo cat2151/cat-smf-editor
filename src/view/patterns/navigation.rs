@@ -4,7 +4,7 @@ use super::*;
 use cat_smf_editor::message;
 use cat_smf_editor::score::{
     musical_time::MusicalTime,
-    pattern::{editing::Context, Catalog, Kind},
+    pattern::{editing::Context, Catalog},
 };
 use std::collections::BTreeMap;
 
@@ -18,6 +18,12 @@ pub struct State {
 pub struct Snapshot {
     context: Option<Context>,
     drum: bool,
+}
+
+impl State {
+    pub(super) fn last(&self, container: u64) -> Option<u64> {
+        self.last.get(&container).copied()
+    }
 }
 
 pub fn snapshot(a: &App) -> Snapshot {
@@ -61,11 +67,13 @@ pub fn enter_notes(a: &mut App) {
         // Raw can be entered without a prior body; returning to Notes still uses
         // the same last-pattern/first-pattern policy as an ordinary track entry.
         track_selected(a);
+    } else {
+        shown::ensure(a);
     }
 }
 
-pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
-    // Resolve and validate the destination before touching the old editor or transport.
+/// `id`'s context, its container and first tick, checked before anything changes.
+fn destination(a: &App, id: u64) -> Result<(Context, u64, u64), String> {
     let loaded = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let catalog = Catalog::read(&loaded.music)?;
     let pattern = catalog.patterns.get(&id).ok_or(message::MISSING_PATTERN)?;
@@ -91,7 +99,42 @@ pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
         .map(context.track)
         .ok_or(message::MISSING_PATTERN_METER)?;
     let tick = cat_smf_editor::score::same_measure::bounds(map, 1)?.0;
+    Ok((context, container, tick))
+}
 
+/// The projection of `context`, leaving the transport, the candidate and every editor alone.
+fn install(a: &mut App, context: Context, container: u64, tick: u64) {
+    a.patterns.container = Some(container);
+    a.patterns.selected = Some(context.pattern);
+    a.patterns
+        .navigation
+        .last
+        .insert(container, context.pattern);
+    a.patterns.editing = Some(context);
+    a.patterns.edit_song = a.song_id;
+    a.generation = a.generation.wrapping_add(1);
+    refresh(a);
+    crate::cursor::moves::at_tick(a, tick);
+}
+
+/// Shows `id`, a pattern of the current track, as `shown` decides it.
+pub(super) fn show(a: &mut App, id: u64) -> Result<(), String> {
+    let (context, container, tick) = destination(a, id)?;
+    install(a, context, container, tick);
+    Ok(())
+}
+
+/// The grid takes the window from the arrangement panes it was opened from.
+fn present_body(a: &mut App) {
+    present(a);
+    if crate::view::drums::is_open(a) {
+        workspace::reset_windows(a);
+        a.patterns.root_focus = true;
+    }
+}
+
+pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
+    let (context, container, tick) = destination(a, id)?;
     if !a.startup.restoring {
         crate::play::transport::stop(a);
     }
@@ -99,22 +142,11 @@ pub fn edit(a: &mut App, id: u64) -> Result<(), String> {
     a.note_mode = true;
     a.patterns.raw_context = None;
     a.set_track(context.track);
-    a.patterns.container = Some(container);
-    a.patterns.selected = Some(id);
     a.patterns.workspace.song_cell.choice =
         Some(cat_smf_editor::score::scene::arrangement::PatternOrScene::Pattern(id));
     a.patterns.workspace.song_cell.reveal_choice = true;
-    a.patterns.navigation.last.insert(container, id);
-    a.patterns.editing = Some(context);
-    a.patterns.edit_song = a.song_id;
-    a.generation = a.generation.wrapping_add(1);
-    refresh(a);
-    crate::cursor::moves::at_tick(a, tick);
-    present(a);
-    if crate::view::drums::is_open(a) {
-        workspace::reset_windows(a);
-        a.patterns.root_focus = true;
-    }
+    install(a, context, container, tick);
+    present_body(a);
     Ok(())
 }
 
@@ -136,38 +168,26 @@ fn select_source(a: &mut App) -> Result<(), String> {
         .iter()
         .find_map(|(&id, &t)| (t == a.track).then_some(id))
         .ok_or(message::MISSING_SOUND_CONTAINER)?;
-    let selected = a
-        .patterns
-        .navigation
-        .last
-        .get(&owner)
-        .copied()
-        .filter(|id| c.patterns.get(id).is_some_and(|p| p.container == owner))
-        .or_else(|| {
-            c.patterns
-                .values()
-                .filter(|p| p.container == owner)
-                // The keyboard's Capture only when the container has nothing else.
-                .min_by_key(|p| (p.kind == Kind::Capture, p.tick))
-                .map(|p| p.id)
-        });
+    let selected = shown::resolve(a);
     let drum = l.patches.get(a.track).is_some_and(|p| p.drums.is_some());
     a.patterns.container = Some(owner);
     a.patterns.selected = selected;
-    if drum && let Some(id) = selected {
-        // Repeated notifications must not erase numeric input or restart the editor.
-        if !crate::view::drums::is_open(a)
-            || mode::editing(a, a.track).is_none_or(|c| c.pattern != id)
-        {
-            edit(a, id)?;
-        }
-    } else {
+    // Repeated notifications must not erase numeric input, restart the editor or move the cursor.
+    if let Some(id) = selected
+        && mode::editing(a, a.track).is_none_or(|c| c.pattern != id)
+    {
+        show(a, id)?;
+    }
+    if !drum || selected.is_none() {
         a.patterns.workspace.song_cell.focus = true;
+    } else if !crate::view::drums::is_open(a) {
+        present_body(a);
     }
     Ok(())
 }
 
-/// Dismissing a body is a real navigation back to the library, not a hidden editor.
+/// Dismissing a body is a real navigation back to the library, not a hidden editor;
+/// `shown` puts the pattern back on the event list.
 pub fn browse(a: &mut App) {
     crate::view::drums::close(a);
     a.patterns.editing = None;
@@ -185,6 +205,7 @@ pub fn browse(a: &mut App) {
         .map(cat_smf_editor::score::scene::arrangement::PatternOrScene::Pattern);
     a.patterns.workspace.song_cell.placing = false;
     a.patterns.workspace.song_cell.focus = true;
+    shown::ensure(a);
 }
 
 #[cfg(test)]

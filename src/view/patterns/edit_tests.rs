@@ -217,9 +217,9 @@ fn pattern_edit_source_direct_input_is_disabled_and_running_sequence_refreshes()
     assert_eq!(a.playback.repeat, Some((0, 1920)));
     assert_eq!(p.parts[0].0, source);
     assert_eq!(p.parts[0].2.notes[0].pitch, 72);
+    a.select_track(source);
     a.patterns.editing = None;
     refresh(&mut a);
-    a.select_track(source);
     let before = bytes(&a);
     assert!(a
         .edit_music(|m| {

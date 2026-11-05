@@ -148,6 +148,19 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     root_owner(a)
 }
 
+/// No input or menu of the root window holds a row of what it shows.
+pub fn root_idle(a: &App) -> bool {
+    matches!(
+        root_owner(a),
+        Screen::Main
+            | Screen::Drums
+            | Screen::Timeline
+            | Screen::Mixer
+            | Screen::Play
+            | Screen::Overview
+    )
+}
+
 /// The screen owning the root window, whichever window has focus.
 fn root_owner(a: &App) -> Screen {
     if a.patterns.workspace.input_open() {

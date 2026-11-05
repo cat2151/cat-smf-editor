@@ -24,7 +24,7 @@ fn song_candidate_trash_removes_body_and_all_occurrences_in_one_undo() {
         .iter()
         .all(|s| s.cells.iter().all(|cell| cell.pattern != second)));
     assert_eq!(body(&a, first), first_body);
-    assert!(a.patterns.editing.is_none());
+    assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, first);
     assert_ne!(a.patterns.selected, Some(second));
     key(&mut a, &c, Pane::Song.viewport(), Key::Z, Modifiers::CTRL);
     assert_eq!(bytes(&a), before);

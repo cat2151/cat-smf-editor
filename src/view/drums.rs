@@ -20,7 +20,7 @@ mod layout_tests;
 mod native_tests;
 mod pattern;
 mod presentation;
-pub(crate) use presentation::{close, dismiss, display, is_open, open, reconcile};
+pub(crate) use presentation::{close, dismiss, display, follow, is_open, open, reconcile};
 pub(crate) mod playback;
 #[cfg(test)]
 pub(crate) mod tests;

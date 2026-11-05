@@ -9,10 +9,8 @@ fn twice(entered: bool, expire: bool) {
     let c = egui::Context::default();
     if entered {
         library::edit(&mut a, id).unwrap();
-        assert_eq!(mode::editing(&a, source).unwrap().pattern, id);
-    } else {
-        assert!(a.patterns.editing.is_none());
     }
+    assert_eq!(mode::editing(&a, source).unwrap().pattern, id);
     let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
     press(&mut a, &c, Key::V);
     assert!(!a.note_mode && !mode::workspace_open(&a));
@@ -29,14 +27,8 @@ fn twice(entered: bool, expire: bool) {
     assert!(mode::source(&a, source));
     assert!(presentation::frame(&a, source).stroke.width > 0.0);
     assert!(mode::workspace_open(&a));
-    assert_eq!(
-        a.can_edit_notes(source),
-        mode::editing(&a, source).is_some()
-    );
-    if !entered || expire {
-        assert!(a.patterns.editing.is_none());
-        assert!(!a.can_edit_notes(source));
-    }
+    assert_eq!(mode::editing(&a, source).unwrap().pattern, id);
+    assert!(a.can_edit_notes(source));
     assert_eq!(
         cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap(),
         before
@@ -58,19 +50,19 @@ fn v_twice_with_expired_edit_target_still_returns_source_to_pattern_mode() {
 }
 
 #[test]
-fn selecting_and_restoring_a_notes_source_never_need_an_edit_context_or_open_flag() {
-    let (mut a, source, _) = edit_tests::fixture();
+fn selecting_and_restoring_a_notes_source_shows_its_pattern() {
+    let (mut a, source, id) = edit_tests::fixture();
     a.select_track(source);
     assert!(mode::source(&a, source));
-    assert!(!a.can_edit_notes(source));
+    assert!(a.can_edit_notes(source));
     let session = a.session().unwrap();
     let music = a.loaded.as_ref().unwrap().music.clone();
     let mut restarted = crate::view::tests::app(music);
     restarted.restore_position(&session);
     assert_eq!(restarted.track, source);
     assert!(restarted.note_mode && mode::source(&restarted, source));
-    assert!(restarted.patterns.editing.is_none());
-    assert!(!restarted.can_edit_notes(source));
+    assert_eq!(mode::editing(&restarted, source).unwrap().pattern, id);
+    assert!(restarted.can_edit_notes(source));
     restarted.select_track(0);
     assert!(!mode::source(&restarted, 0));
     restarted.select_track(source);

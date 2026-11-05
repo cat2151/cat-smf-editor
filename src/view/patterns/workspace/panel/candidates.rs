@@ -9,7 +9,6 @@ pub(super) fn show(
     beacon: Option<super::super::super::beacon::Step>,
     (ime, was_focused): (bool, bool),
 ) {
-    let choices = choices(a, p);
     let s = a.patterns.workspace.selection_mut(p);
     let cells = s.cells(p);
     let response = ui.add(egui::TextEdit::singleline(&mut s.query).id(query_id(p)));
@@ -25,10 +24,8 @@ pub(super) fn show(
         s.placing = false;
     }
     s.search.update(&s.query);
-    let filtered = choices
-        .into_iter()
-        .filter(|(_, label)| s.search.matches_text(label))
-        .collect::<Vec<_>>();
+    let filtered = labels::found(a, p);
+    let s = a.patterns.workspace.selection_mut(p);
     if !filtered.iter().any(|(part, _)| Some(*part) == s.choice) {
         s.choice = filtered.first().map(|(part, _)| *part);
     }
@@ -59,12 +56,12 @@ pub(super) fn show(
                     egui::vec2(ui.available_width().min(240.0), 30.0),
                     egui::Sense::click_and_drag(),
                 );
-                cell(
+                part_card(
                     ui,
                     rect,
                     &label,
+                    placed_fill(ui, catalog, part),
                     Some(part) == selected && (p == Pane::Scene || !cells),
-                    false,
                     |painter, area| {
                         paint_part(painter, area, music, keys, catalog, c, part, None);
                     },

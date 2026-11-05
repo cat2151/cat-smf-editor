@@ -241,6 +241,7 @@ pub fn mutate(
     a.patterns.edit_song = a.song_id;
     refresh(a);
     crate::cursor::moves::at_tick(a, tick);
+    super::shown::ensure(a);
     Ok(())
 }
 pub fn place_selected(a: &mut App, p: Pane) {

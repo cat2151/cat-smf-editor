@@ -79,6 +79,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     {
         let _span = crate::frame_trace::span("validate");
         patterns::validate(app);
+        patterns::shown::follow(app, ctx);
     }
     if app.startup_pending(ctx) {
         app.lifecycle.interrupted();
@@ -367,11 +368,15 @@ fn pane(
     let split = rect.right() - crate::view::track_map::WIDTH;
     let rows = egui::Rect::from_min_max(rect.min, egui::pos2(split, rect.bottom()));
     let map = egui::Rect::from_min_max(egui::pos2(split, rect.top()), rect.max);
-    let action = crate::view::track_map::show(
-        app,
-        &mut ui.new_child(egui::UiBuilder::new().max_rect(map)),
-        track,
-    );
+    let action = (!patterns::mode::unprojected(app, track))
+        .then(|| {
+            crate::view::track_map::show(
+                app,
+                &mut ui.new_child(egui::UiBuilder::new().max_rect(map)),
+                track,
+            )
+        })
+        .flatten();
     let mut tick = None;
     match action {
         Some(track_map::Action::Selecting) => app.playback.follow = false,

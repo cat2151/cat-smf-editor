@@ -306,6 +306,7 @@ fn song_n_chooses_container_from_current_and_cancel_keeps_song() {
         catalog.patterns[&a.patterns.selected.unwrap()].container,
         owner
     );
+    frame(&mut a, &c, root, vec![]);
     a.undo_music().unwrap();
     a.mml_input.open = false;
     key(&mut a, &c, song, Key::N, Modifiers::NONE);

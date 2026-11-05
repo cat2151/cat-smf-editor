@@ -17,7 +17,7 @@ mod boundary;
 mod keybind_tests;
 #[cfg(test)]
 mod tests;
-pub(crate) use ownership::{owner, Screen};
+pub(crate) use ownership::{owner, root_idle, Screen};
 
 type Execute = dyn Fn(&mut App, &egui::Context) -> bool;
 

@@ -337,13 +337,9 @@ fn move_placement(a: &mut App, p: Pane, rows: isize, measures: isize) {
     result(a, r);
 }
 fn candidate(a: &mut App, p: Pane, delta: isize) {
-    let all = choices(a, p);
+    let all = panel::labels::found(a, p);
     let s = a.patterns.workspace.selection_mut(p);
     s.reveal_choice = true;
-    let all = all
-        .into_iter()
-        .filter(|(_, label)| s.search.matches_text(label))
-        .collect::<Vec<_>>();
     let i = all
         .iter()
         .position(|(part, _)| Some(*part) == s.choice)

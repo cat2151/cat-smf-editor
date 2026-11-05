@@ -79,6 +79,14 @@ pub(crate) fn display(app: &mut App) {
     app.trill_edit = None;
 }
 
+/// The grid moves with a running Song; `display` would close the panels open beside it.
+pub(crate) fn follow(app: &mut App, id: u64) {
+    app.drum_editor.target = Some(Target::Pattern(id));
+    app.drum_editor.page = 0;
+    app.drum_editor.first = 1;
+    app.drum_editor.last = 1;
+}
+
 pub(crate) fn close(app: &mut App) {
     playback::close(app);
     app.drum_editor = State::default();

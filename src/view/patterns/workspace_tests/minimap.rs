@@ -123,7 +123,7 @@ fn minimap_notes_use_the_other_minimaps_colors() {
     assert_eq!(fills, vec![c4, g4]);
 }
 #[test]
-fn scene_notes_use_the_minimap_colors_and_pattern_notes_stay_gray() {
+fn scene_notes_use_the_minimap_colors_and_patterns_their_container_color() {
     let (mut a, c, _, second, scene) = verification_song();
     let p = Pane::Song;
     frame(&mut a, &c, p.viewport(), vec![]);
@@ -140,7 +140,12 @@ fn scene_notes_use_the_minimap_colors_and_pattern_notes_stay_gray() {
         let mut out = shapes
             .iter()
             .filter_map(|s| match &s.shape {
-                egui::epaint::Shape::Rect(r) if rect.contains_rect(r.rect) && r.rect != rect => {
+                // Notes are the square shapes; the label's ground is rounded.
+                egui::epaint::Shape::Rect(r)
+                    if rect.contains_rect(r.rect)
+                        && r.rect != rect
+                        && r.corner_radius == egui::CornerRadius::ZERO =>
+                {
                     Some(r.fill)
                 }
                 _ => None,
@@ -150,16 +155,26 @@ fn scene_notes_use_the_minimap_colors_and_pattern_notes_stay_gray() {
         out
     };
     let minimap = crate::view::timeline_minimap::note_color;
-    let gray = crate::view::pitch_keyboard::note_color(67, None);
     // Scene A plays c in its first measure and g in its second.
     let cell = |measure: u64| egui::Id::new((p.title(), "cell", 0usize, measure));
     assert_eq!(fills(cell(1)), vec![minimap(60, None)]);
     assert_eq!(fills(cell(2)), vec![minimap(67, None)]);
-    assert_eq!(fills(cell(3)), vec![gray]);
+    let track = Catalog::read(&a.loaded.as_ref().unwrap().music)
+        .unwrap()
+        .patterns[&second]
+        .track;
+    let container = crate::view::track_color(track);
+    assert_eq!(
+        fills(cell(3)),
+        vec![container.gamma_multiply(0.45), container]
+    );
     let part = |part: PatternOrScene| egui::Id::new((p.title(), "part", format!("{part:?}")));
     assert_eq!(
         fills(part(PatternOrScene::Scene(scene))),
         vec![minimap(60, None), minimap(67, None)]
     );
-    assert_eq!(fills(part(PatternOrScene::Pattern(second))), vec![gray]);
+    assert_eq!(
+        fills(part(PatternOrScene::Pattern(second))),
+        vec![container.gamma_multiply(0.45), container]
+    );
 }

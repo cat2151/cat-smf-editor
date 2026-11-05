@@ -12,6 +12,7 @@ mod native_tests;
 pub(crate) mod navigation;
 pub(crate) mod presentation;
 pub(crate) mod preview;
+pub(crate) mod shown;
 pub(crate) mod windows;
 pub(crate) mod workspace;
 pub struct PreviewTempo(pub f64);
@@ -91,24 +92,28 @@ pub fn refresh(a: &mut App) {
 
 pub fn validate(a: &mut App) {
     crate::view::drums::reconcile(a);
-    let Some(context) = &a.patterns.editing else {
-        return;
-    };
-    let current = crate::play::playback::location(a).0;
-    if a.patterns.edit_song != a.song_id
-        || context.track != a.track
-        || a.loaded
-            .as_ref()
-            .and_then(|l| l.edit_range(context).ok())
-            .is_none_or(|(start, end)| !(start..end).contains(&current))
-    {
+    if let Some(context) = &a.patterns.editing {
         let tick = crate::play::playback::location(a).0;
-        a.patterns.editing = None;
-        a.generation = a.generation.wrapping_add(1);
-        refresh(a);
-        crate::cursor::moves::at_tick(a, tick);
-        crate::view::drums::reconcile(a);
+        let range = (a.patterns.edit_song == a.song_id && context.track == a.track)
+            .then(|| a.loaded.as_ref()?.edit_range(context).ok())
+            .flatten();
+        match range {
+            None => {
+                a.patterns.editing = None;
+                a.generation = a.generation.wrapping_add(1);
+                refresh(a);
+                crate::cursor::moves::at_tick(a, tick);
+                crate::view::drums::reconcile(a);
+            }
+            // A cursor outside the body does not leave it.
+            Some((start, end)) if !(start..end).contains(&tick) => {
+                let last = end.saturating_sub(1).max(start);
+                crate::cursor::moves::at_tick(a, tick.clamp(start, last));
+            }
+            Some(_) => {}
+        }
     }
+    shown::ensure(a);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -227,6 +232,8 @@ mod mode_tests;
 mod mode_transition_tests;
 #[cfg(test)]
 mod raw_tests;
+#[cfg(test)]
+mod shown_tests;
 #[cfg(test)]
 mod song_mode_tests;
 #[cfg(test)]

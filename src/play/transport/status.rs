@@ -1,34 +1,82 @@
 use super::{preparing, tick, App};
-use cat_smf_editor::score::audition_timing::TempoMap;
+use crate::play::playback::Mode;
+use cat_smf_editor::score::{audition_timing::TempoMap, pattern, scene::arrangement};
 use eframe::egui;
 use std::sync::Arc;
 
+/// The song, its edit, the view and the preview tempo.
+type Version = (u64, u64, bool, Option<u64>, u64);
+
 #[derive(Clone)]
 struct Timing {
-    version: (u64, u64),
+    version: Version,
     tempos: Arc<Vec<TempoMap>>,
     total: f64,
 }
 
+fn shown(app: &App) -> Option<u64> {
+    let context = app.patterns.editing.as_ref()?;
+    context.standalone.then_some(context.pattern)
+}
+
+/// The length of what plays: the running Song or Scene, else the pattern playing or shown, else
+/// the file. Raw counts the ticks a container stores; Notes counts the Song and the plain tracks,
+/// because those stored ticks are no time in the music.
+fn total(app: &App, tempos: &[TempoMap], mode: Option<Mode>) -> Option<f64> {
+    let loaded = app.loaded.as_ref()?;
+    let tempo = tempos.first()?;
+    let song = |scene| {
+        let (catalog, collection) = loaded.arrangement.as_ref()?;
+        let (_, end) =
+            arrangement::occurrences_in(&loaded.music, catalog, collection, scene).ok()?;
+        Some(tempo.duration(0, end))
+    };
+    let pattern = match mode {
+        Some(Mode::Arrangement(scene)) => return song(scene),
+        Some(Mode::Pattern(id)) => Some(id),
+        _ => shown(app),
+    };
+    if let Some(id) = pattern {
+        let (catalog, _) = loaded.arrangement.as_ref()?;
+        return Some(tempo.duration(0, catalog.patterns.get(&id)?.length().ok()?));
+    }
+    let tracks = loaded
+        .music
+        .tracks
+        .iter()
+        .enumerate()
+        .zip(tempos)
+        .filter(|((index, _), _)| !app.note_mode || !pattern::is_source(&loaded.music, *index))
+        .map(|((_, track), tempo)| tempo.duration(0, track.events.last().map_or(0, |e| e.tick)))
+        .fold(0.0, f64::max);
+    Some(song(None).map_or(tracks, |song| song.max(tracks)))
+}
+
 fn stopped_timing(app: &App, ctx: &egui::Context) -> Option<Timing> {
     let loaded = app.loaded.as_ref()?;
-    let version = (app.song_id, app.generation);
+    let version = (
+        app.song_id,
+        app.generation,
+        app.note_mode,
+        shown(app),
+        app.patterns.tempo.0.to_bits(),
+    );
     let id = egui::Id::new("transport-timing");
     if let Some(cached) = ctx.data_mut(|d| d.get_temp::<Timing>(id))
         && cached.version == version
     {
         return Some(cached);
     }
+    let preview = shown(app)
+        .and_then(|_| TempoMap::constant(loaded.music.division, app.patterns.tempo.0).ok());
     let tempos: Vec<_> = (0..loaded.music.tracks.len())
-        .map(|track| TempoMap::new(&loaded.music, track))
+        .map(|track| {
+            preview
+                .clone()
+                .unwrap_or_else(|| TempoMap::new(&loaded.music, track))
+        })
         .collect();
-    let total = loaded
-        .music
-        .tracks
-        .iter()
-        .zip(&tempos)
-        .map(|(track, tempo)| tempo.duration(0, track.events.last().map_or(0, |e| e.tick)))
-        .fold(0.0, f64::max);
+    let total = total(app, &tempos, None)?;
     let timing = Timing {
         version,
         tempos: Arc::new(tempos),
@@ -120,18 +168,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 .playback
                 .active
                 .as_ref()
-                .zip(app.loaded.as_ref())
-                .map(|(active, loaded)| {
-                    loaded
-                        .music
-                        .tracks
-                        .iter()
-                        .zip(&active.tempos)
-                        .map(|(track, tempo)| {
-                            tempo.duration(0, track.events.last().map_or(0, |e| e.tick))
-                        })
-                        .fold(0.0, f64::max)
-                })
+                .and_then(|active| total(app, &active.tempos, Some(active.mode)))
                 .or_else(|| timing.as_ref().map(|t| t.total))
                 .filter(|seconds| seconds.is_finite());
             let hours = total_seconds.unwrap_or(seconds) >= 3600.0;
@@ -208,7 +245,85 @@ Shift+Space  演奏停止",
 
 #[cfg(test)]
 mod tests {
-    use super::clock;
+    use super::{clock, stopped_timing, total, App, Mode, TempoMap};
+    use crate::view::patterns::{self, workspace_tests::verification_song};
+    use cat_smf_editor::score::{pattern::operations, scene::arrangement};
+    use eframe::egui;
+
+    /// A Song stopped on its container, whose stored bodies run far past the Song's end.
+    fn song() -> (App, egui::Context, u64, f64, f64) {
+        let (mut a, c, first, _, _) = verification_song();
+        crate::play::transport::stop(&mut a);
+        let source = a.track;
+        a.edit_tracks(|m| {
+            for _ in 0..40 {
+                operations::create(m, source, None)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        patterns::refresh(&mut a);
+        let music = &a.loaded.as_ref().unwrap().music;
+        let tempo = TempoMap::new(music, 0);
+        let (_, end) = arrangement::occurrences(music, None).unwrap();
+        let stored = music.tracks[source].events.last().unwrap().tick;
+        let (song, stored) = (tempo.duration(0, end), tempo.duration(0, stored));
+        assert!(song > 0.0 && song * 2.0 < stored, "{song} {stored}");
+        (a, c, first, song, stored)
+    }
+    fn tempos(a: &App) -> Vec<TempoMap> {
+        let music = &a.loaded.as_ref().unwrap().music;
+        (0..music.tracks.len())
+            .map(|track| TempoMap::new(music, track))
+            .collect()
+    }
+
+    #[test]
+    fn a_song_lasts_to_its_end_not_to_the_ticks_its_containers_store() {
+        let (a, _, _, song, _) = song();
+        let tempos = tempos(&a);
+        assert_eq!(
+            total(&a, &tempos, Some(Mode::Arrangement(None))),
+            Some(song)
+        );
+    }
+
+    #[test]
+    fn only_raw_counts_the_ticks_a_container_stores() {
+        let (mut a, c, _, song, stored) = song();
+        a.patterns.editing = None;
+        a.track = 0;
+        assert_eq!(stopped_timing(&a, &c).unwrap().total, song);
+        a.note_mode = false;
+        assert_eq!(stopped_timing(&a, &c).unwrap().total, stored);
+    }
+
+    #[test]
+    fn a_pattern_lasts_its_own_length_at_the_preview_tempo() {
+        let (mut a, c, first, _, _) = song();
+        patterns::library::edit(&mut a, first).unwrap();
+        a.patterns.tempo.0 = 120.0;
+        let length = a
+            .loaded
+            .as_ref()
+            .unwrap()
+            .arrangement
+            .as_ref()
+            .unwrap()
+            .0
+            .patterns[&first]
+            .length()
+            .unwrap();
+        let seconds = length as f64 / 960.0;
+        assert_eq!(stopped_timing(&a, &c).unwrap().total, seconds);
+        a.patterns.tempo.0 = 60.0;
+        let slower = stopped_timing(&a, &c).unwrap();
+        assert_eq!(slower.total, seconds * 2.0);
+        assert_eq!(
+            total(&a, &slower.tempos, Some(Mode::Pattern(first))),
+            Some(seconds * 2.0)
+        );
+    }
 
     #[test]
     fn time_format_handles_millisecond_second_minute_and_hour_carries() {

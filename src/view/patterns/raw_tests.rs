@@ -146,8 +146,8 @@ fn raw_track_selection_leaves_song_alone_and_keeps_the_container_uneditable() {
     let p = crate::play::transport::prepare(&a, crate::play::playback::Mode::AllTracks).unwrap();
     assert!(p.parts.iter().all(|part| part.0 != source));
     press(&mut a, &c, Key::V);
-    assert!(a.patterns.editing.is_none());
-    assert!(a.loaded.as_ref().unwrap().display_music.is_none());
+    assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
+    assert!(a.loaded.as_ref().unwrap().display_music.is_some());
     assert_eq!(bytes(&a), original);
     track_selected(&mut a);
     library::edit(&mut a, id).unwrap();
