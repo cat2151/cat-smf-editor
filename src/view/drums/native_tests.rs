@@ -61,6 +61,7 @@ fn installed_drums_save_restart_and_render_each_row() {
         app.drum_editor.row = row;
         app.drum_editor.field = row + 2;
         activate(&mut app).unwrap();
+        values::set_level(&mut app, row, -3.0 * (row + 1) as f32).unwrap();
     }
     app.state_cache.save().unwrap();
     let original = app.loaded.as_ref().unwrap().patches[track].clone();
@@ -167,19 +168,10 @@ fn installed_drums_current_document_preserves_onsets_and_patch_states() {
     let bytes = std::fs::read(&original).unwrap();
     let copy = work.path().join("current.mid");
     std::fs::write(&copy, &bytes).unwrap();
-    let mut plugin = cat_smf_editor::chain::default_instrument().unwrap();
     let table: cat_smf_editor::patch_roots::Table =
         serde_json::from_slice(&std::fs::read(home.join("cache/patch-roots-v1.json")).unwrap())
             .unwrap();
-    let installed = table.plugin(&plugin).unwrap();
-    plugin.bundle_path = installed.bundle_path;
-    crate::player::patch_roots::Assumed::set_root(std::path::Path::new(&installed.roots[0]));
-    cat_smf_editor::patch_roots::Roots::plugin(
-        &mut crate::player::patch_roots::Assumed,
-        &plugin,
-        false,
-    )
-    .unwrap();
+    let _roots = crate::player::patch_roots::Assumed::with_table(table);
     let mut app = crate::view::tests::app(cat_smf_editor::edit::tracks::new_song());
     app.player_selection.executable = Some(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -223,7 +215,18 @@ fn installed_drums_current_document_preserves_onsets_and_patch_states() {
         assert_eq!(retained(a), retained(b));
     }
     assert!(app.loaded.as_ref().unwrap().patches[track] == patch);
-    let adjusted = cat_smf_editor::smf_io::encode(after).unwrap();
+    values::set_level(&mut app, 2, -9.5).unwrap();
+    let mut patch = patch;
+    let id = patch.drums.as_ref().unwrap().rows[2].layer;
+    patch
+        .layers
+        .iter_mut()
+        .find(|l| l.settings.id == id)
+        .unwrap()
+        .settings
+        .volume_db = -9.5;
+    assert!(app.loaded.as_ref().unwrap().patches[track] == patch);
+    let adjusted = cat_smf_editor::smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap();
     app.saved.save_confirmed().unwrap();
     assert_eq!(std::fs::read(&copy).unwrap(), adjusted);
     app.load_mid_unchecked(copy);

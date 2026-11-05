@@ -14,7 +14,7 @@ pub(super) struct State {
     pub(super) repeat: repeat::State,
     pub(super) cells: Option<(f32, f32)>,
     pub(super) scope: Option<u64>,
-    anchor: Option<u64>,
+    pub(super) anchor: Option<u64>,
 }
 
 impl State {
@@ -128,13 +128,14 @@ pub(super) fn show(a: &mut App, ui: &mut egui::Ui) {
 }
 
 pub(super) fn apply(a: &mut App, action: repeat::Action) {
+    a.patterns.workspace.timeline.anchor = None;
     match action {
         repeat::Action::Start(range) => crate::play::transport::repeat::start_song(a, range),
         other => repeat::apply(a, other),
     }
 }
 
-pub(super) fn collect(out: &mut Vec<Command>) {
+pub(super) fn collect(app: &App, out: &mut Vec<Command>) {
     for (id, name, key, enlarge) in [
         ("song-zoom-in", "時間拡大", Key::PageUp, true),
         ("song-zoom-out", "時間縮小", Key::PageDown, false),
@@ -151,9 +152,20 @@ pub(super) fn collect(out: &mut Vec<Command>) {
         );
     }
     for (id, name, end) in [
-        ("song-repeat-a", "Song repeat A", false),
-        ("song-repeat-b", "Song repeat B", true),
+        (
+            "song-repeat-a",
+            "Song A-B Repeat A：選択小節の先頭を開始点に設定",
+            false,
+        ),
+        (
+            "song-repeat-b",
+            "Song A-B Repeat B：選択小節の末尾を終了点に設定して再生",
+            true,
+        ),
     ] {
+        if end && end_range(app).is_none() {
+            continue;
+        }
         out.push(Command::plain(Screen::Song, id, name, &[], move |a, _| {
             let Some(l) = &a.loaded else { return };
             let Ok(tick) =
@@ -162,17 +174,8 @@ pub(super) fn collect(out: &mut Vec<Command>) {
                 return;
             };
             if end {
-                let start = a
-                    .patterns
-                    .workspace
-                    .timeline
-                    .anchor
-                    .or(a.playback.repeat.map(|r| r.0));
-                if let Some(start) = start.filter(|&start| start != tick) {
-                    crate::play::transport::repeat::start_song(
-                        a,
-                        (start.min(tick), start.max(tick)),
-                    );
+                if let Some(range) = end_range(a) {
+                    crate::play::transport::repeat::start_song(a, range);
                 }
             } else {
                 a.patterns.workspace.timeline.anchor = Some(tick);
@@ -182,11 +185,61 @@ pub(super) fn collect(out: &mut Vec<Command>) {
     out.push(Command::plain(
         Screen::Song,
         "song-repeat-clear",
-        "Song repeat解除",
+        "Song A-B Repeat 解除",
         &[],
         |a, _| {
             a.patterns.workspace.timeline.anchor = None;
             crate::play::transport::repeat::clear(a);
         },
     ));
+}
+
+fn end_range(a: &App) -> Option<(u64, u64)> {
+    let music = &a.loaded.as_ref()?.music;
+    let next = a.patterns.workspace.song_cell.measure.checked_add(1)?;
+    let tick = model::measure_tick(music, None, next).ok()?;
+    let start = a
+        .patterns
+        .workspace
+        .timeline
+        .anchor
+        .or(a.playback.repeat.map(|r| r.0))?;
+    (start < tick).then_some((start, tick))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeat_end_includes_the_selected_measure_with_changing_meters() {
+        let (mut a, _, _, _, _) = crate::view::patterns::workspace_tests::verification_song();
+        let music = &mut a.loaded.as_mut().unwrap().music;
+        let events = &mut music.tracks[0].events;
+        events.retain(|event| !(event.status == 0xff && event.meta_type == 0x58));
+        events.extend([(0, 4, 2), (1920, 3, 2), (3360, 5, 3)].map(
+            |(tick, numerator, exponent)| cat_smf_editor::model::Event {
+                tick,
+                delta: 0,
+                status: 0xff,
+                meta_type: 0x58,
+                data: vec![numerator, exponent, 24, 8],
+            },
+        ));
+        events.sort_by_key(|event| event.tick);
+        a.patterns.workspace.timeline.anchor = Some(0);
+        for (measure, end) in [(1, 1920), (2, 3360), (3, 4560)] {
+            a.patterns.workspace.song_cell.measure = measure;
+            assert_eq!(end_range(&a), Some((0, end)));
+        }
+        a.patterns.workspace.timeline.anchor = Some(3360);
+        for measure in [1, 2] {
+            a.patterns.workspace.song_cell.measure = measure;
+            assert_eq!(end_range(&a), None, "B must follow A");
+        }
+        a.patterns.workspace.song_cell.measure = 3;
+        assert_eq!(end_range(&a), Some((3360, 4560)));
+        a.patterns.workspace.song_cell.measure = u64::MAX;
+        assert_eq!(end_range(&a), None);
+    }
 }

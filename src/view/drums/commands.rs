@@ -5,6 +5,10 @@ use egui::Modifiers;
 #[derive(Clone, Copy)]
 pub(super) enum Op {
     Move(i32, i32),
+    Value(usize, values::Field, u8),
+    Level(usize, f32),
+    Swing(usize),
+    Mute(usize),
     Page(bool),
     Activate,
     Confirm,
@@ -84,36 +88,42 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             );
             add(
                 "drum-activate",
-                "音色 / ノート番号 / Step",
+                "音色 / Note / Velocity / Level / Swing / Step",
                 &[Key::Enter],
                 Op::Activate,
             );
             add("drum-toggle", "Step", &[Key::F, Key::Space], Op::Toggle);
+            add(
+                "drum-mute",
+                "Mute",
+                &[Key::M],
+                Op::Mute(app.drum_editor.row),
+            );
             add("drum-scope", "Loop Solo", &[Key::S], Op::Scope);
             add("drum-loop", "Loop", &[Key::R], Op::Loop);
             add(
                 "drum-a-prev",
-                "A −",
+                "A-B Repeat A −",
                 &[Key::OpenBracket],
                 Op::Boundary(false, -1),
             );
             add(
                 "drum-a-next",
-                "A +",
+                "A-B Repeat A +",
                 &[Key::CloseBracket],
                 Op::Boundary(false, 1),
             );
         }
     }
     if screen == Screen::Drums {
-        for (id, key, delta) in [
-            ("drum-b-prev", Key::OpenBracket, -1),
-            ("drum-b-next", Key::CloseBracket, 1),
+        for (id, name, key, delta) in [
+            ("drum-b-prev", "A-B Repeat B −", Key::OpenBracket, -1),
+            ("drum-b-next", "A-B Repeat B +", Key::CloseBracket, 1),
         ] {
             out.push(Command::new(
                 screen,
                 id,
-                "B",
+                name,
                 &[(key, Modifiers::SHIFT)],
                 move |a, _| apply(a, Op::Boundary(true, delta)),
             ));
@@ -160,19 +170,39 @@ pub(super) fn apply(app: &mut App, op: Op) {
         }
         Op::Move(y, x) => {
             s.row = s.row.saturating_add_signed(-(y as isize)).min(3);
-            let last = playback::measure(app).map_or(17, |m| m.steps.len() + 1);
-            app.drum_editor.field = app
-                .drum_editor
-                .field
-                .saturating_add_signed(x as isize)
-                .min(last);
+            let swing_enabled = app
+                .loaded
+                .as_ref()
+                .and_then(|l| l.patches[app.track].drums.as_ref())
+                .is_some_and(|d| d.rows[app.drum_editor.row].swing_enabled);
+            let first = playback::measure(app).map_or(16, |m| m.steps.len()) + 2;
+            let mut order = vec![0];
+            order.extend(2..first);
+            order.extend([first + 1, first + 2]);
+            if swing_enabled {
+                order.push(first + 3);
+            }
+            order.extend([1, first]);
+            let index = order
+                .iter()
+                .position(|&field| field == app.drum_editor.field)
+                .unwrap_or(order.len() - 3);
+            app.drum_editor.field =
+                order[index.saturating_add_signed(x as isize).min(order.len() - 1)];
             Ok(())
         }
+        Op::Value(row, field, value) => values::set(app, row, field, value),
+        Op::Level(row, db) => values::set_level(app, row, db),
+        Op::Swing(row) => values::toggle_swing(app, row),
+        Op::Mute(row) => values::toggle_mute(app, row),
         Op::Page(next) => playback::page(app, next),
         Op::Activate => activate(app),
         Op::Confirm => confirm(app),
         Op::Toggle => {
-            app.drum_editor.field = app.drum_editor.field.max(2);
+            let steps = playback::measure(app).map_or(16, |m| m.steps.len());
+            if !(2..steps + 2).contains(&app.drum_editor.field) {
+                app.drum_editor.field = 2;
+            }
             activate(app)
         }
         Op::Scope if !playback::soloable(app) => Ok(()),

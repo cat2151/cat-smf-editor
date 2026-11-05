@@ -213,12 +213,55 @@ fn song_timeline_keyboard_zoom_and_repeat_commands_preserve_cell_navigation() {
     key(&mut a, &c, id, Key::PageDown, Modifiers::NONE);
     assert!((rect(&c, "minimap").width() - width).abs() < 1.0);
     a.patterns.workspace.song_cell.measure = 1;
-    command(&mut a, &c, id, "Song repeat A");
-    a.patterns.workspace.song_cell.measure = 3;
-    command(&mut a, &c, id, "Song repeat B");
-    assert_eq!(a.playback.repeat, Some((0, 3840)));
-    command(&mut a, &c, id, "Song repeat解除");
+    let has_b = |a: &App| {
+        crate::view::commands::definitions(a, Screen::Song)
+            .iter()
+            .any(|command| command.id == "song-repeat-b")
+    };
+    assert!(!has_b(&a), "B needs a start point");
+    command(&mut a, &c, id, "Song A-B Repeat A");
+    assert!(has_b(&a), "A and B can select the same measure");
     assert!(a.playback.repeat.is_none());
+    frame(&mut a, &c, id, vec![]);
+    let row = rect(&c, "repeat");
+    let shapes = c
+        .data(|d| {
+            d.get_temp::<Vec<egui::epaint::ClippedShape>>(egui::Id::new(("workspace-shapes", id)))
+        })
+        .unwrap();
+    assert!(
+        shapes.iter().any(|shape| matches!(
+            &shape.shape,
+            egui::epaint::Shape::LineSegment { points, stroke }
+                if stroke.color == crate::view::timeline_repeat::RANGE
+                    && (points[0].x - row.left()).abs() < 0.5
+                    && points[0].y == row.top() && points[1].y == row.bottom()
+        )),
+        "A is marked on the repeat row"
+    );
+    command(
+        &mut a,
+        &c,
+        id,
+        "Song A-B Repeat B：選択小節の末尾を終了点に設定して再生",
+    );
+    assert_eq!(a.playback.repeat, Some((0, 1920)));
+    a.patterns.workspace.song_cell.placing = true;
+    for _ in 0..2 {
+        key(&mut a, &c, id, Key::L, Modifiers::NONE);
+    }
+    assert_eq!(a.patterns.workspace.song_cell.measure, 3);
+    assert!(has_b(&a));
+    command(
+        &mut a,
+        &c,
+        id,
+        "Song A-B Repeat B：選択小節の末尾を終了点に設定して再生",
+    );
+    assert_eq!(a.playback.repeat, Some((0, 5760)));
+    command(&mut a, &c, id, "Song A-B Repeat 解除");
+    assert!(a.playback.repeat.is_none());
+    assert!(!has_b(&a), "clear also discards the remembered A");
 }
 
 #[test]

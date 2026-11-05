@@ -23,6 +23,44 @@ pub(crate) use patterns::{pattern_body, rebuild as rebuild_patterns};
 pub struct Row {
     pub layer: u64,
     pub output: u8,
+    #[serde(default = "default_velocity")]
+    pub velocity: u8,
+    #[serde(default)]
+    pub swing_enabled: bool,
+    #[serde(default = "default_swing")]
+    pub swing: u8,
+}
+
+const fn default_velocity() -> u8 {
+    100
+}
+const fn default_swing() -> u8 {
+    50
+}
+
+impl Row {
+    /// Warp pairs of sixteenth notes, keeping pair boundaries fixed.
+    pub fn swung_tick(&self, tick: f64, division: u16) -> f64 {
+        if !self.swing_enabled || self.swing == 50 || division < 4 || division & 0x8000 != 0 {
+            return tick;
+        }
+        let pair = f64::from(division) / 2.0;
+        let start = (tick / pair).floor() * pair;
+        let position = (tick - start) / pair;
+        // The displayed shuffle preset is the exact triplet ratio.
+        let ratio = if self.swing == 66 {
+            2.0 / 3.0
+        } else {
+            f64::from(self.swing) / 100.0
+        };
+        start
+            + pair
+                * if position <= 0.5 {
+                    position * 2.0 * ratio
+                } else {
+                    ratio + (position - 0.5) * 2.0 * (1.0 - ratio)
+                }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,6 +76,9 @@ impl Default for Settings {
             rows: std::array::from_fn(|i| Row {
                 layer: i as u64 + 1,
                 output: 60,
+                velocity: default_velocity(),
+                swing_enabled: false,
+                swing: default_swing(),
             }),
         }
     }
@@ -45,7 +86,12 @@ impl Default for Settings {
 impl Settings {
     pub fn validate(&self) -> Result<(), String> {
         if self.version != 1
-            || self.rows.iter().any(|r| r.layer == 0 || r.output > 127)
+            || self.rows.iter().any(|r| {
+                r.layer == 0
+                    || r.output > 127
+                    || !(1..=127).contains(&r.velocity)
+                    || !(1..=99).contains(&r.swing)
+            })
             || self
                 .rows
                 .iter()
@@ -165,7 +211,7 @@ pub fn toggle(track: &mut Track, division: u16, row: usize, step: u64) -> Result
                 delta: 0,
                 status: 0x99,
                 meta_type: 0,
-                data: vec![pitch, 100],
+                data: vec![pitch, read(track)?.map_or(100, |s| s.rows[row].velocity)],
             },
         );
         let eot = track

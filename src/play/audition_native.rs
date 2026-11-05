@@ -16,6 +16,20 @@ pub struct Native {
 }
 
 impl Native {
+    pub fn set_drum_controls(&mut self, patch: &Patch) {
+        self.settings.drums = patch.drums.clone();
+        for layer in &mut self.settings.layers {
+            if let Some(new) = patch
+                .layers
+                .iter()
+                .find(|l| l.settings.id == layer.settings.id)
+            {
+                layer.settings.volume_db = new.settings.volume_db;
+                layer.settings.mute = new.settings.mute;
+            }
+        }
+    }
+
     #[cfg(test)]
     pub fn patch(&self) -> &Patch {
         &self.settings

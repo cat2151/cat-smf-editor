@@ -321,6 +321,9 @@ impl Voice {
 #[path = "audition_refresh.rs"]
 mod refresh;
 
+#[path = "audition_drums.rs"]
+mod drums;
+
 #[cfg(test)]
 #[path = "automation/refresh_tests.rs"]
 mod refresh_tests;
@@ -367,9 +370,6 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
         .build_output_stream(
             config,
             move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                if let Ok(latest) = mailbox.try_lock() {
-                    command = latest.clone();
-                }
                 // The UI also excludes rendering while delivering native metadata
                 // notifications and refreshing their instance-local bindings.
                 let Some(mut pointers) =
@@ -379,6 +379,9 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     data.fill(T::EQUILIBRIUM);
                     return;
                 };
+                if let Ok(latest) = mailbox.try_lock() {
+                    command = latest.clone();
+                }
                 let mut offset = 0;
                 while offset < data.len() {
                     let max = (data.len() - offset) / channels;

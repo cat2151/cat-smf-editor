@@ -209,6 +209,21 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
             .patch_roots
             .lookup(app.player_selection.executable.clone()),
     )?;
+    if let (Some(old), Some(new)) = (&old.drums, &settings.drums) {
+        for (row, (&pitch, new)) in cat_smf_editor::score::drums::NOTES
+            .iter()
+            .zip(&new.rows)
+            .enumerate()
+        {
+            if old.rows[row].velocity != new.velocity {
+                for event in &mut music.tracks[track].events {
+                    if cat_smf_editor::score::note_view::note_on(event) && event.data[0] == pitch {
+                        event.data[1] = new.velocity;
+                    }
+                }
+            }
+        }
+    }
     cat_smf_editor::score::macro_values::retain_unchanged_layers(
         &mut music.tracks[track],
         &old,
@@ -218,8 +233,24 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
     cat_smf_editor::score::same_measure::validate(&music)?;
     crate::view::parameter_editor::pattern_targets::sound(app, &music, track, settings)?;
     app.saved.remember(&original, &music)?;
+    let drums_live = old.drums.is_some()
+        && settings.drums.is_some()
+        && old.layers.len() == settings.layers.len()
+        && old
+            .layers
+            .iter()
+            .zip(&settings.layers)
+            .all(|(before, after)| {
+                let mut previous = before.settings.clone();
+                previous.volume_db = after.settings.volume_db;
+                previous.mute = after.settings.mute;
+                previous == after.settings && before.instrument == after.instrument
+            })
+        && old.effects == settings.effects;
     let live = old.same_except_bypass(settings);
-    let resume = if live {
+    let resume = if drums_live {
+        None
+    } else if live {
         app.audition.set_effect_bypass(track, settings);
         None
     } else {
@@ -236,6 +267,9 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
     crate::view::patterns::refresh(app);
     if let Some(session) = session {
         app.restore_cursor(&session);
+    }
+    if drums_live {
+        crate::play::transport::timeline::reload_drums(app, track);
     }
     if let Some(resume) = resume {
         crate::play::selection_playback::restore(app, resume);

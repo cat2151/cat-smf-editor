@@ -36,6 +36,76 @@ impl Effect for NoEffect {
 }
 
 #[test]
+fn live_mute_silences_only_the_target_layer_and_unmute_restores_gain() {
+    let record = Rc::new(RefCell::new(Vec::new()));
+    let mut render = Render::<_, NoEffect>::new(
+        (1..=2)
+            .map(|id| {
+                (
+                    Recorder(record.clone()),
+                    Layer {
+                        id,
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect(),
+        None,
+    );
+    let mut out = [0.0; 2];
+    render.set_layer_level(1, -6.0206);
+    render.set_layer_mute(1, true);
+    assert!(render.process_live(&[0x2090_3c64], &mut out, 2));
+    assert_eq!(out, [1.0; 2]);
+    render.set_layer_mute(2, true);
+    assert!(render.process_live(&[0x2080_3c00], &mut out, 2));
+    assert_eq!(out, [0.0; 2]);
+    render.set_layer_mute(1, false);
+    assert!(render.process_live(&[], &mut out, 2));
+    assert!((out[0] - 0.5).abs() < 0.00001);
+}
+
+#[test]
+fn level_changes_only_audio_gain_while_held_notes_keep_their_velocity_and_release() {
+    let record = Rc::new(RefCell::new(Vec::new()));
+    let mut render =
+        Render::<_, NoEffect>::new(vec![(Recorder(record.clone()), Layer::default())], None);
+    render.set_drums(Some(Default::default()));
+    let mut out = [0.0; 2];
+    assert!(render.process_live(&[0x2099_2464], &mut out, 2));
+    assert_eq!(out, [1.0; 2]);
+    render.set_layer_level(1, -6.0206);
+    assert!(render.process_live(&[], &mut out, 2));
+    assert!((out[0] - 0.5).abs() < 0.00001);
+    assert!(render.process_live(&[0x2089_2400, 0x2099_2464], &mut out, 2));
+    assert!((out[0] - 0.5).abs() < 0.00001);
+    assert_eq!(
+        *record.borrow(),
+        vec![vec![0x2099_3c64], vec![], vec![0x2089_3c00, 0x2099_3c64]]
+    );
+}
+
+#[test]
+fn changing_drum_output_releases_held_pitch_and_uses_new_pitch_for_next_hit() {
+    let record = Rc::new(RefCell::new(Vec::new()));
+    let mut render =
+        Render::<_, NoEffect>::new(vec![(Recorder(record.clone()), Layer::default())], None);
+    let mut drums = cat_smf_editor::score::drums::Settings::default();
+    render.set_drums(Some(drums.clone()));
+    assert!(render.process_live(&[0x2090_2450], &mut [0.; 2], 2));
+    drums.rows[0].output = 73;
+    render.set_drums(Some(drums));
+    assert!(render.process_live(&[0x2080_2400, 0x2090_2451, 0x2080_2400], &mut [0.; 2], 2));
+    assert_eq!(
+        *record.borrow(),
+        vec![
+            vec![0x2090_3c50],
+            vec![0x2080_3c00, 0x2090_4951, 0x2080_4900]
+        ]
+    );
+}
+
+#[test]
 fn live_chords_release_and_fast_retrigger_preserve_order_without_restarting_held_notes() {
     let record = Rc::new(RefCell::new(Vec::new()));
     let mut render =

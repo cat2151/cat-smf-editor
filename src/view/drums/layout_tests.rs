@@ -66,10 +66,71 @@ fn cursor_changes_color_only_while_drums_own_focus() {
 }
 
 #[test]
+fn parameter_columns_stay_aligned_across_rows_and_value_changes() {
+    let mut app = super::tests::fixture();
+    let ctx = egui::Context::default();
+    for width in [480.0, 800.0] {
+        let mut baseline = None;
+        for phase in 0..4 {
+            for row in 0..4 {
+                let variant = (row + phase) % 4;
+                values::set_level(&mut app, row, [-99.0, -3.0, 0.0, 12.0][variant]).unwrap();
+                values::set(&mut app, row, values::Field::Note, [0, 9, 60, 127][variant]).unwrap();
+                values::set(
+                    &mut app,
+                    row,
+                    values::Field::Velocity,
+                    [1, 9, 80, 127][variant],
+                )
+                .unwrap();
+                values::set(&mut app, row, values::Field::Swing, [1, 9, 50, 99][variant]).unwrap();
+                if (row + phase) % 2 == 0 {
+                    values::toggle_swing(&mut app, row).unwrap();
+                }
+            }
+            for _ in 0..3 {
+                let _ = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 600.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| show(&mut app, ctx),
+                );
+            }
+            for row in 0..4 {
+                let columns = [
+                    "drum-level",
+                    "drum-swing-toggle",
+                    "drum-note",
+                    "drum-velocity",
+                ]
+                .map(|id| {
+                    let rect = ctx
+                        .data(|d| d.get_temp::<egui::Rect>(egui::Id::new((id, row))))
+                        .unwrap();
+                    (rect.left(), rect.right())
+                });
+                assert_eq!(
+                    *baseline.get_or_insert(columns),
+                    columns,
+                    "Columns moved at width {width}, row {row}, phase {phase}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn all_cells_fit_after_viewport_resize_without_scrolling() {
     let mut app = super::tests::fixture();
     let ctx = egui::Context::default();
-    for width in [1280.0, 800.0, 640.0, 1100.0] {
+    for row in 0..4 {
+        values::toggle_swing(&mut app, row).unwrap();
+    }
+    for width in [1280.0, 800.0, 640.0, 480.0, 1100.0] {
         for _ in 0..3 {
             let _ = ctx.run(
                 egui::RawInput {
@@ -102,7 +163,41 @@ fn all_cells_fit_after_viewport_resize_without_scrolling() {
         );
         assert!(cells
             .iter()
-            .all(|cell| cell.width() >= 10.0 && cell.height() >= 30.0));
+            .enumerate()
+            .all(|(index, cell)| cell.width() >= 10.0
+                && cell.height() >= if index % 18 == 1 { 24.0 } else { 30.0 }));
+        for row in 0..4 {
+            let level = ctx
+                .data(|d| d.get_temp::<egui::Rect>(egui::Id::new(("drum-level", row))))
+                .unwrap();
+            assert!(area.contains_rect(level) && clip.contains_rect(level));
+            let swing = ctx
+                .data(|d| d.get_temp::<egui::Rect>(egui::Id::new(("drum-swing", row))))
+                .unwrap();
+            let note = cells[(3 - row) * 18 + 1];
+            let velocity = ctx
+                .data(|d| d.get_temp::<egui::Rect>(egui::Id::new(("drum-velocity", row))))
+                .unwrap();
+            assert!(
+                level.right() < swing.left()
+                    && swing.right() < note.left()
+                    && note.right() < velocity.left()
+            );
+            let instrument = cells[(3 - row) * 18];
+            if width >= 640.0 {
+                assert!((level.left() - instrument.left()).abs() < 1.0);
+            }
+            for id in ["drum-note", "drum-velocity"] {
+                let control = ctx
+                    .data(|d| d.get_temp::<egui::Rect>(egui::Id::new((id, row))))
+                    .unwrap();
+                assert!(
+                    area.contains_rect(control) && clip.contains_rect(control),
+                    "Clipped {id} at {width}"
+                );
+                assert!(level.right() < control.left());
+            }
+        }
         app.drum_editor.field = 17;
         super::commands::apply(&mut app, super::commands::Op::Toggle);
         assert!(playback::measure(&app).unwrap().active(

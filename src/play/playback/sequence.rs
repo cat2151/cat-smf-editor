@@ -137,9 +137,13 @@ pub(super) fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequ
     } else {
         tempo.duration(start, end.saturating_sub(start))
     };
-    Some(Sequence::from_source(
-        notes, end, events, &selected, &tempo, start,
-    ))
+    Some(
+        Sequence::from_source(notes, end, events, &selected, &tempo, start).drums(
+            loaded.patches[track].drums.as_ref(),
+            loaded.music.division,
+            &tempo,
+        ),
+    )
 }
 
 #[cfg(test)]

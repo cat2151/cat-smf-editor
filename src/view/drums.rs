@@ -17,6 +17,8 @@ mod grid;
 #[cfg(test)]
 mod layout_tests;
 #[cfg(test)]
+mod mute_tests;
+#[cfg(test)]
 mod native_tests;
 mod pattern;
 mod presentation;
@@ -25,6 +27,9 @@ pub(crate) mod playback;
 #[cfg(test)]
 pub(crate) mod tests;
 mod title;
+#[cfg(test)]
+mod value_tests;
+mod values;
 mod widgets;
 
 #[derive(Default)]
@@ -98,6 +103,9 @@ fn create_track_with(
 }
 pub(super) enum Input {
     Note { text: String, focus: bool },
+    Velocity { text: String, focus: bool },
+    Level { text: String, focus: bool },
+    Swing { text: String, focus: bool },
 }
 
 fn needs_track(app: &App) -> bool {
@@ -183,6 +191,31 @@ fn activate(app: &mut App) -> Result<(), String> {
                 focus: true,
             })
         }
+        field if field >= playback::measure(app)?.steps.len() + 2 => {
+            let extra = field - playback::measure(app)?.steps.len() - 2;
+            match extra {
+                0 => {
+                    app.drum_editor.input = Some(Input::Velocity {
+                        text: settings.rows[row].velocity.to_string(),
+                        focus: true,
+                    })
+                }
+                1 => {
+                    app.drum_editor.input = Some(Input::Level {
+                        text: values::level(patch, row)?.to_string(),
+                        focus: true,
+                    })
+                }
+                2 => return values::toggle_swing(app, row),
+                3 if settings.rows[row].swing_enabled => {
+                    app.drum_editor.input = Some(Input::Swing {
+                        text: settings.rows[row].swing.to_string(),
+                        focus: true,
+                    })
+                }
+                _ => {}
+            }
+        }
         field => {
             let number = state.page + 1;
             app.edit_music(|m| drums::toggle_measure(m, track, row, number, field - 2))?;
@@ -192,18 +225,21 @@ fn activate(app: &mut App) -> Result<(), String> {
 }
 
 fn confirm(app: &mut App) -> Result<(), String> {
-    let row = app.drum_editor.row;
-    let mut patch = app.loaded.as_ref().ok_or(message::NO_SONG)?.patches[app.track].clone();
-    match app.drum_editor.input.as_ref().ok_or("入力がありません")? {
-        Input::Note { text, .. } => {
-            let note: u8 = text.parse().map_err(|_| message::MIDI_NOTE_MUST_BE_0_127)?;
-            if note > 127 {
-                return Err(message::MIDI_NOTE_MUST_BE_0_127.into());
-            }
-            patch.drums.as_mut().ok_or(message::NO_DRUM_SETTINGS)?.rows[row].output = note;
-        }
+    let input = app.drum_editor.input.as_ref().ok_or("入力がありません")?;
+    if let Input::Level { text, .. } = input {
+        let db = text.parse::<f32>().map_err(|_| "dBが不正です")?;
+        values::set_level(app, app.drum_editor.row, db)?;
+        app.drum_editor.input = None;
+        return Ok(());
     }
-    crate::player::selection::store_track(app, app.track, &patch)?;
+    let (field, text) = match input {
+        Input::Note { text, .. } => (values::Field::Note, text),
+        Input::Velocity { text, .. } => (values::Field::Velocity, text),
+        Input::Swing { text, .. } => (values::Field::Swing, text),
+        Input::Level { .. } => unreachable!(),
+    };
+    let value = text.parse::<u8>().map_err(|_| field.error())?;
+    values::set(app, app.drum_editor.row, field, value)?;
     app.drum_editor.input = None;
     Ok(())
 }

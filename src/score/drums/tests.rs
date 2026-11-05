@@ -105,3 +105,15 @@ fn fractional_grid_and_corrupt_metadata_are_checked() {
     settings.rows[1].layer = 1;
     assert!(settings.validate().is_err());
 }
+
+#[test]
+fn omitted_row_controls_have_neutral_defaults() {
+    let settings: Settings = serde_json::from_str(r#"{"version":1,"rows":[{"layer":1,"output":60},{"layer":2,"output":60},{"layer":3,"output":60},{"layer":4,"output":60}]}"#).unwrap();
+    assert_eq!(settings, Settings::default());
+    for (swing, velocity) in [(0, 100), (100, 100), (50, 0), (50, 128)] {
+        let mut invalid = settings.clone();
+        invalid.rows[0].swing = swing;
+        invalid.rows[0].velocity = velocity;
+        assert!(invalid.validate().is_err());
+    }
+}

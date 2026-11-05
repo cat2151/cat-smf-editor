@@ -110,7 +110,7 @@ pub fn toggle_measure(
                 delta: 0,
                 status: 0x99,
                 meta_type: 0,
-                data: vec![pitch, 100],
+                data: vec![pitch, read(source)?.map_or(100, |s| s.rows[row].velocity)],
             },
         );
         edit::insert(

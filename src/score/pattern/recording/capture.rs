@@ -3,10 +3,10 @@
 use super::{control, fill, note, operations};
 use crate::edit;
 use crate::message;
-use crate::model::{Event, Music, Track};
+use crate::model::{Event, Music};
 use crate::score::{
     note_view::{note_off, note_on},
-    pattern::{body, event, Catalog, Kind, Meter, PatternRecord, Record, VERSION},
+    pattern::{body, Catalog, Kind, Meter},
 };
 
 /// Milliseconds from the phrase start.
@@ -32,7 +32,7 @@ impl Phrase {
 /// Keys played on one container without a silence of the gap between them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Phrase {
-    /// Wall-clock milliseconds.
+    /// Milliseconds from the keyboard session start.
     pub start: u64,
     /// `None` for the fallback sound of a song without a container.
     pub container: Option<u64>,
@@ -81,7 +81,7 @@ pub struct Keys {
 }
 
 impl Keys {
-    /// `at` is wall-clock milliseconds, never earlier than the previous key; a `velocity` of 0
+    /// `at` is session-relative milliseconds, never earlier than the previous key; a `velocity` of 0
     /// releases the key.
     pub fn key(&mut self, at: u64, pitch: u8, velocity: u8, container: Option<u64>, gap: u64) {
         let on = velocity > 0;
@@ -196,15 +196,21 @@ fn source(music: &mut Music, source: Option<usize>) -> Result<usize, String> {
 /// Appends `phrase` and its CC1 `controls` (milliseconds from the phrase start) to the Capture
 /// pattern of the container on `source`, creating the pattern (and, for a `None` source, the
 /// container). The phrase starts at a bar, one empty bar after the previous one, behind a
-/// marker of `stamp`. Returns the Capture pattern.
+/// marker with a song-wide sequence number. Returns the Capture pattern.
 pub fn append(
     music: &mut Music,
     source: Option<usize>,
     tempo: u32,
     phrase: &Phrase,
     controls: &[(u64, u8)],
-    stamp: &str,
 ) -> Result<u64, String> {
+    let sequence = captured(music)?
+        .iter()
+        .map(|p| p.sequence)
+        .max()
+        .unwrap_or(0)
+        .checked_add(1)
+        .ok_or(message::STORAGE_OVERFLOW)?;
     let (notes, end) = events(music.division, tempo, phrase, controls)?;
     let source = self::source(music, source)?;
     if notes.iter().any(|e| e.status == 0xb0) {
@@ -243,7 +249,7 @@ pub fn append(
         delta: 0,
         status: 0xff,
         meta_type: MARKER,
-        data: stamp.as_bytes().to_vec(),
+        data: format!("Capture {sequence}").into_bytes(),
     }];
     events.extend(notes);
     fill(music, id, meters, offset, events)?;
@@ -269,8 +275,8 @@ pub struct TickNote {
 pub struct Captured {
     pub pattern: u64,
     pub container: u64,
-    /// The marker's text, when the phrase was played.
-    pub stamp: String,
+    /// Song-wide capture order, independent of wall-clock time.
+    pub sequence: u64,
     /// Ticks from the pattern start: the phrase's first bar and the bar after its last note.
     pub range: (u64, u64),
     /// The meters of those bars.
@@ -338,14 +344,19 @@ pub fn captured(music: &Music) -> Result<Vec<Captured>, String> {
             out.push(Captured {
                 pattern: p.id,
                 container: p.container,
-                stamp: String::from_utf8_lossy(&m.data).into_owned(),
+                sequence: std::str::from_utf8(&m.data)
+                    .ok()
+                    .and_then(|s| s.strip_prefix("Capture "))
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .filter(|&n| n > 0)
+                    .ok_or("Invalid Capture sequence marker")?,
                 range: (bars[first] - start, bars[after] - start),
                 meters: p.meters[first..after].to_vec(),
                 notes,
             });
         }
     }
-    out.sort_by(|a, b| (&b.stamp, b.range.0).cmp(&(&a.stamp, a.range.0)));
+    out.sort_by_key(|p| std::cmp::Reverse((p.sequence, p.pattern, p.range.0)));
     Ok(out)
 }
 
@@ -371,70 +382,12 @@ pub fn take(music: &mut Music, phrase: &Captured) -> Result<u64, String> {
     Ok(id)
 }
 
-/// Copies every Capture pattern of `from` into `into`, replacing the pattern of the same id.
-/// A container `into` lacks comes along with its track events outside patterns.
-pub fn carry(from: &Music, into: &mut Music) -> Result<(), String> {
-    let source = Catalog::read(from)?;
-    let captures: Vec<_> = source
-        .patterns
-        .values()
-        .filter(|p| p.kind == Kind::Capture)
-        .collect();
-    if captures.is_empty() {
-        return Ok(());
-    }
-    let mut next = into.clone();
-    for p in captures {
-        let c = Catalog::read(&next)?;
-        if let Some(old) = c.patterns.get(&p.id) {
-            operations::remove(&mut next.tracks[old.track], old)?;
-        }
-        let track = match c.tracks.get(&p.container) {
-            Some(&track) => track,
-            None => {
-                next.tracks.push(container(from, &source, p.track)?);
-                if next.format == 0 {
-                    next.format = 1;
-                }
-                next.tracks.len() - 1
-            }
-        };
-        let tick = operations::free_tick(&Catalog::read(&next)?, track)?;
-        let mut events = body::extract(&from.tracks[p.track].events, p.range()?)?;
-        for e in &mut events {
-            e.tick = tick
-                .checked_add(e.tick - p.tick)
-                .ok_or(message::STORAGE_OVERFLOW)?;
-        }
-        events.push(event(
-            tick,
-            &Record::Pattern(PatternRecord {
-                version: VERSION,
-                id: p.id,
-                kind: p.kind,
-                name: p.name.clone(),
-                meters: p.meters.clone(),
-            }),
-        ));
-        for e in events {
-            edit::insert(&mut next.tracks[track], e);
-        }
-        edit::refresh_deltas(&mut next.tracks[track])?;
-    }
-    Catalog::read(&next)?;
-    *into = next;
-    Ok(())
-}
+mod carry;
+pub use carry::carry;
 
-/// The events of container `track` outside its patterns.
-fn container(from: &Music, c: &Catalog, track: usize) -> Result<Track, String> {
-    let mut t = from.tracks[track].clone();
-    for p in c.patterns.values().filter(|p| p.track == track) {
-        operations::remove(&mut t, p)?;
-    }
-    Ok(t)
-}
-
+#[cfg(test)]
+#[path = "capture_sequence_tests.rs"]
+mod sequence_tests;
 #[cfg(test)]
 #[path = "capture_tests.rs"]
 mod tests;

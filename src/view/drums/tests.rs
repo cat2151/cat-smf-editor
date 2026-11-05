@@ -26,7 +26,7 @@ pub(crate) fn fixture() -> App {
     open(&mut app);
     app
 }
-fn press(app: &mut App, ctx: &egui::Context, key: Key) {
+pub(super) fn press(app: &mut App, ctx: &egui::Context, key: Key) {
     let _ = ctx.run(
         egui::RawInput {
             events: [true, false]
@@ -65,7 +65,9 @@ fn keyboard_grid_page_numeric_cancel_confirm_undo_and_close() {
         1,
         16
     ));
-    press(&mut app, &ctx, Key::ArrowLeft);
+    for _ in 0..18 {
+        press(&mut app, &ctx, Key::ArrowRight);
+    }
     press(&mut app, &ctx, Key::Enter);
     assert_eq!(commands::owner(&app, &ctx), Screen::DrumInput);
     app.drum_editor.input = Some(Input::Note {
@@ -321,7 +323,8 @@ fn twelve_step_measures_bound_keyboard_and_wheel_changes_repeat_end() {
     for _ in 0..20 {
         press(&mut app, &ctx, Key::L);
     }
-    assert_eq!(app.drum_editor.field, 13);
+    assert_eq!(app.drum_editor.field, 14);
+    app.drum_editor.field = 13;
     press(&mut app, &ctx, Key::Space);
     assert!(playback::measure(&app).unwrap().active(
         &app.loaded.as_ref().unwrap().music.tracks[1],

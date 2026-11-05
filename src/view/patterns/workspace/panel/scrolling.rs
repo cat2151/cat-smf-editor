@@ -119,13 +119,21 @@ impl Matrix {
             egui::Sense::hover(),
         );
         let rect = whole.with_min_x(whole.left() + self.label);
+        let action = state
+            .viewport
+            .binding(&axis, 0)
+            .repeat(ui, rect, range, &mut state.repeat);
+        if let Some(tick) = state.anchor {
+            let x = rect.left() + crate::view::timeline_repeat::TickAxis::x(&axis, tick);
+            ui.painter().line_segment(
+                [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
+                egui::Stroke::new(2.0_f32, crate::view::timeline_repeat::RANGE),
+            );
+        }
         #[cfg(test)]
         ui.ctx()
             .data_mut(|d| d.insert_temp(egui::Id::new((Pane::Song.title(), "repeat")), rect));
-        state
-            .viewport
-            .binding(&axis, 0)
-            .repeat(ui, rect, range, &mut state.repeat)
+        action
     }
     pub fn finish_timeline<R>(
         &self,

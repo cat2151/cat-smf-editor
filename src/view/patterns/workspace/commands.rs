@@ -12,7 +12,7 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if let Some(p) = p {
         let cells = a.patterns.workspace.selection(p).cells(p);
         if p == Pane::Song {
-            super::timeline::collect(out);
+            super::timeline::collect(a, out);
             if !cells {
                 out.push(Command::new(
                     s,

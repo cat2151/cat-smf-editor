@@ -78,6 +78,7 @@ pub struct Render<R = note_render::Render, E = ProcessorRef> {
     automation: Vec<super::automation::LayerBindings>,
     pub parameter_error: Option<i32>,
     layers: Vec<(R, Layer)>,
+    routed_notes: Vec<[[u8; 128]; 16]>,
     effects: Option<E>,
     scratch: Vec<f32>,
     /// While it has a take, it silences the instruments and sounds in the first layer's place.
@@ -88,6 +89,7 @@ pub struct Render<R = note_render::Render, E = ProcessorRef> {
 impl<R: Instrument, E: Effect> Render<R, E> {
     pub fn new(layers: Vec<(R, Layer)>, effects: Option<E>) -> Self {
         Self {
+            routed_notes: vec![[[255; 128]; 16]; layers.len()],
             drums: None,
             ordered_events: Vec::with_capacity(
                 cat_smf_editor::host::parameters::MAX_AUTOMATION_EVENTS,
@@ -116,6 +118,18 @@ impl<R: Instrument, E: Effect> Render<R, E> {
 
     pub fn set_drums(&mut self, drums: Option<cat_smf_editor::score::drums::Settings>) {
         self.drums = drums;
+    }
+
+    pub fn set_layer_level(&mut self, id: u64, db: f32) {
+        if let Some((_, layer)) = self.layers.iter_mut().find(|(_, l)| l.id == id) {
+            layer.volume_db = db;
+        }
+    }
+
+    pub fn set_layer_mute(&mut self, id: u64, mute: bool) {
+        if let Some((_, layer)) = self.layers.iter_mut().find(|(_, l)| l.id == id) {
+            layer.mute = mute;
+        }
     }
 
     pub fn automate(&mut self, plan: Option<&super::automation::RuntimePlan>, frame: u64) -> bool {
@@ -152,6 +166,7 @@ impl<R: Instrument, E: Effect> Render<R, E> {
     }
 
     pub fn reset(&mut self) {
+        self.routed_notes.fill([[255; 128]; 16]);
         for (render, _) in &mut self.layers {
             render.reset();
         }

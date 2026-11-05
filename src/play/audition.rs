@@ -18,6 +18,7 @@ pub(crate) mod opening;
 #[path = "audition_parameters.rs"]
 mod parameters;
 
+#[derive(Clone)]
 pub(super) struct Part {
     live: Option<live::Queue>,
     /// Metronome mixed after the master chain, so track gains never mute it.

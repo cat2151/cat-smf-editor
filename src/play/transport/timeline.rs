@@ -1,6 +1,9 @@
 //! Refresh edited music and seek without losing the running scope or A–B range.
 use super::{App, Mode, Prepared};
 
+mod drums;
+pub(crate) use drums::reload_drums;
+
 pub(crate) struct Resume {
     tick: u64,
     end: u64,

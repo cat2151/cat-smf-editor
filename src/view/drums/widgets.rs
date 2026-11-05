@@ -57,8 +57,14 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
         .default_width((ctx.screen_rect().width() - 32.0).clamp(1.0, 1080.0))
         .show(ctx, |ui| {
             ui.set_style(original_style.clone());
-            if let Some(Input::Note { text, focus }) = &mut state.input {
-                ui.label(format!("{} · Note", drums::NAMES[state.row]));
+            if let Some(input) = &mut state.input {
+                let (label, text, focus) = match input {
+                    Input::Note { text, focus } => ("Note", text, focus),
+                    Input::Velocity { text, focus } => ("Velocity", text, focus),
+                    Input::Level { text, focus } => ("Level · dB", text, focus),
+                    Input::Swing { text, focus } => ("Swing %", text, focus),
+                };
+                ui.label(format!("{} · {label}", drums::NAMES[state.row]));
                 let response = ui.text_edit_singleline(text);
                 if *focus {
                     response.request_focus();

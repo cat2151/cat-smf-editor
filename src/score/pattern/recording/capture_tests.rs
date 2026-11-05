@@ -99,33 +99,22 @@ fn each_marker_lists_its_bars_and_takes_them_as_a_normal_pattern() {
         container: None,
         notes: vec![n(0, 500, 60), n(500, 1, 60), n(1750, 500, 64)],
     };
-    let id = append(&mut m, None, 500_000, &first, &[], "2026-11-01 10:00:00").unwrap();
+    let id = append(&mut m, None, 500_000, &first, &[]).unwrap();
     let track = Catalog::read(&m).unwrap().patterns[&id].track;
     let second = Phrase {
         start: 9000,
         container: None,
         notes: vec![n(0, 250, 67)],
     };
-    append(
-        &mut m,
-        Some(track),
-        500_000,
-        &second,
-        &[],
-        "2026-11-01 10:00:09",
-    )
-    .unwrap();
+    append(&mut m, Some(track), 500_000, &second, &[]).unwrap();
     let listed = captured(&m).unwrap();
     // Newest first; bars 0-1, a bar of rest, then bar 3.
     assert_eq!(
         listed
             .iter()
-            .map(|c| (c.pattern, c.stamp.as_str(), c.range, c.meters.len()))
+            .map(|c| (c.pattern, c.sequence, c.range, c.meters.len()))
             .collect::<Vec<_>>(),
-        vec![
-            (id, "2026-11-01 10:00:09", (5760, 7680), 1),
-            (id, "2026-11-01 10:00:00", (0, 3840), 2),
-        ]
+        vec![(id, 2, (5760, 7680), 1), (id, 1, (0, 3840), 2),]
     );
     let tick = |start, length, pitch| TickNote {
         start,
@@ -196,7 +185,7 @@ fn phrases_append_to_one_capture_pattern_from_bar_one_with_a_bar_between() {
         // Ends inside bar 2 at 120 BPM.
         notes: vec![n(0, 2500, 60)],
     };
-    let id = append(&mut m, None, 500_000, &first, &[], "2026-11-01 10:00:00").unwrap();
+    let id = append(&mut m, None, 500_000, &first, &[]).unwrap();
     let c = Catalog::read(&m).unwrap();
     let p = &c.patterns[&id];
     assert_eq!((p.kind, p.name.as_str()), (Kind::Capture, "Capture"));
@@ -218,15 +207,7 @@ fn phrases_append_to_one_capture_pattern_from_bar_one_with_a_bar_between() {
         notes: vec![n(0, 250, 64)],
     };
     assert_eq!(
-        append(
-            &mut m,
-            Some(track),
-            500_000,
-            &second,
-            &[],
-            "2026-11-01 10:00:09"
-        )
-        .unwrap(),
+        append(&mut m, Some(track), 500_000, &second, &[]).unwrap(),
         id
     );
     let c = Catalog::read(&m).unwrap();
@@ -236,10 +217,10 @@ fn phrases_append_to_one_capture_pattern_from_bar_one_with_a_bar_between() {
     assert_eq!(
         bars(&m, id),
         vec![
-            (0, 0, 6, "2026-11-01 10:00:00".into()),
+            (0, 0, 6, "Capture 1".into()),
             (0, 0, 0x90, "60".into()),
             (1, 480, 0x80, "60".into()),
-            (3, 0, 6, "2026-11-01 10:00:09".into()),
+            (3, 0, 6, "Capture 2".into()),
             (3, 0, 0x90, "64".into()),
             (3, 240, 0x80, "64".into()),
         ]
@@ -257,10 +238,10 @@ fn a_capture_grows_past_the_patterns_after_it_and_stays_out_of_the_song_export()
         container: None,
         notes: vec![n(0, 250, pitch)],
     };
-    let capture = append(&mut m, Some(t), 500_000, &phrase(60), &[], "a").unwrap();
+    let capture = append(&mut m, Some(t), 500_000, &phrase(60), &[]).unwrap();
     let first = captured(&m).unwrap().remove(0);
     let placed = take(&mut m, &first).unwrap();
-    append(&mut m, Some(t), 500_000, &phrase(62), &[], "b").unwrap();
+    append(&mut m, Some(t), 500_000, &phrase(62), &[]).unwrap();
     let c = Catalog::read(&m).unwrap();
     assert_eq!(c.patterns[&capture].meters.len(), 3);
     assert_eq!(
@@ -303,7 +284,6 @@ fn a_phrase_keeps_each_key_velocity_and_its_cc1_before_the_notes() {
         500_000,
         &phrase,
         &[(0, 5), (500, 9), (1000, 12)],
-        "a",
     )
     .unwrap();
     let c = Catalog::read(&m).unwrap();
@@ -346,7 +326,7 @@ fn played(pitch: u8) -> Phrase {
 fn carry_copies_a_capture_past_the_normal_patterns_of_the_older_song() {
     let (mut into, t, normal) = song_with_a_pattern();
     let mut from = into.clone();
-    let capture = append(&mut from, Some(t), 500_000, &played(60), &[], "a").unwrap();
+    let capture = append(&mut from, Some(t), 500_000, &played(60), &[]).unwrap();
     // The older song's normal pattern covers where the Capture is stored in `from`.
     let bar = Meter {
         numerator: 4,
@@ -372,16 +352,16 @@ fn carry_copies_a_capture_past_the_normal_patterns_of_the_older_song() {
 #[test]
 fn carry_replaces_the_capture_of_the_same_id() {
     let (mut into, t, _) = song_with_a_pattern();
-    append(&mut into, Some(t), 500_000, &played(60), &[], "a").unwrap();
+    append(&mut into, Some(t), 500_000, &played(60), &[]).unwrap();
     let mut from = into.clone();
-    append(&mut from, Some(t), 500_000, &played(62), &[], "b").unwrap();
+    append(&mut from, Some(t), 500_000, &played(62), &[]).unwrap();
     carry(&from, &mut into).unwrap();
     assert_eq!(Catalog::read(&into).unwrap().patterns.len(), 2);
     let listed = captured(&into).unwrap();
     assert_eq!(listed, captured(&from).unwrap());
     assert_eq!(
-        listed.iter().map(|c| c.stamp.as_str()).collect::<Vec<_>>(),
-        vec!["b", "a"]
+        listed.iter().map(|c| c.sequence).collect::<Vec<_>>(),
+        vec![2, 1]
     );
 }
 
@@ -390,7 +370,7 @@ fn carry_brings_a_container_only_the_newer_song_has() {
     let mut into = edit::tracks::new_song();
     into.division = 480;
     let mut from = into.clone();
-    let capture = append(&mut from, None, 500_000, &played(60), &[], "a").unwrap();
+    let capture = append(&mut from, None, 500_000, &played(60), &[]).unwrap();
     carry(&from, &mut into).unwrap();
     let (old, new) = (Catalog::read(&from).unwrap(), Catalog::read(&into).unwrap());
     assert_eq!(

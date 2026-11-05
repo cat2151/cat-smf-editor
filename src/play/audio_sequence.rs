@@ -21,6 +21,9 @@ pub struct MidiEvent {
     pub word: u32,
 }
 
+#[path = "sequence_drums.rs"]
+mod drums;
+
 #[path = "sequence_events.rs"]
 mod events;
 

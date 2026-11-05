@@ -2,6 +2,7 @@
 
 - 互換性不要、まだこのアプリはuserが作者一人のプロトタイピング段階である
 - ターミノロジーとして、SMFを出力するとき、meta eventのtextの音楽用語は英語で書くこと。NGは例えば「フェルマータ」というカタカナ
+- 設計として、SMF meta eventにtimestampを入れるのはNG
 - もしrelease build時にビルド対象アプリが起動中のせいでrelease buildが落ちたら、アプリをkillしてrelease buildをしなおすこと
 
 # 画面の文字

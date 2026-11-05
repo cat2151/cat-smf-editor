@@ -147,11 +147,14 @@ pub(super) fn parts(data: &[u8]) -> Option<Vec<Part>> {
                         .enumerate()
                         .map(|(i, r)| {
                             format!(
-                                "{}: GM {} → {} / Layer {}",
+                                "{}: GM {} → {} / Layer {} / Velocity {} / Swing {} ({}%)",
                                 crate::score::drums::NAMES[i],
                                 crate::score::drums::NOTES[i],
                                 r.output,
-                                r.layer
+                                r.layer,
+                                r.velocity,
+                                if r.swing_enabled { "On" } else { "Off" },
+                                r.swing
                             )
                         })
                         .collect::<Vec<_>>()

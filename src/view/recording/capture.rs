@@ -21,24 +21,19 @@ pub(crate) fn viewport() -> egui::ViewportId {
 /// The keys of one keyboard session not yet in the song.
 pub(super) struct Pending {
     keys: Keys,
-    /// Wall-clock milliseconds at the session clock's zero.
-    base: u64,
 }
 
 impl Pending {
     pub(super) fn new() -> Self {
         Self {
             keys: Keys::default(),
-            base: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_millis() as u64),
         }
     }
 }
 
 /// Notes that started at `velocity`, or stopped for 0, by the keys.
 pub(super) fn record(s: &mut Session, pitches: &[u8], velocity: u8, at: Duration) {
-    let at = s.pending.base + at.as_millis() as u64;
+    let at = at.as_millis() as u64;
     let container = s.sounds[s.selected].container;
     for &pitch in pitches {
         s.pending.keys.key(at, pitch, velocity, container, GAP);
@@ -47,9 +42,7 @@ pub(super) fn record(s: &mut Session, pitches: &[u8], velocity: u8, at: Duration
 
 /// A phrase goes on that silence has not ended yet.
 pub(super) fn playing(s: &Session, at: Duration) -> bool {
-    s.pending
-        .keys
-        .playing(s.pending.base + at.as_millis() as u64, GAP)
+    s.pending.keys.playing(at.as_millis() as u64, GAP)
 }
 
 /// Puts the ended phrases, or with `all` every phrase, in the song without an undo step.
@@ -57,7 +50,7 @@ pub(super) fn flush(a: &mut App, s: &mut Session, all: bool) -> Result<(), Strin
     let phrases = if all {
         s.pending.keys.finish()
     } else {
-        let now = s.pending.base + s.clock.elapsed().as_millis() as u64;
+        let now = s.clock.elapsed().as_millis() as u64;
         s.pending.keys.take(now, GAP)
     };
     for phrase in phrases {
@@ -70,8 +63,7 @@ pub(super) fn flush(a: &mut App, s: &mut Session, all: bool) -> Result<(), Strin
 fn append(a: &mut App, s: &mut Session, phrase: &Phrase) -> Result<(), String> {
     let source = super::take::source(a, phrase.container)?;
     let tempo = s.settings().tempo;
-    let stamp = rows::stamp(phrase.start);
-    let from = Duration::from_millis(phrase.start.saturating_sub(s.pending.base));
+    let from = Duration::from_millis(phrase.start);
     let controls: Vec<(u64, u8)> = s
         .settings()
         .modulation
@@ -85,7 +77,7 @@ fn append(a: &mut App, s: &mut Session, phrase: &Phrase) -> Result<(), String> {
         .collect();
     let mut id = 0;
     a.append_tracks(|music| {
-        id = capture::append(music, source, tempo, phrase, &controls, &stamp)?;
+        id = capture::append(music, source, tempo, phrase, &controls)?;
         Ok(())
     })?;
     super::take::adopt(a, s, id)

@@ -109,11 +109,22 @@ impl<R: Instrument, E: Effect> Render<R, E> {
                                 push(&mut self.ordered_events, AutomationEvent::note(word))?;
                                 continue;
                             }
-                            if let Some(pitch) = super::routed_pitch(
-                                layer,
-                                self.drums.as_ref(),
-                                ((word >> 8) & 127) as u8,
-                            ) {
+                            let input = ((word >> 8) & 127) as u8;
+                            let channel = ((word >> 16) & 15) as usize;
+                            let held = &mut self.routed_notes[index][channel][input as usize];
+                            let on = (word >> 20) & 15 == 9 && word & 127 != 0;
+                            let routed = super::routed_pitch(layer, self.drums.as_ref(), input);
+                            let pitch = if on {
+                                *held = routed.unwrap_or(255);
+                                routed
+                            } else if *held != 255 {
+                                let pitch = *held;
+                                *held = 255;
+                                Some(pitch)
+                            } else {
+                                routed
+                            };
+                            if let Some(pitch) = pitch {
                                 push(
                                     &mut self.ordered_events,
                                     AutomationEvent::note(
