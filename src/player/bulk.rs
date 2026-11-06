@@ -21,7 +21,9 @@ pub(crate) fn targets(music: &Music) -> Vec<usize> {
         .iter()
         .enumerate()
         .filter(|(i, track)| {
-            has_notes(track) && !cat_smf_editor::score::pattern::is_source(music, *i)
+            has_notes(track)
+                && !cat_smf_editor::score::pattern::is_source(music, *i)
+                && cat_smf_editor::score::drum_kit::read(track).is_ok_and(|k| k.is_none())
         })
         .map(|(index, _)| index)
         .collect()
@@ -41,6 +43,14 @@ pub(crate) fn same_program(music: &Music) -> bool {
 }
 
 pub(crate) fn request(app: &mut App) {
+    if app
+        .loaded
+        .as_ref()
+        .is_some_and(|l| l.patches[app.track].kit.is_some())
+    {
+        super::kit_selection::open(app, false, false);
+        return;
+    }
     app.player_selection.layer = None;
     let bulk = !app
         .loaded

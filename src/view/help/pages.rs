@@ -119,3 +119,34 @@ pub(super) fn macros(ui: &mut egui::Ui) {
     });
     crate::view::help::close_guide(ui);
 }
+
+pub(super) fn kit(ui: &mut egui::Ui) {
+    egui::Grid::new("kit-help").show(ui, |ui| {
+        super::key_groups(
+            ui,
+            &[(
+                Color32::LIGHT_BLUE,
+                &[
+                    ("h j k l", "Note / 項目"),
+                    ("Enter", "Note選択 / Velocity / Step / Kit / Swing"),
+                    ("f / Space", "Step"),
+                    ("Shift+F10", "Step menu"),
+                    ("/", "行検索"),
+                    ("N", "Note割り当て"),
+                    ("A", "4行追加"),
+                    ("PageUp / PageDown", "小節"),
+                    ("[ / ]", "A小節"),
+                    ("Shift+[ / ]", "B小節"),
+                    ("M", "Mute"),
+                    ("Wheel", "Velocity / Swing / A-B小節"),
+                    ("R", "Loop"),
+                    ("S", "Loop Solo"),
+                    ("X", "Effects"),
+                    ("Shift+Space", "停止"),
+                    ("Ctrl+Z", "元に戻す"),
+                    ("Esc", "閉じる"),
+                ],
+            )],
+        )
+    });
+}

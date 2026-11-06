@@ -136,7 +136,13 @@ fn pattern_switch_drops_numeric_input_and_an_old_command_cannot_edit_the_new_bod
     let (mut a, track, ids) = fixture();
     let c = egui::Context::default();
     a.select_track(track);
-    press(&mut a, &c, Key::ArrowLeft);
+    for _ in 0..32 {
+        if a.drum_editor.command_target().1 == 1 {
+            break;
+        }
+        press(&mut a, &c, Key::ArrowRight);
+    }
+    assert_eq!(a.drum_editor.command_target().1, 1);
     press(&mut a, &c, Key::Enter);
     assert_eq!(commands::owner(&a, &c), Screen::DrumInput);
     let old = commands::definitions(&a, Screen::DrumInput)

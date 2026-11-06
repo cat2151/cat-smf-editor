@@ -77,11 +77,17 @@ pub(crate) fn prepare_occurrences(
         parts.push((
             track,
             patch,
-            Sequence::from_source(notes, end, events, &selected, &tempo, 0).drums(
-                loaded.patches[track].drums.as_ref(),
-                loaded.music.division,
-                &tempo,
-            ),
+            Sequence::from_source(notes, end, events, &selected, &tempo, 0)
+                .drums(
+                    loaded.patches[track].drums.as_ref(),
+                    loaded.music.division,
+                    &tempo,
+                )
+                .kit_swing(
+                    loaded.patches[track].kit.as_ref(),
+                    loaded.music.division,
+                    &tempo,
+                ),
         ));
     }
     if parts.is_empty() {

@@ -8,12 +8,16 @@ pub const DOWNLOAD: &str = "https://github.com/cat2151/cat-plugin-player/release
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Browser {
     Patch,
+    Kit,
     Effect,
     MasterEffect,
 }
 
 #[derive(Default)]
 pub struct State {
+    pub kit_request: u64,
+    pub kit_open: bool,
+    pub kit_pattern: bool,
     pub setup: crate::player::setup::Setup,
     pub layer: Option<u64>,
     pub open: bool,
@@ -84,6 +88,14 @@ pub fn open(app: &mut App, browser: Browser) {
 }
 
 pub fn open_layer(app: &mut App, id: u64) {
+    if app
+        .loaded
+        .as_ref()
+        .is_some_and(|l| l.patches[app.track].kit.is_some())
+    {
+        super::kit_selection::open(app, false, false);
+        return;
+    }
     app.player_selection.layer = Some(id);
     open_mode(app, Browser::Patch, false, None);
 }
@@ -142,6 +154,7 @@ pub(crate) fn open_mode(app: &mut App, browser: Browser, bulk: bool, slot: Optio
             app.player_selection.open = false;
         }
         Err(error) => {
+            app.player_selection.kit_open = false;
             app.player_selection.open = true;
             app.player_selection.error = Some(error);
         }
@@ -189,6 +202,15 @@ pub fn store_master(
 
 /// Writes one track's chain settings into the loaded SMF, keeping the playback position.
 pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(), String> {
+    store_track_with(app, track, settings, |_| Ok(()))
+}
+
+pub(crate) fn store_track_with(
+    app: &mut App,
+    track: usize,
+    settings: &Settings,
+    edit: impl FnOnce(&mut cat_smf_editor::model::Music) -> Result<(), String>,
+) -> Result<(), String> {
     let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     let old = loaded
         .patches
@@ -202,6 +224,7 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
     let original = loaded.original.clone();
     let session = app.session();
     let mut music = before.clone();
+    edit(&mut music)?;
     chain_settings::write(
         &mut music.tracks[track],
         settings,
@@ -233,8 +256,8 @@ pub fn store_track(app: &mut App, track: usize, settings: &Settings) -> Result<(
     cat_smf_editor::score::same_measure::validate(&music)?;
     crate::view::parameter_editor::pattern_targets::sound(app, &music, track, settings)?;
     app.saved.remember(&original, &music)?;
-    let drums_live = old.drums.is_some()
-        && settings.drums.is_some()
+    let drums_live = old.sequencer()
+        && settings.sequencer()
         && old.layers.len() == settings.layers.len()
         && old
             .layers

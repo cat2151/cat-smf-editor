@@ -142,7 +142,11 @@ pub(super) fn body(app: &mut App, ui: &mut egui::Ui) {
             if let Some(l) = &app.loaded {
                 ui.heading(format!("Drum sequencer · {}", l.track_titles[app.track]));
             }
-            pages::drums(ui);
+            if crate::view::drums::kit::active(app) {
+                pages::kit(ui);
+            } else {
+                pages::drums(ui);
+            }
         }
         Target::Macro => pages::macros(ui),
         Target::Picker => {

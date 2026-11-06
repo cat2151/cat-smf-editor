@@ -131,6 +131,7 @@ fn the_player_starts_once_and_later_requests_only_show_a_browser() {
     let t = std::time::Instant::now();
     player_out
         .send(&ToEditor::Selected(Selected {
+            kit: None,
             reference: Some(Box::new(cat_smf_editor::patch_reference::PatchReference {
                 plugin: PluginKey {
                     format: "CLAP".into(),
@@ -437,3 +438,6 @@ fn real_patch_choices_each_reach_the_track() {
 
 #[path = "resident_panes_tests.rs"]
 mod panes;
+
+#[path = "kit_link_tests.rs"]
+mod kit;

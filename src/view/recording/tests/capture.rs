@@ -2,6 +2,8 @@ use super::*;
 use cat_smf_editor::score::pattern::{
     event, record, recording::capture::TickNote, Definition, Kind, Record,
 };
+mod feedback;
+mod playback;
 
 /// `k` held for `held`, then silence for `rest`.
 fn tap(a: &mut App, ctx: &egui::Context, k: Key, held: Duration, rest: Duration) {

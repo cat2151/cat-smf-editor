@@ -113,7 +113,13 @@ impl<R: Instrument, E: Effect> Render<R, E> {
                             let channel = ((word >> 16) & 15) as usize;
                             let held = &mut self.routed_notes[index][channel][input as usize];
                             let on = (word >> 20) & 15 == 9 && word & 127 != 0;
-                            let routed = super::routed_pitch(layer, self.drums.as_ref(), input);
+                            let routed = self.kit.map_or_else(
+                                || super::routed_pitch(layer, self.drums.as_ref(), input),
+                                |id| {
+                                    (id == layer.id && !(on && self.kit_muted[input as usize]))
+                                        .then_some(input)
+                                },
+                            );
                             let pitch = if on {
                                 *held = routed.unwrap_or(255);
                                 routed

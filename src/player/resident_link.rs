@@ -77,6 +77,7 @@ pub struct Link {
 enum Event {
     Connected(Sender),
     Selected(Selected),
+    KitClosed(Open),
     Cursor(String, Option<PatchIdentity>),
     Panes(String, [String; 2], String),
     Closed(Option<String>),
@@ -99,6 +100,12 @@ pub fn request(app: &mut App, request: Request) -> Result<(), String> {
                 })
                 .ok_or("trackにinstrument layerがありません")?,
             song: app.song_id,
+        },
+        Browser::Kit => Open::Kit {
+            track: request.track,
+            layer: app.player_selection.layer,
+            song: app.song_id,
+            request: app.player_selection.kit_request,
         },
         Browser::Effect => Open::Effect {
             track: request.track,
@@ -196,6 +203,13 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
                     break Some(Some(format!("playerに応答できませんでした: {error}")));
                 }
             }
+            Event::KitClosed(target) => {
+                if target == link.target.open {
+                    link.loading.observe(true);
+                    app.player_selection.kit_open = false;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                }
+            }
             Event::Panes(context, panes, query) => {
                 app.config.select_browser_panes(context, panes, query)
             }
@@ -211,6 +225,7 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
             app.player_selection.resident = Some(link);
         }
         Some(error) => {
+            app.player_selection.kit_open = false;
             log(format_args!("link closed: {error:?}"));
             app.player_selection.open = true;
             app.player_selection.error = Some(match error {
@@ -271,7 +286,9 @@ fn pane_context(target: &Target) -> String {
         return serde_json::to_string(&(&target.original, "patch", track, layer)).unwrap();
     }
     let (kind, track) = match target.open {
-        Open::Patch { track } | Open::Layer { track, .. } => ("patch", Some(track)),
+        Open::Patch { track } | Open::Layer { track, .. } | Open::Kit { track, .. } => {
+            ("patch", Some(track))
+        }
         Open::Effect { track, .. } => ("effect", Some(track)),
         Open::MasterEffect { .. } => ("master_effect", None),
     };
@@ -336,6 +353,7 @@ impl Link {
                         panes,
                         query,
                     })) => Event::Panes(context, panes, query),
+                    Ok(Some(ToEditor::KitClosed { target })) => Event::KitClosed(target),
                     Ok(Some(ToEditor::Cursor { context, patch })) => Event::Cursor(context, patch),
                     Ok(None) => Event::Closed(None),
                     Err(error) => Event::Closed(Some(error.to_string())),

@@ -8,7 +8,7 @@ pub(super) enum Field {
     Swing,
 }
 impl Field {
-    fn stepped(self, value: u8, up: bool) -> u8 {
+    pub(super) fn stepped(self, value: u8, up: bool) -> u8 {
         let next = if matches!(self, Self::Velocity) {
             if up {
                 (value / 10 + 1).saturating_mul(10)
@@ -166,29 +166,30 @@ pub(super) fn controls(
                 state.field = first + 1;
                 *action = Some(Op::Activate);
             }
-            let mut enabled = r.swing_enabled;
-            let response = ui.checkbox(&mut enabled, "Swing");
+            let response = super::surface::swing_toggle(
+                ui,
+                r.swing_enabled,
+                state.row == row && state.field == first + 2,
+                cursor,
+                true,
+            );
             #[cfg(test)]
             ui.ctx().data_mut(|d| {
                 d.insert_temp(egui::Id::new(("drum-swing-toggle", row)), response.rect);
             });
-            if state.row == row && state.field == first + 2 {
-                ui.painter()
-                    .rect_stroke(response.rect, 2.0, cursor, egui::StrokeKind::Inside);
-            }
             if response.clicked() {
                 state.row = row;
                 state.field = first + 2;
                 *action = Some(Op::Swing(row));
             }
-            if enabled {
-                let response = ui.add_sized(
-                    [40.0, 24.0],
-                    button(
-                        format!("{}%", r.swing),
-                        state.row == row && state.field == first + 3,
-                    ),
-                );
+            if let Some(response) = super::surface::swing_amount(
+                ui,
+                r.swing_enabled,
+                r.swing,
+                state.row == row && state.field == first + 3,
+                cursor,
+                egui::vec2(40.0, 24.0),
+            ) {
                 #[cfg(test)]
                 ui.ctx()
                     .data_mut(|d| d.insert_temp(egui::Id::new(("drum-swing", row)), response.rect));
@@ -199,8 +200,6 @@ pub(super) fn controls(
                     *action = Some(Op::Activate);
                 }
             } else {
-                // Keep later columns in place when the swing value is hidden.
-                ui.allocate_exact_size(egui::vec2(40.0, 24.0), egui::Sense::hover());
                 #[cfg(test)]
                 ui.ctx().data_mut(|d| {
                     d.remove::<egui::Rect>(egui::Id::new(("drum-swing", row)));

@@ -58,7 +58,7 @@ pub(crate) fn open(app: &mut App) {
     if app
         .loaded
         .as_ref()
-        .is_some_and(|l| l.patches[app.track].drums.is_some())
+        .is_some_and(|l| l.patches[app.track].sequencer())
     {
         super::drums::open(app);
         return;

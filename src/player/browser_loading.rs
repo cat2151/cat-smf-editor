@@ -3,13 +3,14 @@ use cat_smf_editor::resident_ipc::Open;
 
 #[derive(Default)]
 pub(super) struct Loading {
-    shown: [bool; 2],
+    shown: [bool; 3],
     pending: Option<(usize, &'static str)>,
 }
 
 impl Loading {
     pub fn request(&mut self, open: Open) {
         let (index, title) = match open {
+            Open::Kit { .. } => (2, "Drum kits"),
             Open::Patch { .. } | Open::Layer { .. } => (0, "Browse patches"),
             Open::Effect { .. } => (1, "Browse effects"),
             Open::MasterEffect { .. } => (1, "Browse master effects"),

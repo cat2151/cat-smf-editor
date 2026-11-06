@@ -74,6 +74,8 @@ impl Effect for ProcessorRef {
 
 pub struct Render<R = note_render::Render, E = ProcessorRef> {
     drums: Option<cat_smf_editor::score::drums::Settings>,
+    kit: Option<u64>,
+    kit_muted: [bool; 128],
     ordered_events: Vec<cat_smf_editor::host::parameters::AutomationEvent>,
     automation: Vec<super::automation::LayerBindings>,
     pub parameter_error: Option<i32>,
@@ -91,6 +93,8 @@ impl<R: Instrument, E: Effect> Render<R, E> {
         Self {
             routed_notes: vec![[[255; 128]; 16]; layers.len()],
             drums: None,
+            kit: None,
+            kit_muted: [false; 128],
             ordered_events: Vec::with_capacity(
                 cat_smf_editor::host::parameters::MAX_AUTOMATION_EVENTS,
             ),
@@ -114,6 +118,16 @@ impl<R: Instrument, E: Effect> Render<R, E> {
         }
         self.automation = bindings;
         self.parameter_error = None;
+    }
+
+    pub fn set_kit(&mut self, kit: Option<&cat_smf_editor::drum_kit::Kit>) {
+        self.kit = kit.map(|k| k.layer);
+        self.kit_muted.fill(false);
+        if let Some(kit) = kit {
+            for &note in &kit.muted {
+                self.kit_muted[note as usize] = true;
+            }
+        }
     }
 
     pub fn set_drums(&mut self, drums: Option<cat_smf_editor::score::drums::Settings>) {
@@ -192,7 +206,21 @@ impl<R: Instrument, E: Effect> Render<R, E> {
             let (shifted, lengths) = if sung {
                 ([0; 128], [0; 128])
             } else {
-                transpose(layer, self.drums.as_ref(), velocities, durations)
+                match self.kit {
+                    Some(id) if id == layer.id => {
+                        let mut velocities = *velocities;
+                        let mut durations = *durations;
+                        for (note, &mute) in self.kit_muted.iter().enumerate() {
+                            if mute {
+                                velocities[note] = 0;
+                                durations[note] = 0;
+                            }
+                        }
+                        (velocities, durations)
+                    }
+                    Some(_) => ([0; 128], [0; 128]),
+                    None => transpose(layer, self.drums.as_ref(), velocities, durations),
+                }
             };
             let scratch = &mut self.scratch[..out.len()];
             if !render.render(&shifted, &lengths, changed, scratch, channels) {

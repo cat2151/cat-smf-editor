@@ -44,7 +44,7 @@ pub(super) fn container(ui: &mut egui::Ui, s: &mut Session) {
         }
         if ui
             .selectable_label(false, "+")
-            .on_hover_text("New container")
+            .on_hover_text("New container  Ctrl+Shift+N")
             .clicked()
         {
             clicked = Some(Button::NewSound);
@@ -57,6 +57,12 @@ pub(super) fn container(ui: &mut egui::Ui, s: &mut Session) {
         s.clicked = clicked;
     }
 }
+
+#[path = "choices/creation.rs"]
+mod creation;
+pub(super) use creation::{keys as creation_keys, show as creation};
+mod kit;
+pub(super) use kit::{poll as poll_kit, start as create_kit, KitCreation};
 
 /// The last press's velocity and the CC1 sent now; a click lists the choices, the modulation's
 /// only until a take is armed.

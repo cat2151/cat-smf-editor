@@ -138,11 +138,17 @@ pub(super) fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequ
         tempo.duration(start, end.saturating_sub(start))
     };
     Some(
-        Sequence::from_source(notes, end, events, &selected, &tempo, start).drums(
-            loaded.patches[track].drums.as_ref(),
-            loaded.music.division,
-            &tempo,
-        ),
+        Sequence::from_source(notes, end, events, &selected, &tempo, start)
+            .drums(
+                loaded.patches[track].drums.as_ref(),
+                loaded.music.division,
+                &tempo,
+            )
+            .kit_swing(
+                loaded.patches[track].kit.as_ref(),
+                loaded.music.division,
+                &tempo,
+            ),
     )
 }
 

@@ -6,7 +6,7 @@ use cat_smf_editor::score::{
 };
 
 impl Sequence {
-    pub fn drums(mut self, settings: Option<&Settings>, division: u16, tempo: &TempoMap) -> Self {
+    pub fn drums(self, settings: Option<&Settings>, division: u16, tempo: &TempoMap) -> Self {
         let Some(settings) = settings else {
             return self;
         };
@@ -17,24 +17,52 @@ impl Sequence {
         {
             return self;
         }
-        let time = |seconds: f64, row: usize| {
-            if !settings.rows[row].swing_enabled
-                || settings.rows[row].swing == 50
-                || !seconds.is_finite()
-            {
+        self.swing(division, tempo, |pitch| {
+            let row = &settings.rows[NOTES.iter().position(|&p| p == pitch)?];
+            row.swing_enabled.then_some(row.swing)
+        })
+    }
+
+    pub fn kit_swing(
+        self,
+        kit: Option<&cat_smf_editor::drum_kit::Kit>,
+        division: u16,
+        tempo: &TempoMap,
+    ) -> Self {
+        let Some(kit) = kit.filter(|k| k.swing.values().any(|s| s.enabled && s.amount != 50))
+        else {
+            return self;
+        };
+        self.swing(division, tempo, |pitch| {
+            let swing = kit.swing.get(&pitch)?;
+            swing.enabled.then_some(swing.amount)
+        })
+    }
+
+    fn swing(mut self, division: u16, tempo: &TempoMap, amount: impl Fn(u8) -> Option<u8>) -> Self {
+        let time = |seconds: f64, pitch: u8| {
+            let Some(swing) = amount(pitch).filter(|&s| s != 50) else {
+                return seconds;
+            };
+            if !seconds.is_finite() {
                 return seconds;
             }
-            let tick = settings.rows[row].swung_tick(tempo.fractional_tick(seconds), division);
+            let row = cat_smf_editor::score::drums::Row {
+                layer: 1,
+                output: pitch,
+                velocity: 100,
+                swing_enabled: true,
+                swing,
+            };
+            let tick = row.swung_tick(tempo.fractional_tick(seconds), division);
             let whole = tick.floor() as u64;
             tempo.seconds_at(whole) + tempo.duration(whole, 1) * tick.fract()
         };
         for note in &mut self.notes {
-            if let Some(row) = NOTES.iter().position(|&pitch| pitch == note.pitch) {
-                let start = time(self.origin + note.start, row);
-                let end = time(self.origin + note.start + note.duration, row);
-                note.start = (start - self.origin).max(0.0);
-                note.duration = (end - start).max(0.0);
-            }
+            let start = time(self.origin + note.start, note.pitch);
+            let end = time(self.origin + note.start + note.duration, note.pitch);
+            note.start = (start - self.origin).max(0.0);
+            note.duration = (end - start).max(0.0);
         }
         for event in &mut self.events {
             let status = (event.word >> 20) & 15;
@@ -42,9 +70,7 @@ impl Sequence {
                 continue;
             }
             let pitch = ((event.word >> 8) & 127) as u8;
-            if let Some(row) = NOTES.iter().position(|&pitch2| pitch2 == pitch) {
-                event.time = time(event.time, row).max(self.origin);
-            }
+            event.time = time(event.time, pitch).max(self.origin);
         }
         self.notes.sort_by(|a, b| a.start.total_cmp(&b.start));
         self.events.sort_by(|a, b| a.time.total_cmp(&b.time));

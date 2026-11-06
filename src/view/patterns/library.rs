@@ -92,7 +92,7 @@ pub(super) fn add_container(a: &mut App, drums: bool) -> Result<(), String> {
     };
     add_container_with(a, patch)
 }
-pub(super) fn add_container_with(
+pub(crate) fn add_container_with(
     a: &mut App,
     drums: Option<cat_smf_editor::score::instrument::Patch>,
 ) -> Result<(), String> {
@@ -112,6 +112,12 @@ pub(crate) fn new_container(a: &mut App, drums: bool) -> Result<u64, String> {
     } else {
         None
     };
+    new_container_with(a, patch)
+}
+pub(crate) fn new_container_with(
+    a: &mut App,
+    patch: Option<cat_smf_editor::score::instrument::Patch>,
+) -> Result<u64, String> {
     let mut music = a
         .loaded
         .as_ref()
@@ -156,7 +162,13 @@ fn source(
     music: &mut cat_smf_editor::model::Music,
     drums: Option<&cat_smf_editor::score::instrument::Patch>,
 ) -> Result<usize, String> {
-    let base = if drums.is_some() { "Drums" } else { "Init Saw" };
+    let base = if drums.is_some_and(|p| p.kit.is_some()) {
+        "Drum kit"
+    } else if drums.is_some() {
+        "Drums"
+    } else {
+        "Init Saw"
+    };
     let name = numbered(music, base, None);
     let track = operations::create_source(music)?;
     music.tracks[track]

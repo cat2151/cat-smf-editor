@@ -32,6 +32,7 @@ pub const DEFAULT_LABEL: &str = "Surge XT / Init Saw";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Patch {
+    pub kit: Option<crate::drum_kit::Kit>,
     pub drums: Option<super::drums::Settings>,
     pub layers: Vec<ResolvedLayer>,
     pub effects: Vec<PluginState>,
@@ -41,6 +42,7 @@ impl Default for Patch {
     fn default() -> Self {
         Self {
             drums: None,
+            kit: None,
             layers: vec![ResolvedLayer {
                 settings: Layer::default(),
                 instrument: None,
@@ -118,10 +120,12 @@ impl Patch {
             layers,
             effects,
             drums: None,
+            kit: saved.kit,
         })
     }
     pub fn saved(&self) -> Result<instrument_layers::Settings, String> {
         let settings = instrument_layers::Settings {
+            kit: self.kit.clone(),
             layers: self
                 .layers
                 .iter()
@@ -144,6 +148,9 @@ impl Patch {
 
     pub fn validate(&self) -> Result<(), String> {
         self.saved()?;
+        if self.kit.is_some() && self.drums.is_some() {
+            return Err("A track cannot contain both drum modes".into());
+        }
         if let Some(drums) = &self.drums {
             drums.validate_layers(
                 &self
@@ -167,13 +174,18 @@ impl Patch {
         .validate_effect_states()
     }
 
+    pub fn sequencer(&self) -> bool {
+        self.drums.is_some() || self.kit.is_some()
+    }
+
     pub fn label(&self) -> &str {
         self.layers.first().map_or("—", ResolvedLayer::label)
     }
 
     /// `other` differs from `self` at most in effect bypass.
     pub fn same_except_bypass(&self, other: &Self) -> bool {
-        self.drums == other.drums
+        self.kit == other.kit
+            && self.drums == other.drums
             && self.layers == other.layers
             && same_except_bypass(&self.effects, &other.effects)
     }
@@ -204,6 +216,7 @@ impl From<Chain> for Patch {
     fn from(chain: Chain) -> Self {
         Self {
             drums: None,
+            kit: None,
             layers: vec![ResolvedLayer {
                 settings: Layer::default(),
                 instrument: chain.instrument,
@@ -231,4 +244,29 @@ pub fn write(
     super::drums::write(&mut next, patch.drums.as_ref())?;
     *track = next;
     Ok(())
+}
+
+#[cfg(test)]
+mod kit_tests {
+    use super::*;
+    #[test]
+    fn kit_and_four_lane_settings_cannot_coexist() {
+        let mut patch = Patch {
+            kit: Some(crate::drum_kit::Kit {
+                layer: 1,
+                rows: None,
+                muted: vec![],
+                swing: Default::default(),
+                notes: vec![crate::drum_kit::Note {
+                    note: 127,
+                    name: "Source".into(),
+                    velocity: 100,
+                }],
+            }),
+            ..Default::default()
+        };
+        patch.validate().unwrap();
+        patch.drums = Some(Default::default());
+        assert!(patch.validate().is_err());
+    }
 }

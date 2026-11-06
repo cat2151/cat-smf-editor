@@ -16,7 +16,7 @@ pub(crate) fn is_open(app: &App) -> bool {
         Some(Target::Track(track)) => track == app.track,
         Some(Target::Pattern(id)) => {
             crate::view::patterns::mode::editing(app, app.track).is_some_and(|c| c.pattern == id)
-                && l.patches.get(app.track).is_some_and(|p| p.drums.is_some())
+                && l.patches.get(app.track).is_some_and(|p| p.sequencer())
         }
         None => false,
     }
@@ -42,6 +42,9 @@ pub(crate) fn open(app: &mut App) {
 
 /// Present an already resolved target. No creation, SMF writes or audition here.
 pub(crate) fn display(app: &mut App) {
+    if app.drum_editor.kit.take_preview() {
+        app.audition.stop_key();
+    }
     let target = crate::view::patterns::mode::editing(app, app.track)
         .map_or(Target::Track(app.track), |c| Target::Pattern(c.pattern));
     let tick = crate::play::playback::location(app).0;
@@ -81,6 +84,9 @@ pub(crate) fn display(app: &mut App) {
 
 /// The grid moves with a running Song; `display` would close the panels open beside it.
 pub(crate) fn follow(app: &mut App, id: u64) {
+    if app.drum_editor.kit.take_preview() {
+        app.audition.stop_key();
+    }
     app.drum_editor.target = Some(Target::Pattern(id));
     app.drum_editor.page = 0;
     app.drum_editor.first = 1;
@@ -88,6 +94,9 @@ pub(crate) fn follow(app: &mut App, id: u64) {
 }
 
 pub(crate) fn close(app: &mut App) {
+    if app.drum_editor.kit.take_preview() {
+        app.audition.stop_key();
+    }
     playback::close(app);
     app.drum_editor = State::default();
 }

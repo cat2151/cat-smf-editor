@@ -103,6 +103,13 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         ));
         out.push(Command::plain(
             s,
+            "add-kit-track",
+            "Drum kitトラック追加",
+            &[],
+            |a, _| crate::player::kit_selection::open(a, true, false),
+        ));
+        out.push(Command::plain(
+            s,
             "add-drum-track",
             "ドラムトラック追加",
             &[],

@@ -58,7 +58,7 @@ fn first_choice_and_cancel_leave_normal_song_and_undo_intact() {
     let undo = a.undo.available();
     open(&mut a).unwrap();
     frame(&mut a, &c, vec![]);
-    assert_eq!(a.patterns.first.as_ref().unwrap().choices.len(), 2);
+    assert_eq!(a.patterns.first.as_ref().unwrap().choices.len(), 3);
     assert_eq!(bytes(&a), before);
     press(&mut a, &c, Key::Escape);
     assert_eq!(bytes(&a), before);

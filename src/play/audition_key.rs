@@ -10,6 +10,17 @@ impl Audition {
         pitch: u8,
         take: Option<Arc<crate::play::sung::Take>>,
     ) -> bool {
+        self.preview_key(track, patch, pitch, 80, None, take)
+    }
+    pub fn preview_key(
+        &mut self,
+        track: usize,
+        patch: &Patch,
+        pitch: u8,
+        velocity: u8,
+        duration: Option<f64>,
+        take: Option<Arc<crate::play::sung::Take>>,
+    ) -> bool {
         let disabled = self.disabled;
         let master = self.master.clone();
         let gains = self.gains.clone();
@@ -28,7 +39,7 @@ impl Audition {
             self.auditioned = vec![pitch];
             self.sung = take.clone();
         }
-        self.key_active = voice.play_track(track, patch, &[(pitch, 80, None)], take);
+        self.key_active = voice.play_track(track, patch, &[(pitch, velocity, duration)], take);
         self.key_active
     }
 

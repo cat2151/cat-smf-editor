@@ -119,7 +119,7 @@ fn the_settings_window_fits_the_shown_rows() {
     let mut a = app();
     let ctx = egui::Context::default();
     open_key(&mut a, &ctx);
-    let mut measure = |a: &mut App| {
+    let measure = |a: &mut App| {
         let mut size = egui::Vec2::ZERO;
         let s = a.patterns.recording.session.as_mut().unwrap();
         let _ = ctx.run(

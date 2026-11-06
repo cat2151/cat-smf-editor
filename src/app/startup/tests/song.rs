@@ -13,6 +13,7 @@ fn pattern_song_starts_before_ui_and_keeps_playing_after_editor_restore() {
                 let (mut source_app, source, id) = crate::view::patterns::edit_tests::fixture();
                 if drum {
                     let patch = cat_smf_editor::score::instrument::Patch {
+                        kit: None,
                         drums: Some(Default::default()),
                         layers: (1..=4)
                             .map(|id| cat_smf_editor::score::instrument::ResolvedLayer {

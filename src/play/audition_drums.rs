@@ -30,6 +30,7 @@ impl Audition {
             return;
         }
         renders[index].set_drums(patch.drums.clone());
+        renders[index].set_kit(patch.kit.as_ref());
         for layer in &patch.layers {
             renders[index].set_layer_level(layer.settings.id, layer.settings.volume_db);
             renders[index].set_layer_mute(layer.settings.id, layer.settings.mute);

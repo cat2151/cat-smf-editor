@@ -2,6 +2,45 @@ use super::*;
 use crate::play::audio_sequence::Note;
 
 #[test]
+fn kit_swing_uses_actual_note_identity_and_the_same_exact_shuffle_timing() {
+    let tempo = TempoMap::constant(480, 120.0).unwrap();
+    let kit = cat_smf_editor::drum_kit::Kit {
+        layer: 1,
+        notes: vec![],
+        rows: None,
+        muted: vec![],
+        swing: [(
+            127,
+            cat_smf_editor::drum_kit::Swing {
+                enabled: true,
+                amount: 66,
+            },
+        )]
+        .into(),
+    };
+    let notes = [0, 127]
+        .into_iter()
+        .map(|pitch| Note {
+            pitch,
+            velocity: 83,
+            start: 0.125,
+            duration: 0.125,
+        })
+        .collect();
+    let sequence = Sequence::new(notes, 0.5).kit_swing(Some(&kit), 480, &tempo);
+    let straight = sequence.notes.iter().find(|n| n.pitch == 0).unwrap();
+    let swung = sequence.notes.iter().find(|n| n.pitch == 127).unwrap();
+    assert_eq!((straight.start, straight.duration), (0.125, 0.125));
+    assert!((swung.start - 1.0 / 6.0).abs() < 1e-10);
+    assert!((swung.start + swung.duration - 0.25).abs() < 1e-10);
+    assert!(sequence
+        .events
+        .iter()
+        .filter(|e| (e.word >> 8) & 127 == 127 && (e.word >> 20) & 15 == 9)
+        .all(|e| (e.time - swung.start).abs() < 1e-10));
+}
+
+#[test]
 fn rows_swing_and_velocity_are_independent_and_shuffle_is_exact() {
     let tempo = TempoMap::constant(480, 120.0).unwrap();
     let mut settings = Settings::default();

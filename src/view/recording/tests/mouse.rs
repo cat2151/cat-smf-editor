@@ -163,6 +163,10 @@ fn plus(a: &mut App) {
         state.session.as_mut().unwrap(),
         window::Button::NewSound
     ));
+    let s = state.session.as_mut().unwrap();
+    assert_eq!(s.new_sound, Some(0));
+    s.new_sound = None;
+    assert!(!playing::button(a, s, window::Button::CreateSound(false)));
     a.patterns.recording = state;
 }
 

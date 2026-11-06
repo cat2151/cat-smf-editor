@@ -123,6 +123,9 @@ impl Screen {
 }
 
 pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
+    if a.player_selection.kit_open {
+        return Screen::Waiting;
+    }
     if ctx.viewport_id() == super::super::help::viewport() {
         return Screen::Help;
     }
@@ -232,7 +235,7 @@ fn root_owner(a: &App) -> Screen {
     if crate::view::drums::is_open(a) {
         return if a.drum_editor.confirm_create {
             Screen::DrumCreate
-        } else if a.drum_editor.input.is_some() {
+        } else if a.drum_editor.input.is_some() || a.drum_editor.kit.has_input() {
             Screen::DrumInput
         } else {
             Screen::Drums

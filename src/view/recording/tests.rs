@@ -3,6 +3,7 @@ use cat_smf_editor::{edit, score::pattern::body};
 use std::time::Duration;
 mod captions;
 mod capture;
+mod creation;
 mod expression;
 mod layered;
 mod loop_takes;

@@ -27,6 +27,7 @@ pub(super) fn recording(ui: &mut egui::Ui) {
                     SOUND,
                     &[
                         ("← → / Ctrl+P", "Container"),
+                        ("Ctrl+Shift+N", "New container"),
                         ("Ctrl+T", "音色選択"),
                         ("Ctrl+V", "Velocity"),
                         ("Ctrl+W", "Modulation"),
@@ -69,7 +70,14 @@ pub(super) fn recording(ui: &mut egui::Ui) {
             &[
                 (MOVE, &[("↑ ↓", "phrase選択")]),
                 (PLAY, &[("Space", "試聴")]),
-                (EDIT, &[("Enter", "pattern化"), ("Esc", "閉じる")]),
+                (
+                    EDIT,
+                    &[
+                        ("Enter", "pattern化"),
+                        ("Ctrl+Shift+Delete", "履歴を全削除"),
+                        ("Esc", "閉じる"),
+                    ],
+                ),
             ],
         );
     });

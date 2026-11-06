@@ -173,8 +173,10 @@ pub(super) enum Button {
     Stop,
     /// The container at this index of the session's sounds.
     Sound(usize),
-    /// A new Init Saw container, played at once.
+    /// Choose the kind of a new container.
     NewSound,
+    CreateSound(bool),
+    NewKit,
     Velocity(Velocity),
     Modulation(Modulation),
     /// The phrase loop switch.
@@ -383,4 +385,5 @@ pub(super) fn show(ctx: &egui::Context, class: egui::ViewportClass, s: &mut Sess
     } else {
         egui::CentralPanel::default().frame(frame).show(ctx, body);
     }
+    super::choices::creation(ctx, s);
 }

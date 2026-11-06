@@ -18,6 +18,7 @@ pub struct Native {
 impl Native {
     pub fn set_drum_controls(&mut self, patch: &Patch) {
         self.settings.drums = patch.drums.clone();
+        self.settings.kit = patch.kit.clone();
         for layer in &mut self.settings.layers {
             if let Some(new) = patch
                 .layers
@@ -305,6 +306,7 @@ impl Native {
                 .map(|chain| unsafe { chain.audio_ref() }),
         );
         render.set_drums(self.settings.drums.clone());
+        render.set_kit(self.settings.kit.as_ref());
         render
     }
 

@@ -179,6 +179,7 @@ pub fn jump(app: &mut App, tick: u64) {
 
 // Prepare the audio device after the start request's frame can be painted.
 pub fn advance(app: &mut App) {
+    crate::view::recording::advance_capture(app);
     crate::view::drums::playback::validate(app);
     crate::view::macro_editor::validate(app);
     crate::view::parameter_editor::preview::validate(app);

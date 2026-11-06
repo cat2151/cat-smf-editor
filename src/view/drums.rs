@@ -14,16 +14,24 @@ mod catalog;
 mod catalog_tests;
 pub(crate) mod commands;
 mod grid;
+pub(crate) mod kit;
+#[cfg(test)]
+mod kit_edit_tests;
+#[cfg(test)]
+mod kit_native_tests;
 #[cfg(test)]
 mod layout_tests;
 #[cfg(test)]
 mod mute_tests;
 #[cfg(test)]
 mod native_tests;
+#[cfg(test)]
+mod parity_tests;
 mod pattern;
 mod presentation;
 pub(crate) use presentation::{close, dismiss, display, follow, is_open, open, reconcile};
 pub(crate) mod playback;
+mod surface;
 #[cfg(test)]
 pub(crate) mod tests;
 mod title;
@@ -31,9 +39,11 @@ mod title;
 mod value_tests;
 mod values;
 mod widgets;
+mod window;
 
 #[derive(Default)]
 pub struct State {
+    pub(crate) kit: kit::State,
     target: Option<presentation::Target>,
     pub(super) confirm_create: bool,
     row: usize,
@@ -110,7 +120,7 @@ pub(super) enum Input {
 
 fn needs_track(app: &App) -> bool {
     app.loaded.as_ref().is_some_and(|loaded| {
-        loaded.patches[app.track].drums.is_none()
+        !loaded.patches[app.track].sequencer()
             && (loaded.music.tracks[app.track]
                 .events
                 .iter()
@@ -121,10 +131,7 @@ fn needs_track(app: &App) -> bool {
 
 fn ensure(app: &mut App) -> Result<(), String> {
     let track = app.track;
-    if app.loaded.as_ref().ok_or(message::NO_SONG)?.patches[track]
-        .drums
-        .is_some()
-    {
+    if app.loaded.as_ref().ok_or(message::NO_SONG)?.patches[track].sequencer() {
         return Ok(());
     }
     if needs_track(app) {
@@ -146,6 +153,7 @@ pub(crate) fn prepare(app: &mut App) -> Result<(Patch, Catalog), String> {
         layers: Vec::new(),
         drums: Some(settings.clone()),
         effects: Vec::new(),
+        kit: None,
     };
     let explicit = app.player_selection.executable.clone();
     for (i, entries) in catalog.iter().enumerate() {
@@ -250,6 +258,10 @@ fn result(app: &mut App, result: Result<(), String>) {
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
     if !is_open(app) {
+        return;
+    }
+    if kit::active(app) {
+        kit::show(app, ctx);
         return;
     }
     super::commands::route(app, ctx);

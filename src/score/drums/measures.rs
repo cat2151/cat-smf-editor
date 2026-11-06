@@ -139,7 +139,8 @@ pub fn rebuild(music: &mut crate::model::Music) -> Result<(), String> {
         })
         .collect::<std::collections::BTreeSet<_>>();
     for (track, source) in music.tracks.iter_mut().enumerate() {
-        if bodies.contains(&track) || read(source)?.is_none() {
+        let kit = crate::score::drum_kit::read(source)?.is_some();
+        if bodies.contains(&track) || (read(source)?.is_none() && !kit) {
             continue;
         }
         let map = time
@@ -147,7 +148,12 @@ pub fn rebuild(music: &mut crate::model::Music) -> Result<(), String> {
             .ok_or("drumの小節の対応表が見つかりません")?;
         let pairs = edit::relocate::pairs(source.events.iter());
         let mut releases = Vec::new();
-        for pitch in NOTES {
+        let pitches: Vec<u8> = if kit {
+            (0..128).collect()
+        } else {
+            NOTES.to_vec()
+        };
+        for &pitch in &pitches {
             let ons: Vec<_> = source
                 .events
                 .iter()
@@ -178,10 +184,10 @@ pub fn rebuild(music: &mut crate::model::Music) -> Result<(), String> {
             (
                 e.tick,
                 if crate::score::note_view::note_off(e)
-                    && e.data.first().is_some_and(|p| NOTES.contains(p))
+                    && e.data.first().is_some_and(|p| pitches.contains(p))
                 {
                     0
-                } else if note_on(e) && NOTES.contains(&e.data[0]) {
+                } else if note_on(e) && pitches.contains(&e.data[0]) {
                     2
                 } else {
                     1

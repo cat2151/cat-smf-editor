@@ -276,6 +276,43 @@ fn references(json: &[u8], layers: bool) -> String {
                 .join(" + "),
         );
     }
+    if layers && let Some(kit) = &settings.kit {
+        for (note, swing) in &kit.swing {
+            items.push(format!(
+                "Drum kit note {note} / Swing {}% / {}",
+                swing.amount,
+                if swing.enabled { "On" } else { "Off" }
+            ));
+        }
+        if !kit.muted.is_empty() {
+            items.push(format!(
+                "Drum kit mute: {}",
+                kit.muted
+                    .iter()
+                    .map(u8::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        items.push(format!(
+            "Drum kit layer {}: {}",
+            kit.layer,
+            kit.notes
+                .iter()
+                .map(|n| format!("{} {} / Velocity {}", n.note, n.name, n.velocity))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+        if let Some(rows) = &kit.rows {
+            items.push(format!(
+                "Rows: {}",
+                rows.iter()
+                    .map(|n| n.map_or("—".into(), |n| n.to_string()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    }
     if !settings.effects.is_empty() {
         let effects = settings
             .effects
@@ -313,5 +350,29 @@ fn layer(layer: &instrument_layers::Layer) -> String {
         name.into()
     } else {
         format!("{name} ({})", details.join(", "))
+    }
+}
+
+#[cfg(test)]
+mod kit_tests {
+    use super::*;
+    #[test]
+    fn kit_metadata_names_notes_and_defaults_are_readable() {
+        let settings = instrument_layers::Settings {
+            kit: Some(crate::drum_kit::Kit {
+                layer: 1,
+                rows: None,
+                muted: vec![],
+                swing: Default::default(),
+                notes: vec![crate::drum_kit::Note {
+                    note: 127,
+                    name: "Source note".into(),
+                    velocity: 64,
+                }],
+            }),
+            ..Default::default()
+        };
+        let text = references(&serde_json::to_vec(&settings).unwrap(), true);
+        assert!(text.contains("Drum kit layer 1: 127 Source note / Velocity 64"));
     }
 }

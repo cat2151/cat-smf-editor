@@ -4,6 +4,7 @@ mod browser_activity;
 #[cfg(windows)]
 mod browser_loading;
 pub(crate) mod bulk;
+pub(crate) mod kit_selection;
 pub(crate) mod patch_roots;
 #[cfg(windows)]
 pub(crate) mod resident;

@@ -4,6 +4,7 @@ use cat_smf_editor::message;
 use eframe::egui::{self, Key};
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Choice {
+    Kit,
     /// Both initial containers are created together; `true` starts in Drums.
     Initial(bool),
     Container(u64),
@@ -27,6 +28,7 @@ pub(super) fn choices(a: &App) -> Result<Vec<(Choice, String)>, String> {
         return Ok(vec![
             (Choice::Initial(false), "Surge XT / Init Saw".into()),
             (Choice::Initial(true), "Drums".into()),
+            (Choice::Kit, "Drum kit".into()),
         ]);
     }
     let mut v: Vec<_> = c
@@ -40,6 +42,7 @@ pub(super) fn choices(a: &App) -> Result<Vec<(Choice, String)>, String> {
     let empty = |kind: bool| {
         v.iter().any(|&(t, _)| {
             drums(t) == kind
+                && l.patches[t].kit.is_none()
                 && !m.tracks[t]
                     .events
                     .iter()
@@ -60,6 +63,7 @@ pub(super) fn choices(a: &App) -> Result<Vec<(Choice, String)>, String> {
             out.push((Choice::New(kind), name.into()));
         }
     }
+    out.push((Choice::Kit, "新規: Drum kit".into()));
     Ok(out)
 }
 pub(super) fn open(a: &mut App) -> Result<(), String> {
@@ -86,7 +90,15 @@ fn edit(a: &mut App, ctx: &egui::Context) {
     let Some(p) = a.patterns.first.take() else {
         return;
     };
+    if p.choices[p.selected].0 == Choice::Kit {
+        if let Some(previous) = p.previous {
+            a.patterns = *previous;
+        }
+        crate::player::kit_selection::open(a, true, true);
+        return;
+    }
     let result = match p.choices[p.selected].0 {
+        Choice::Kit => unreachable!(),
         Choice::Initial(drums) => library::initialize(a, drums),
         Choice::Container(id) => library::create_for_container(a, id),
         Choice::New(drums) => library::add_container(a, drums),

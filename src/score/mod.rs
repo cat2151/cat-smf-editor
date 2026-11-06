@@ -4,6 +4,7 @@ pub mod automation;
 pub mod catalog;
 pub mod chord_guide;
 pub mod display_rows;
+pub mod drum_kit;
 pub mod drums;
 pub mod event_content;
 mod gm_programs;

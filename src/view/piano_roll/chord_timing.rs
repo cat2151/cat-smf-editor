@@ -30,7 +30,14 @@ const PLAIN: Modifiers = Modifiers::NONE;
 const SHIFT: Modifiers = Modifiers::SHIFT;
 
 /// `(id, name, keys, button, action)` of each key, in the overlay's order.
-const ACTIONS: [(&str, &str, &[(Key, Modifiers)], &str, Action); 9] = [
+type Binding = (
+    &'static str,
+    &'static str,
+    &'static [(Key, Modifiers)],
+    &'static str,
+    Action,
+);
+const ACTIONS: [Binding; 9] = [
     (
         "chord-next",
         "次のchord",

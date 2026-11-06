@@ -73,7 +73,11 @@ pub fn answer(
                     },
                 )
             } else {
-                apply(app, selected.target, slot)
+                if let Open::Kit { .. } = selected.target {
+                    super::kit_selection::apply(app, selected.target, slot, selected.kit)
+                } else {
+                    apply(app, selected.target, slot)
+                }
             };
             if let Some(resume) = resume {
                 crate::play::selection_playback::restore(app, resume);
@@ -86,6 +90,21 @@ pub fn answer(
 
 /// Whether the selection goes to every track with notes.
 fn check(app: &App, selected: &Selected, target: Option<&Target>) -> Result<bool, String> {
+    if let Open::Kit {
+        track, song, layer, ..
+    } = selected.target
+    {
+        if app.song_id != song || app.track != track {
+            return Err("Kit selection target changed".into());
+        }
+        let kit = selected.kit.as_ref().ok_or("Kit metadata is missing")?;
+        kit.validate()?;
+        if kit.layer != layer.unwrap_or(1) {
+            return Err("Kit layer mismatch".into());
+        }
+    } else if selected.kit.is_some() {
+        return Err("Unexpected kit metadata".into());
+    }
     if let Open::Layer { track, layer, song } = selected.target {
         let bulk = target.is_some_and(|t| t.bulk);
         if app.song_id != song
@@ -110,6 +129,7 @@ fn check(app: &App, selected: &Selected, target: Option<&Target>) -> Result<bool
 pub fn apply(app: &mut App, target: Open, slot: PluginState) -> Result<(), String> {
     let loaded = app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
     match target {
+        Open::Kit { .. } => Err("Kit metadata is required".into()),
         Open::Layer {
             track,
             layer: id,

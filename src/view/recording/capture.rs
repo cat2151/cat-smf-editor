@@ -4,6 +4,8 @@ use super::*;
 use cat_smf_editor::message;
 use cat_smf_editor::score::pattern::recording::capture::{self, Captured, Keys, Phrase};
 use std::time::Duration;
+mod filter;
+mod playback;
 mod rows;
 mod shown;
 
@@ -85,6 +87,8 @@ fn append(a: &mut App, s: &mut Session, phrase: &Phrase) -> Result<(), String> {
 
 /// The open Capture window.
 pub(super) struct Browser {
+    all_phrases: Vec<Captured>,
+    container: Option<u64>,
     /// Newest first.
     phrases: Vec<Captured>,
     /// The `App::generation` `phrases` were read at; `None` until the first read.
@@ -94,6 +98,8 @@ pub(super) struct Browser {
     back: Option<shown::Back>,
     place: Option<egui::Pos2>,
     focus: bool,
+    caption: String,
+    playback: Option<playback::Playing>,
 }
 
 /// Opens the window on the newest phrase, or closes it.
@@ -103,12 +109,16 @@ pub(super) fn toggle(a: &mut App, s: &mut Session) {
         return;
     }
     s.capture = Some(Browser {
+        all_phrases: vec![],
+        container: None,
         phrases: vec![],
         generation: None,
         selected: 0,
         back: None,
         place: None,
         focus: true,
+        caption: TITLE.into(),
+        playback: None,
     });
 }
 
@@ -133,11 +143,8 @@ fn read(a: &mut App, s: &mut Session) -> Result<(), String> {
     }
     let phrases = capture::captured(&a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music)?;
     let b = s.capture.as_mut().unwrap();
-    let kept = b.phrases.get(b.selected).map(|p| (p.pattern, p.range.0));
-    b.selected = kept
-        .and_then(|k| phrases.iter().position(|p| (p.pattern, p.range.0) == k))
-        .unwrap_or(0);
-    b.phrases = phrases;
+    b.all_phrases = phrases;
+    filter::refresh(b);
     b.generation = Some(a.generation);
     Ok(())
 }
@@ -157,8 +164,10 @@ fn audition(a: &mut App, s: &mut Session) {
         return;
     };
     b.back.get_or_insert_with(|| shown::Back::of(a));
-    if let Err(error) = shown::audition(a, &p) {
-        s.error = Some(error);
+    b.playback = None;
+    match playback::start(a, &p, &b.phrases) {
+        Ok(playing) => b.playback = Some(playing),
+        Err(error) => s.error = Some(error),
     }
 }
 
@@ -205,6 +214,58 @@ fn take(a: &mut App, s: &mut Session) -> Result<(), String> {
     super::reveal(a, s, id, s.settings().tempo)
 }
 
+/// Clear persisted and pending captures; ordinary patterns and sounds stay in place.
+fn clear(a: &mut App, s: &mut Session) -> Result<(), String> {
+    a.append_tracks(capture::clear)?;
+    s.pending = Pending::new();
+    if let Some(back) = s.capture.as_mut().and_then(|b| b.back.take()) {
+        back.restore(a);
+    }
+    read(a, s)
+}
+
+pub(super) fn position(a: &App, s: &Session) -> Option<(usize, u64)> {
+    s.capture
+        .as_ref()
+        .and_then(|b| shown::position(a, &b.phrases))
+}
+
+pub(super) fn title(a: &App, s: &Session) -> String {
+    s.capture
+        .as_ref()
+        .and_then(|b| {
+            b.playback
+                .as_ref()
+                .and_then(|p| p.caption(a, &b.phrases))
+                .or_else(|| shown::caption(a, &b.phrases))
+        })
+        .map_or_else(|| TITLE.into(), |caption| format!("{TITLE} · {caption}"))
+}
+
+/// Advance before the transport clears a finished phrase.
+pub(super) fn advance(a: &mut App, s: &mut Session) {
+    let Some(b) = s.capture.as_mut() else { return };
+    let Some(playing) = b.playback.take() else {
+        return;
+    };
+    match playing.advance(a, &b.phrases) {
+        Ok(next) => b.playback = next,
+        Err(error) => s.error = Some(error),
+    }
+}
+
+pub(crate) fn advance_app(a: &mut App) {
+    let mut state = std::mem::take(&mut a.patterns.recording);
+    if let Some(s) = state.session.as_mut() {
+        advance(a, s);
+    }
+    a.patterns.recording = state;
+}
+
+pub(super) fn native_title(s: &Session) -> &str {
+    s.capture.as_ref().map_or(TITLE, |b| b.caption.as_str())
+}
+
 /// Keys of the focused Capture window.
 pub(super) fn keys(a: &mut App, s: &mut Session, events: &[egui::Event]) {
     for event in events {
@@ -227,6 +288,11 @@ pub(super) fn keys(a: &mut App, s: &mut Session, events: &[egui::Event]) {
             Key::ArrowDown if plain => select(a, s, selected + 1),
             _ if repeat => {}
             Key::Escape if plain => close(a, s),
+            Key::Delete if commands::matches(modifiers, Modifiers::CTRL | Modifiers::SHIFT) => {
+                if let Err(error) = clear(a, s) {
+                    s.error = Some(error);
+                }
+            }
             Key::Space if plain => {
                 if auditioning(a, s) {
                     crate::play::transport::stop(a);
@@ -267,8 +333,10 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
     if std::mem::take(&mut b.focus) {
         ctx.send_viewport_cmd_to(viewport(), egui::ViewportCommand::Focus);
     }
+    let title = title(a, s);
+    s.capture.as_mut().unwrap().caption.clone_from(&title);
     let builder = egui::ViewportBuilder::default()
-        .with_title(TITLE)
+        .with_title(&title)
         .with_position(at)
         .with_inner_size(SIZE)
         .with_visible(window::shown(ctx));
@@ -276,10 +344,15 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
     let _window_span = crate::frame_trace::span("capture");
     ctx.show_viewport_immediate(viewport(), builder, |ctx, class| {
         let _span = crate::frame_trace::span("capture/ui");
+        if auditioning(a, s) {
+            ctx.request_repaint();
+        }
         if class == egui::ViewportClass::Embedded {
-            let sounding = auditioning(a, s);
+            let position = position(a, s);
             let bpm = a.patterns.tempo.0;
-            egui::Window::new(TITLE).show(ctx, |ui| clicked = rows::list(ui, s, sounding, bpm));
+            egui::Window::new(&title)
+                .id(egui::Id::new(PLACE))
+                .show(ctx, |ui| clicked = rows::list(ui, s, position, bpm));
             return;
         }
         if ctx.input(|i| i.viewport().close_requested()) {
@@ -291,20 +364,21 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
         }
         super::super::help::observe_recording(a, ctx);
         let input = super::modal::begin(a, ctx);
-        if s.first_read(ctx) {
+        if s.first_read(ctx) && !filter::owns_keys(ctx) {
             keys(a, s, &ctx.input(|i| i.events.clone()));
         }
         if s.capture.is_none() {
             ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
         } else {
-            let sounding = auditioning(a, s);
+            let position = position(a, s);
             let bpm = a.patterns.tempo.0;
             egui::CentralPanel::default()
-                .show(ctx, |ui| clicked = rows::list(ui, s, sounding, bpm));
+                .show(ctx, |ui| clicked = rows::list(ui, s, position, bpm));
         }
         super::modal::end(a, ctx, input);
     });
     match clicked {
+        Some(rows::Click::Filter(container)) => filter::set(a, s, container),
         Some(rows::Click::Take(i)) => {
             if let Some(b) = s.capture.as_mut() {
                 b.selected = i;
@@ -314,7 +388,26 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
             }
         }
         Some(rows::Click::Listen(i)) => listen(a, s, i),
+        Some(rows::Click::Clear) => {
+            if let Err(error) = clear(a, s) {
+                s.error = Some(error);
+            }
+        }
         None => {}
+    }
+}
+
+#[cfg(test)]
+pub(super) fn test_ui(a: &mut App, s: &mut Session, ctx: &egui::Context) {
+    if !filter::owns_keys(ctx) {
+        keys(a, s, &ctx.input(|i| i.events.clone()));
+    }
+    let mut clicked = None;
+    egui::CentralPanel::default().show(ctx, |ui| {
+        clicked = rows::list(ui, s, None, 120.0);
+    });
+    if let Some(rows::Click::Filter(id)) = clicked {
+        filter::set(a, s, id);
     }
 }
 

@@ -60,6 +60,8 @@ pub struct Store {
     pub help_open: bool,
     pub help_window: Option<[f32; 4]>,
     pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
+    pub drum_windows: std::collections::BTreeMap<String, [f32; 2]>,
+    pub drum_window_sizes: std::collections::BTreeMap<String, [f32; 2]>,
     pub keyboard_windows: std::collections::BTreeMap<String, [f32; 2]>,
     pub phrase_loop: bool,
     pub keyboard_focused: bool,
@@ -93,6 +95,8 @@ impl Default for Store {
             help_open: false,
             help_window: None,
             pattern_windows: Default::default(),
+            drum_windows: Default::default(),
+            drum_window_sizes: Default::default(),
             keyboard_windows: Default::default(),
             phrase_loop: false,
             keyboard_focused: false,
@@ -157,6 +161,8 @@ impl Store {
                     help_open,
                     help_window,
                     pattern_windows,
+                    drum_windows,
+                    drum_window_sizes,
                     keyboard_windows,
                     phrase_loop,
                     keyboard_focused,
@@ -188,6 +194,14 @@ impl Store {
                         .filter(|(_, w)| {
                             w.iter().all(|v| v.is_finite()) && w[2] > 0.0 && w[3] > 0.0
                         })
+                        .collect();
+                    store.drum_windows = drum_windows
+                        .into_iter()
+                        .filter(|(_, at)| at.iter().all(|v| v.is_finite()))
+                        .collect();
+                    store.drum_window_sizes = drum_window_sizes
+                        .into_iter()
+                        .filter(|(_, size)| size.iter().all(|v| v.is_finite() && *v > 0.0))
                         .collect();
                     store.keyboard_windows = keyboard_windows
                         .into_iter()
@@ -378,6 +392,8 @@ impl Store {
                 help_open: self.help_open,
                 help_window: self.help_window,
                 pattern_windows: self.pattern_windows.clone(),
+                drum_windows: self.drum_windows.clone(),
+                drum_window_sizes: self.drum_window_sizes.clone(),
                 keyboard_windows: self.keyboard_windows.clone(),
                 phrase_loop: self.phrase_loop,
                 keyboard_focused: self.keyboard_focused,

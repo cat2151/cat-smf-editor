@@ -39,6 +39,12 @@ pub(crate) struct Status {
     /// Pattern companion windows: outer x/y and inner width/height.
     #[serde(default)]
     pub pattern_windows: std::collections::BTreeMap<String, [f32; 4]>,
+    /// Embedded drum sequencers: top-left x/y in logical pixels.
+    #[serde(default)]
+    pub drum_windows: std::collections::BTreeMap<String, [f32; 2]>,
+    /// Embedded drum sequencer content width/height in logical pixels.
+    #[serde(default)]
+    pub drum_window_sizes: std::collections::BTreeMap<String, [f32; 2]>,
     /// Virtual MIDI keyboard windows: outer x/y.
     #[serde(default)]
     pub keyboard_windows: std::collections::BTreeMap<String, [f32; 2]>,
@@ -84,6 +90,8 @@ impl Default for Status {
             help_open: false,
             help_window: None,
             pattern_windows: Default::default(),
+            drum_windows: Default::default(),
+            drum_window_sizes: Default::default(),
             keyboard_windows: Default::default(),
             phrase_loop: false,
             keyboard_focused: false,

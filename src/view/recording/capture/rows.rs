@@ -28,10 +28,17 @@ fn roll(painter: &egui::Painter, rect: egui::Rect, p: &Captured, color: egui::Co
 pub(super) enum Click {
     Listen(usize),
     Take(usize),
+    Clear,
+    Filter(Option<u64>),
 }
 
-/// `sounding` lights the selected row; lengths are timed at `bpm`.
-pub(super) fn list(ui: &mut egui::Ui, s: &Session, sounding: bool, bpm: f64) -> Option<Click> {
+/// The transport lights its current phrase; selection remains independent of playback.
+pub(super) fn list(
+    ui: &mut egui::Ui,
+    s: &Session,
+    position: Option<(usize, u64)>,
+    bpm: f64,
+) -> Option<Click> {
     let b = s.capture.as_ref()?;
     let name = |c: u64| {
         s.sounds
@@ -40,7 +47,21 @@ pub(super) fn list(ui: &mut egui::Ui, s: &Session, sounding: bool, bpm: f64) -> 
             .map_or("-", |sound| sound.name.as_str())
     };
     let mut clicked = None;
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    egui::TopBottomPanel::bottom("capture-actions").show_inside(ui, |ui| {
+        ui.horizontal(|ui| {
+            clicked = filter::dropdown(ui, s);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let clear = ui.button("履歴を全削除").on_hover_text("Ctrl+Shift+Delete");
+                #[cfg(test)]
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(egui::Id::new("capture-clear"), clear.rect));
+                if clear.clicked() {
+                    clicked = Some(Click::Clear);
+                }
+            });
+        });
+    });
+    let _scroll = egui::ScrollArea::vertical().show(ui, |ui| {
         for (i, p) in b.phrases.iter().enumerate() {
             let selected = i == b.selected;
             let egui::InnerResponse {
@@ -52,8 +73,18 @@ pub(super) fn list(ui: &mut egui::Ui, s: &Session, sounding: bool, bpm: f64) -> 
                 let seconds = (quarters * 60.0 / bpm) as u64;
                 ui.monospace(format!("{:>2}:{:02}", seconds / 60, seconds % 60));
                 let (rect, _) = ui.allocate_exact_size(ROLL, egui::Sense::hover());
-                let color = if selected && sounding { SOUNDING } else { NOTE };
+                let playing = position.filter(|&(row, _)| row == i);
+                let color = if playing.is_some() { SOUNDING } else { NOTE };
                 roll(ui.painter(), rect, p, color);
+                if let Some((_, tick)) = playing {
+                    let x =
+                        rect.left() + rect.width() * (tick as f32 / p.end().max(1) as f32).min(1.0);
+                    ui.painter().vline(
+                        x,
+                        rect.y_range(),
+                        egui::Stroke::new(2.0_f32, crate::view::timeline_repeat::PLAYHEAD),
+                    );
+                }
                 ui.label(name(p.container));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.button(TAKE).on_hover_text("Enter")
@@ -68,7 +99,6 @@ pub(super) fn list(ui: &mut egui::Ui, s: &Session, sounding: bool, bpm: f64) -> 
                     egui::Stroke::new(2.0_f32, ui.visuals().selection.stroke.color),
                     egui::StrokeKind::Inside,
                 );
-                response.scroll_to_me(None);
             }
             // Created after the button, so the row would take the button's clicks.
             let listen = egui::Rect::from_min_max(
@@ -87,5 +117,8 @@ pub(super) fn list(ui: &mut egui::Ui, s: &Session, sounding: bool, bpm: f64) -> 
             }
         }
     });
+    #[cfg(test)]
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(egui::Id::new("capture-scroll"), _scroll.id));
     clicked
 }

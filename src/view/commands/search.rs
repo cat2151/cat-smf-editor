@@ -75,6 +75,9 @@ impl Command {
             "add-track" => "add insert track",
             "create-pattern" => "add create pattern",
             "new-container" | "new-drum-container" => "add create container track コンテナ",
+            "delete-current-container-track" => {
+                "delete remove current container track コンテナ 削除"
+            }
             "pattern-midi-baseline" => "midi baseline cc bend",
             "set-pattern-preview-track" => "move pattern to container sound",
             "open-song-matrix" => "edit scene order song matrix",
@@ -98,7 +101,7 @@ impl Command {
             "mixer" => "mixer",
             "layers" => "layers",
             "drums" => "drum sequencer ドラム",
-            "add-drum-track" => "add drum track ドラム",
+            "add-drum-track" | "add-kit-track" => "add drum kit track ドラム",
             "browse-views" => "views view track ビュー 視点",
             "effects" => "effects",
             "effect-add" => "add effect effects insert",

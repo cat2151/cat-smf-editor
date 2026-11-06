@@ -259,3 +259,76 @@ fn every_layer_receives_the_complete_event_order_after_transposition() {
     assert_eq!(second.borrow()[2], vec![0x2080_4800]);
     assert_eq!(out, [2.0, 2.0]);
 }
+
+#[test]
+fn kit_actual_notes_share_one_layer_keep_endpoints_and_retrigger_order() {
+    let records: Vec<_> = (0..2).map(|_| Rc::new(RefCell::new(Vec::new()))).collect();
+    let mut render = Render::<_, NoEffect>::new(
+        records
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                (
+                    Recorder(r.clone()),
+                    Layer {
+                        id: i as u64 + 1,
+                        octave: 2,
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect(),
+        None,
+    );
+    render.set_kit(Some(&cat_smf_editor::drum_kit::Kit {
+        layer: 2,
+        rows: None,
+        muted: vec![],
+        swing: Default::default(),
+        notes: vec![],
+    }));
+    for words in [
+        &[0x2099_0064, 0x2099_7f50][..],
+        &[0x2089_7f00, 0x2099_7f70][..],
+        &[0x2089_0000, 0x2089_7f00][..],
+    ] {
+        assert!(render.process_live(words, &mut [0.; 64], 2));
+    }
+    assert!(records[0].borrow().iter().all(|words| words.is_empty()));
+    assert_eq!(
+        *records[1].borrow(),
+        vec![
+            vec![0x2099_0064, 0x2099_7f50],
+            vec![0x2089_7f00, 0x2099_7f70],
+            vec![0x2089_0000, 0x2089_7f00]
+        ]
+    );
+}
+
+#[test]
+fn kit_mute_blocks_only_its_note_on_and_keeps_releases_and_other_channels() {
+    let record = Rc::new(RefCell::new(Vec::new()));
+    let mut render =
+        Render::<_, NoEffect>::new(vec![(Recorder(record.clone()), Layer::default())], None);
+    let mut kit = cat_smf_editor::drum_kit::Kit {
+        layer: 1,
+        notes: vec![],
+        rows: None,
+        muted: vec![],
+        swing: Default::default(),
+    };
+    render.set_kit(Some(&kit));
+    assert!(render.process_live(&[0x2099_2464], &mut [0.; 2], 2));
+    kit.muted.push(36);
+    render.set_kit(Some(&kit));
+    assert!(render.process_live(
+        &[0x2089_2400, 0x2099_2464, 0x2099_2664, 0x20b9_4000],
+        &mut [0.; 2],
+        2
+    ));
+    assert_eq!(record.borrow()[1], [0x2089_2400, 0x2099_2664, 0x20b9_4000]);
+    kit.muted.clear();
+    render.set_kit(Some(&kit));
+    assert!(render.process_live(&[0x2099_2464], &mut [0.; 2], 2));
+    assert_eq!(record.borrow()[2], [0x2099_2464]);
+}

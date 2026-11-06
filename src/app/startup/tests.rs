@@ -5,6 +5,7 @@ use crate::{
 };
 use cat_smf_editor::smf_io;
 
+mod kit;
 mod song;
 
 fn fixture() -> (tempfile::TempDir, PathBuf) {

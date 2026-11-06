@@ -32,6 +32,7 @@ mod take;
 #[cfg(test)]
 mod tests;
 pub(crate) mod window;
+pub(crate) use capture::advance_app as advance_capture;
 #[cfg(test)]
 pub(crate) use capture::viewport as capture_viewport;
 pub(crate) use companions::reset as reset_windows;
@@ -121,6 +122,8 @@ struct Session {
     error: Option<String>,
     /// A transport button clicked while drawing, handled after it.
     clicked: Option<window::Button>,
+    new_sound: Option<usize>,
+    kit_creation: Option<choices::KitCreation>,
     /// The last frame of each window whose keys were read.
     handled: Vec<(egui::ViewportId, u64)>,
     /// Where the keyboard window opens on the screen.
@@ -158,24 +161,9 @@ impl Session {
     }
 }
 
-pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
-    if a.loaded.is_some()
-        && matches!(s, Screen::Main | Screen::Scene | Screen::Song)
-        && !a.patterns.confirming_creation()
-    {
-        out.push(Command::new(
-            s,
-            "record-pattern",
-            "Virtual MIDI keyboard",
-            &[(Key::R, Modifiers::SHIFT)],
-            |a, ctx| {
-                if let Err(error) = open(a, ctx) {
-                    a.load_error = Some(error);
-                }
-            },
-        ));
-    }
-}
+#[path = "recording/entry_commands.rs"]
+mod entry_commands;
+pub(crate) use entry_commands::collect;
 
 /// Moves the session clock as if `by` had passed.
 #[cfg(test)]
@@ -235,6 +223,9 @@ fn open_from(
         return Ok(());
     }
     let loaded = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
+    if loaded.patches.get(a.track).is_some_and(|p| p.kit.is_some()) {
+        return Err("Kit recording is unavailable".into());
+    }
     let c = Catalog::read(&loaded.music)?;
     let key = song_key(&loaded.music);
     let (mut settings, measures) = a.config.keyboard_settings.unwrap_or_else(|| {
@@ -257,7 +248,7 @@ fn open_from(
     let mut sounds = c
         .tracks
         .iter()
-        .filter(|(_, t)| c.sources.contains(t))
+        .filter(|(_, t)| c.sources.contains(t) && loaded.patches[**t].kit.is_none())
         .map(|(&id, &track)| Sound {
             container: Some(id),
             track,
@@ -287,6 +278,13 @@ fn open_from(
             live: live::Live::default(),
             looper: looper(),
         });
+    }
+    if target.is_some_and(|id| {
+        c.tracks
+            .get(&id)
+            .is_some_and(|&t| loaded.patches[t].kit.is_some())
+    }) {
+        return Err("Kit recording is unavailable".into());
     }
     let selected = sounds.iter().position(|s| s.container == target);
     let index = selected.unwrap_or(0);
@@ -330,6 +328,8 @@ fn open_from(
         capture: None,
         error: None,
         clicked: None,
+        new_sound: None,
+        kit_creation: None,
         handled: vec![],
         position: companions::saved(a, companions::KEYBOARD).unwrap_or_else(|| {
             let screen = egui::Rect::from_min_size(

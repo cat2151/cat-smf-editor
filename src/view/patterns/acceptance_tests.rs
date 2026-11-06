@@ -23,6 +23,7 @@ fn song() -> (App, usize, u64) {
     });
     let settings = drums::Settings::default();
     let patch = Patch {
+        kit: None,
         layers: settings
             .rows
             .iter()

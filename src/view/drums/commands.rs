@@ -23,7 +23,27 @@ pub(super) enum Op {
     Undo,
     Create,
 }
+
+pub(super) fn undo_command(
+    app: &App,
+    screen: Screen,
+    execute: impl Fn(&mut App, &egui::Context) + 'static,
+) -> Option<Command> {
+    app.undo.available().then(|| {
+        Command::new(
+            screen,
+            "undo",
+            "元に戻す",
+            &[(Key::Z, Modifiers::CTRL)],
+            execute,
+        )
+    })
+}
 pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
+    if super::kit::active(app) {
+        super::kit::commands::collect(app, screen, out);
+        return;
+    }
     let own = if app.drum_editor.confirm_create {
         Screen::DrumCreate
     } else if app.drum_editor.input.is_some() {
@@ -136,14 +156,11 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         &[(Key::Space, Modifiers::SHIFT)],
         |a, _| apply(a, Op::Stop),
     ));
-    if !app.drum_editor.confirm_create && app.drum_editor.input.is_none() && app.undo.available() {
-        out.push(Command::new(
-            screen,
-            "undo",
-            "元に戻す",
-            &[(Key::Z, Modifiers::CTRL)],
-            |a, _| apply(a, Op::Undo),
-        ));
+    if !app.drum_editor.confirm_create
+        && app.drum_editor.input.is_none()
+        && let Some(command) = undo_command(app, screen, |a, _| apply(a, Op::Undo))
+    {
+        out.push(command);
     }
 }
 pub(super) fn apply(app: &mut App, op: Op) {

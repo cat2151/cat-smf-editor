@@ -7,7 +7,7 @@ pub(crate) fn input(a: &mut App, ctx: &eframe::egui::Context) {
     if patterns::mode::actual_source(a, a.track)
         && a.loaded
             .as_ref()
-            .is_some_and(|l| l.patches[a.track].drums.is_some())
+            .is_some_and(|l| l.patches[a.track].sequencer())
     {
         super::open(a);
     } else {
@@ -23,7 +23,7 @@ pub(super) fn edit(a: &mut App) -> Result<(), String> {
         return Ok(());
     }
     let l = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
-    if l.patches[a.track].drums.is_none() {
+    if !l.patches[a.track].sequencer() {
         return Err("drum sound containerを選んでください".into());
     }
     let c = Catalog::read(&l.music)?;

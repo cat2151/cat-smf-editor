@@ -163,6 +163,7 @@ fn drum_rows_open_normal_browser_with_role_filters_and_preserve_repeat_on_previe
     let mut app = crate::view::tests::app(music());
     let settings = cat_smf_editor::score::drums::Settings::default();
     let patch = Settings {
+        kit: None,
         drums: Some(settings.clone()),
         layers: (1..=4)
             .map(|id| ResolvedLayer {
@@ -208,6 +209,7 @@ fn drum_rows_open_normal_browser_with_role_filters_and_preserve_repeat_on_previe
         };
         let shared = out.share(&[1, 2, 3]).unwrap();
         out.send(&ToEditor::Selected(Selected {
+            kit: None,
             target: open,
             plugin: plugin.clone(),
             reference: Some(Box::new(cat_smf_editor::patch_reference::PatchReference {

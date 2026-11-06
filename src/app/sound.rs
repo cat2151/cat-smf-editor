@@ -36,6 +36,7 @@ fn resolve_tracks(
         if audible_only
             && !crate::player::bulk::has_notes(track)
             && cat_smf_editor::score::drums::read(track)?.is_none()
+            && cat_smf_editor::score::drum_kit::read(track)?.is_none()
         {
             patches.push(Patch::default());
             volumes.push(1.0);

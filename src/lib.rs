@@ -1,4 +1,6 @@
 pub mod app_meta;
+#[path = "../../cat-plugin-player/shared/drum_kit.rs"]
+pub mod drum_kit;
 pub mod edit;
 #[path = "../../cat-plugin-player/shared/instrument_layers.rs"]
 pub mod instrument_layers;

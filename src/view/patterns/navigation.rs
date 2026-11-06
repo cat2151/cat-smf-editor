@@ -48,7 +48,7 @@ pub fn present(a: &mut App) {
     let drum = mode::editing(a, a.track).is_some()
         && a.loaded
             .as_ref()
-            .is_some_and(|l| l.patches[a.track].drums.is_some());
+            .is_some_and(|l| l.patches[a.track].sequencer());
     if drum {
         crate::view::drums::display(a);
     } else {
@@ -62,7 +62,7 @@ pub fn enter_notes(a: &mut App) {
     } else if mode::actual_source(a, a.track)
         && a.loaded
             .as_ref()
-            .is_some_and(|l| l.patches[a.track].drums.is_some())
+            .is_some_and(|l| l.patches[a.track].sequencer())
     {
         // Raw can be entered without a prior body; returning to Notes still uses
         // the same last-pattern/first-pattern policy as an ordinary track entry.
@@ -90,7 +90,7 @@ fn destination(a: &App, id: u64) -> Result<(Context, u64, u64), String> {
     let drum = loaded
         .patches
         .get(pattern.track)
-        .is_some_and(|p| p.drums.is_some());
+        .is_some_and(|p| p.sequencer());
     if drum {
         cat_smf_editor::score::drums::tick(projection.division, 0)?;
     }
@@ -169,7 +169,7 @@ fn select_source(a: &mut App) -> Result<(), String> {
         .find_map(|(&id, &t)| (t == a.track).then_some(id))
         .ok_or(message::MISSING_SOUND_CONTAINER)?;
     let selected = shown::resolve(a);
-    let drum = l.patches.get(a.track).is_some_and(|p| p.drums.is_some());
+    let drum = l.patches.get(a.track).is_some_and(|p| p.sequencer());
     a.patterns.container = Some(owner);
     a.patterns.selected = selected;
     // Repeated notifications must not erase numeric input, restart the editor or move the cursor.

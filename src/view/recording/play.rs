@@ -98,8 +98,21 @@ pub(super) fn button(a: &mut App, s: &mut Session, button: window::Button) -> bo
             setup::select(a, s, i);
             false
         }
-        window::Button::NewSound if !armed(s) => {
-            match super::super::patterns::library::new_container(a, false) {
+        window::Button::NewSound if !armed(s) && s.kit_creation.is_none() => {
+            let released = s.recorder.as_mut().map(|r| r.release_all(at));
+            if let Some(released) = released {
+                send(s, released, 0, at);
+            }
+            s.mouse = [None; 2];
+            s.new_sound = Some(0);
+            false
+        }
+        window::Button::NewKit if !armed(s) => {
+            super::choices::create_kit(a, s);
+            false
+        }
+        window::Button::CreateSound(drums) if !armed(s) => {
+            match super::super::patterns::library::new_container(a, drums) {
                 Ok(id) => {
                     if super::phrase::adopt(a, s) {
                         super::phrase::retune(a, s);
@@ -182,6 +195,7 @@ fn sound(s: &mut Session, pad: Pad, pressed: bool, at: std::time::Duration) {
 
 /// Moves the mouse of one window onto `target`, releasing the pad it left.
 pub(super) fn point(s: &mut Session, from: window::Pointer, target: Option<Pad>) {
+    let target = target.filter(|_| s.new_sound.is_none());
     let previous = std::mem::replace(&mut s.mouse[from as usize], target);
     if previous == target {
         return;
@@ -255,6 +269,9 @@ pub(super) fn close(a: &mut App, s: &mut Session, at: std::time::Duration) -> bo
 pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modifiers) -> bool {
     let ctrl = commands::matches(modifiers, Modifiers::CTRL);
     match key {
+        Key::N if commands::matches(modifiers, Modifiers::CTRL | Modifiers::SHIFT) => {
+            button(a, s, window::Button::NewSound);
+        }
         Key::F1 | Key::Questionmark => super::super::help::summon(a),
         Key::Comma if ctrl => s.settings_open = !s.settings_open,
         Key::Period if ctrl => s.piano_open = !s.piano_open,
@@ -269,6 +286,7 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
 
 /// `true` closes the window.
 pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool {
+    super::choices::poll_kit(a, s);
     follow_click(s);
     super::phrase::follow(a, s);
     if super::phrase::follow_patch(a, s) {
@@ -304,7 +322,13 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
         }
         return false;
     }
+    if super::choices::creation_keys(ctx, s) {
+        return false;
+    }
     for event in ctx.input(|i| i.events.clone()) {
+        if s.new_sound.is_some() {
+            break;
+        }
         let egui::Event::Key {
             key,
             physical_key,

@@ -2,6 +2,7 @@ use super::commands::{Command, Screen};
 use crate::app::App;
 pub(crate) mod beacon;
 mod cards;
+mod container_delete;
 mod first;
 pub(crate) mod library;
 pub(crate) mod matrix;
@@ -151,6 +152,7 @@ impl Action {
     }
 }
 pub(crate) fn collect(app: &App, s: Screen, out: &mut Vec<Command>) {
+    container_delete::collect(app, s, out);
     workspace::collect(app, s, out);
     if app.patterns.confirming_creation() {
         if s == Screen::Patterns {

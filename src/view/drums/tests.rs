@@ -8,6 +8,7 @@ pub(crate) fn fixture() -> App {
         tracks: vec![cat_smf_editor::model::Track { events: vec![] }; 2],
     });
     let mut patch = Patch {
+        kit: None,
         drums: Some(drums::Settings::default()),
         layers: vec![],
         effects: vec![],

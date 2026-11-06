@@ -193,6 +193,9 @@ fn frame(
 
 /// Keys of the focused settings window: rows and values by arrows, plus every window key.
 pub(super) fn settings_keys(a: &mut App, s: &mut Session, events: &[egui::Event]) {
+    if s.new_sound.is_some() {
+        return;
+    }
     for event in events {
         let &egui::Event::Key {
             key,
@@ -332,7 +335,14 @@ pub(super) fn adopt(ctx: &egui::Context, s: &mut Session) {
         for (title, shown) in open {
             if shown
                 && !s.owned.contains(&title)
-                && super::super::analysis::owner::adopt_by(owner, title)
+                && super::super::analysis::owner::adopt_by(
+                    owner,
+                    if title == capture::TITLE {
+                        capture::native_title(s)
+                    } else {
+                        title
+                    },
+                )
             {
                 s.owned.push(title);
             }

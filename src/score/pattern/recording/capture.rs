@@ -384,6 +384,8 @@ pub fn take(music: &mut Music, phrase: &Captured) -> Result<u64, String> {
 
 mod carry;
 pub use carry::carry;
+mod clear;
+pub use clear::clear;
 
 #[cfg(test)]
 #[path = "capture_sequence_tests.rs"]

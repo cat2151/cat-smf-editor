@@ -195,6 +195,7 @@ fn a_selection_from_the_pipe_is_applied_and_answered() {
     let synth = slot("synth", Vec::new());
     player_out
         .send(&ToEditor::Selected(Selected {
+            kit: None,
             reference: synth.reference.clone().map(Box::new),
             target: Open::Patch { track: 1 },
             plugin: synth.plugin.clone(),
@@ -230,6 +231,7 @@ fn a_selection_from_the_pipe_is_applied_and_answered() {
     gone.name.push_str("-missing");
     player_out
         .send(&ToEditor::Selected(Selected {
+            kit: None,
             reference: synth.reference.clone().map(Box::new),
             target: Open::Patch { track: 2 },
             plugin: synth.plugin,
@@ -270,6 +272,7 @@ fn select(
     let shared = player_out.share(&slot.state).unwrap();
     player_out
         .send(&ToEditor::Selected(Selected {
+            kit: None,
             reference: slot.reference.clone().map(Box::new),
             target: open,
             plugin: slot.plugin,
