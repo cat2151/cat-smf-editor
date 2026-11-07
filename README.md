@@ -1,92 +1,94 @@
 # cat-smf-editor
 
-A lightweight application designed for easy editing of SMF (Standard MIDI File) files. It utilizes [UAPMD](https://github.com/atsushieno/uapmd) and is written in Rust.
-Its editing features are somewhat idiosyncratic and it's mostly for personal use. Specifications may change rapidly, potentially making older files unreadable.
+A lightweight application aiming to easily edit SMF (Standard MIDI File). It utilizes [UAPMD](https://github.com/atsushieno/uapmd) and is written in Rust.
+
+The editing features are idiosyncratic. It's almost exclusively for personal use. Specifications may change tomorrow, potentially making existing files unreadable.
 
 ## Download
 
 [Download Windows version](https://github.com/cat2151/cat-smf-editor/releases/download/v0.1.0/cat-smf-editor-0.1.0-windows-x64.zip)
 
-As this is an experimental project, the link may occasionally return a 404 error.
+This is an experimental project, so it may occasionally return 404.
 
-## Previous Challenges and What This App Solves
+## Past Challenges and What This App Solves
 ### SMF Editing
 - Attempts to publish CC0 licensed music data, like [The Mutopia Project](https://www.mutopiaproject.org/), are wonderful!
-- For serious performances or their associated editing, preparations like launching a DAW are often required.
-- Lightweight applications for casual playback and editing often had a user experience that was not for me.
-- Nowadays, if you have a desired UX, you can achieve it with vibe coding.
+- Serious performances and their editing often require preparation, such as launching a DAW.
+- Lightweight apps for casual performance and editing often had a user experience that was "not for me."
+- Nowadays, if you have a desired UX, you can achieve it through "vibecoding."
 - So I decided to do just that.
 ### Enjoying Casual, Simple Composition-like Play
-- Existing SMF editors and DAWs often didn't align with my desired workflow.
-- Nowadays, if you have a desired UX, you can achieve it with vibe coding.
+- Existing SMF editors and DAWs often didn't suit my desired workflow (were "not for me").
+  - When enjoying casual, simple composition-like play, they were often paid, required account registration, had high hurdles to get audio plugins playing, or high hurdles to produce the first sound.
+- Nowadays, if you have a desired UX, you can achieve it through "vibecoding."
 - So I decided to do just that.
 
-## Concept, What It Aims For
-- A Toy
+## Concept, Goals
+- Toy
   - It aims to be more of a toy than an editor.
-  - The positioning of this application is roughly [Toy] >> Educational >> Commercial.
+  - The positioning of this app is roughly: [Toy] >> Educational >> Commercial.
   - Only a very limited number of elements can be edited.
-  - It has "editor" in its name, but don't mind it.
+  - It has "editor" in its name, but don't mind that.
 - Sound Playback
-  - It aims to maintain "sounding correctly in the author's environment" as much as possible.
+  - It aims to maintain "playback in the author's environment" as much as possible.
 - Immediate Playback
-  - From app launch until sound playback, it's a perceived 0.2 seconds for a single track. Playback is optimized for maximum speed.
-    - Processes like GUI display preparation are also handled after the sound starts.
-      - Sound playing before the GUI is displayed could be called a sound version of a splash screen.
+  - From app launch to sound playback for a single track is an approximate 0.2 seconds. It prioritizes the fastest possible playback.
+    - Processes like GUI display preparation are also handled after the sound plays.
+      - Sound playing before the GUI appears might be considered a sound-based splash screen.
 - Implement Only My Own Workflow
-  - Due to nearly zero development resources, it's a matter of triage.
-  - Developing this kind of editor requires immense development cost.
-    - For example, achieving both safe editing (such as undo, time machine, and non-destructive editing) and a standard UX requires directing data model design, operational design, requirements elicitation, verification implementation, and dogfooding. Even just selecting features (which, if aiming for a standard, would mean including everything) incurs enormous development costs.
+  - Due to almost zero development resources, this is a triage.
+  - Developing this kind of editor requires enormous development costs.
+    - For example, to achieve both safe editing (such as undo, time machine, and non-destructive editing) and a standard UX, the development cost is enormous. This includes tasks like directing data model design, operational design, requirements gathering, verification implementation, dogfooding, and making feature choices (which isn't feasible if aiming for a standard, thus requiring an all-inclusive approach).
   - If you are looking for a common "lightweight and standard editor," please look elsewhere.
 - From Educational to Experimental
-  - It is oriented more towards educational use than commercial use.
-  - However, due to the constraints mentioned above, this app is
-  - oriented more towards being a toy or for experimental use than educational.
+  - It leans more towards educational use than commercial use.
+  - However, due to the aforementioned constraints, this app
+  - leans more towards a "toy" or "experimental" direction than educational.
 - Experimentation, Exploration, Personal Use
-  - Destructive changes will be made frequently.
-    - Files saved yesterday becoming unreadable today will be commonplace.
-      - Therefore, its use should be limited to a toy level.
+  - Destructive changes will be frequent.
+    - It will be commonplace for files saved yesterday to be unreadable today.
+      - Therefore, please keep usage at a "toy" level.
 
-## Corner for Random Thoughts
-- SMF editors have many uses and too many considerations; if you aim for a 'practical level,' the development cost becomes enormous.
-  - A toy. I want to heavily edit only specific parts: fine-tune timbre, effects, tempo curves, arpeggios, and individual notes on a piano roll. Prioritize a quick edit and verification cycle, with fully automated loading and saving (no manual operations). → This app targets only a very small part of that workflow.
-  - I want to browse and play smoothly, and quickly visualize content. A lightweight browser or viewer.
-  - I want to make minor changes. Ensure that everything except the changed parts remains exactly as it was, with diff visualization for that purpose. A lightweight editor.
+## Random Thoughts Corner
+- SMF editors have many uses and too many considerations. If aiming for a "production-ready level," the development cost becomes enormous.
+  - A toy. Want to heavily edit only a few parts: timbre and effects, tempo curves, arpeggios, fine-tuning each note on a piano roll. Prioritize a rapid edit and verification cycle, with fully automatic load and save operations, no manual intervention needed → This app targets only a small subset of such a workflow.
+  - Want to quickly browse and play, quickly visualize content. A lightweight browser or viewer.
+  - Want to make small changes. Guarantee that everything except the changed part remains exactly original, with diff visualization for that purpose. A lightweight editor.
   - A toy for practicing composition and arrangement.
-    - Casual visualization, casual editing. Non-destructive editing would be good to prevent confusion, but the development cost would be enormous.
-    - No, instead of an SMF editor, I think it's better to compose with other standard, modern applications.
-  - Full-fledged composition and arrangement.
+    - Casual visualization, casual editing. Non-destructive editing would be good to prevent confusion, but development cost would be enormous.
+    - No, I think it's better to compose with other standard, modern apps, not an SMF editor.
+  - Serious composition and arrangement.
     - Same as above.
-    - Furthermore, a very high-level implementation of advanced undo, time machine, non-destructive editing, etc., is essential.
+    - Furthermore, highly advanced undo, time machine, and non-destructive editing must be implemented at an extremely high level.
 - To be added later.
 
 ## Out of Scope, What It Does Not Aim For
 - DAW
-  - Directly reading, writing, and editing not only SMF but also DAW projects and projects from other famous DAWs, including audio, of course.
+  - Direct reading, writing, and editing of not only SMF but also DAW projects from other popular DAWs, including Audio.
 - Plugins
-  - Freely extending all editor functions with plugins.
+  - Freely extend all editor functions with plugins.
 - Scripting
-  - Freely extending all editor functions with scripts.
+  - Freely extend all editor functions with scripts.
 - Standard
-  - 200% coverage of the look and behavior of standard SMF editors and DAWs. Fully compatible with and superseding all editors and DAWs.
+  - 200% coverage of the look and behavior of standard SMF editors and DAWs. A complete superset of features and behavior for all editors and DAWs.
 - Features
-  - Equipped with every conceivable feature. Usable for all purposes.
+  - Equipped with every possible feature. Usable for all purposes.
 - Compatibility
-  - Full data compatibility.
-    - Able to load all SMF files, able to import projects from all DAWs.
-    - Export to all music data formats and all DAW projects.
-  - Full settings compatibility. Able to load and operate with all past settings.
+  - Complete data compatibility.
+    - Capable of loading all SMF files, importing all DAW projects.
+    - Export compatible with all music data formats and all DAW projects.
+  - Complete settings compatibility. Capable of loading and operating with all past settings.
 - Robustness
-  - Absolutely no bugs, no matter what you do. The app never crashes.
+  - Absolutely no bugs no matter what you do. The app never crashes.
 - Usability
   - Pursuing convenience and ease of use to the extreme.
 - Performance
-  - High-speed operation with no CPU load in any environment. Sound never drops out.
+  - Operates at high speed with no CPU load in any environment. Sound never drops out.
 - User Requests
   - Immediately responding to all user requests.
 
 ## For Developers: Build Instructions
-- Clone the necessary external repositories, then build with Cargo.
+- Clone the necessary external repositories and build with Cargo.
 - More details will be added later.
 
 ## License
