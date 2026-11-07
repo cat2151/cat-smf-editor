@@ -6,11 +6,9 @@ SMF(Standard MIDI File)を手軽に編集できることを目指している軽
 
 ## ダウンロード
 
-現在、工事中です、ダウンロードできません
-
-以下は404です、復旧したときすぐ入手できるよう、ひとまず残しておきます
-
 [Windows版をダウンロード](https://github.com/cat2151/cat-smf-editor/releases/download/v0.1.0/cat-smf-editor-0.1.0-windows-x64.zip)
+
+実験用プロジェクトなのでときどき404です
 
 ## これまでの課題と、このアプリが解決すること
 ### SMF編集
