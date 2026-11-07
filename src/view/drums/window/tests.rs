@@ -8,6 +8,7 @@ fn fixture(kind: Kind) -> App {
             super::super::open(&mut app);
             app
         }
+        Kind::Melody => super::super::melody_tests::fixture(),
     }
 }
 
@@ -28,10 +29,14 @@ fn frame(app: &mut App, ctx: &egui::Context, focused: bool) -> egui::FullOutput 
 }
 
 #[test]
-fn both_windows_restore_independent_positions_after_exit_and_close_reopen() {
+fn every_window_restores_independent_positions_after_exit_and_close_reopen() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("status.json");
-    let positions = [(Kind::Drums, [120.0, 160.0]), (Kind::Kit, [320.0, 260.0])];
+    let positions = [
+        (Kind::Drums, [120.0, 160.0]),
+        (Kind::Kit, [320.0, 260.0]),
+        (Kind::Melody, [220.0, 210.0]),
+    ];
     let mut store = Store::open(path.clone());
     for (kind, position) in positions {
         store.drum_windows.insert(kind.key().into(), position);
@@ -96,7 +101,8 @@ fn both_windows_restore_independent_positions_after_exit_and_close_reopen() {
         );
         let other = match kind {
             Kind::Drums => Kind::Kit,
-            Kind::Kit => Kind::Drums,
+            Kind::Kit => Kind::Melody,
+            Kind::Melody => Kind::Drums,
         };
         assert_eq!(
             restarted.config.drum_windows[other.key()],

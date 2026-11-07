@@ -1,5 +1,8 @@
 use cat_smf_editor::message;
-use cat_smf_editor::{patch_identity::PatchIdentity, score::pattern::recording};
+use cat_smf_editor::{
+    patch_identity::PatchIdentity,
+    score::{harmony, pattern::recording},
+};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 mod status;
@@ -27,6 +30,9 @@ pub struct Session {
     /// Stable identity of the independently edited pattern; ticks alone cannot identify it.
     #[serde(default)]
     pub edited_pattern: Option<u64>,
+    /// Ordinary containers whose patterns open in the melody step grid.
+    #[serde(default)]
+    pub step_containers: Vec<u64>,
 }
 
 /// Which tracks `t` changes.
@@ -64,6 +70,8 @@ pub struct Store {
     pub drum_window_sizes: std::collections::BTreeMap<String, [f32; 2]>,
     pub keyboard_windows: std::collections::BTreeMap<String, [f32; 2]>,
     pub phrase_loop: bool,
+    pub melody_row_sets: std::collections::BTreeMap<u64, harmony::Set>,
+    pub melody_zooms: std::collections::BTreeMap<u64, f32>,
     pub keyboard_focused: bool,
     pub keyboard_settings: Option<(recording::Settings, u16)>,
     pub keyboard_voicings: std::collections::BTreeMap<u64, recording::Voicing>,
@@ -99,6 +107,8 @@ impl Default for Store {
             drum_window_sizes: Default::default(),
             keyboard_windows: Default::default(),
             phrase_loop: false,
+            melody_row_sets: Default::default(),
+            melody_zooms: Default::default(),
             keyboard_focused: false,
             keyboard_settings: None,
             keyboard_voicings: Default::default(),
@@ -165,6 +175,8 @@ impl Store {
                     drum_window_sizes,
                     keyboard_windows,
                     phrase_loop,
+                    melody_row_sets,
+                    melody_zooms,
                     keyboard_focused,
                     keyboard_settings,
                     keyboard_voicings,
@@ -208,6 +220,11 @@ impl Store {
                         .filter(|(_, at)| at.iter().all(|v| v.is_finite()))
                         .collect();
                     store.phrase_loop = phrase_loop;
+                    store.melody_row_sets = melody_row_sets;
+                    store.melody_zooms = melody_zooms
+                        .into_iter()
+                        .filter(|(_, z)| z.is_finite() && *z > 0.0)
+                        .collect();
                     store.keyboard_focused = keyboard_focused;
                     store.keyboard_settings = keyboard_settings;
                     store.keyboard_voicings = keyboard_voicings;
@@ -325,6 +342,32 @@ impl Store {
         }
     }
 
+    /// The row set of `container`'s step grid; Chord until one is chosen.
+    pub fn melody_rows(&self, container: Option<u64>) -> harmony::Set {
+        container
+            .and_then(|c| self.melody_row_sets.get(&c).copied())
+            .unwrap_or_default()
+    }
+
+    /// The row height of `container`'s step grid relative to the unzoomed grid.
+    pub fn melody_zoom(&self, container: Option<u64>) -> f32 {
+        container
+            .and_then(|c| self.melody_zooms.get(&c).copied())
+            .unwrap_or(1.0)
+    }
+
+    /// Zooming changes this every wheel tick; the normal exit hook persists it.
+    pub fn remember_melody_zoom(&mut self, container: u64, zoom: f32) {
+        self.melody_zooms.insert(container, zoom);
+    }
+
+    pub fn select_melody_rows(&mut self, container: u64, rows: harmony::Set) {
+        if self.melody_rows(Some(container)) != rows {
+            self.melody_row_sets.insert(container, rows);
+            self.persist();
+        }
+    }
+
     pub fn select_keyboard_focused(&mut self, focused: bool) {
         if self.keyboard_focused != focused {
             self.keyboard_focused = focused;
@@ -396,6 +439,8 @@ impl Store {
                 drum_window_sizes: self.drum_window_sizes.clone(),
                 keyboard_windows: self.keyboard_windows.clone(),
                 phrase_loop: self.phrase_loop,
+                melody_row_sets: self.melody_row_sets.clone(),
+                melody_zooms: self.melody_zooms.clone(),
                 keyboard_focused: self.keyboard_focused,
                 keyboard_settings: self.keyboard_settings,
                 keyboard_voicings: self.keyboard_voicings.clone(),

@@ -6,6 +6,7 @@ use eframe::egui::{self, Pos2};
 pub(super) enum Kind {
     Drums,
     Kit,
+    Melody,
 }
 
 impl Kind {
@@ -13,6 +14,7 @@ impl Kind {
         match self {
             Self::Drums => "drum-sequencer",
             Self::Kit => "drum-kit-sequencer",
+            Self::Melody => "melody-step-sequencer",
         }
     }
 
@@ -33,7 +35,7 @@ impl Kind {
         }
     }
 
-    /// Both grids use this shell so focus colors, style isolation and position
+    /// Every grid uses this shell so focus colors, style isolation and position
     /// persistence cannot require a second implementation when either changes.
     pub(super) fn show(
         self,
@@ -47,6 +49,7 @@ impl Kind {
         let name = match self {
             Self::Drums => "Drum sequencer",
             Self::Kit => "Drum kit",
+            Self::Melody => "Step sequencer",
         };
         let width = (ctx.screen_rect().width() - 32.0).max(1.0);
         let builder = egui::Window::new(format!("{name} · {track_title}"))
@@ -54,14 +57,14 @@ impl Kind {
             .open(open)
             .collapsible(false)
             .max_width(width);
-        // Deliberate layout differences: four fixed rows versus a scrollable kit.
+        // Deliberate layout differences: four fixed rows versus scrollable kit and pitch rows.
         let mut builder = match self {
             Self::Drums => builder
                 .resizable([true, false])
                 .scroll([false, false])
                 .min_width(width.min(320.0))
                 .default_width(width.min(1080.0)),
-            Self::Kit => builder.default_size([790.0, 500.0]).min_width(280.0),
+            Self::Kit | Self::Melody => builder.default_size([790.0, 500.0]).min_width(280.0),
         };
         if let Some(position) = self.position(&app.config) {
             builder = builder.default_pos(position);
@@ -74,7 +77,7 @@ impl Kind {
             let available = ui.available_size();
             body(app, ui);
             match self {
-                Self::Kit => available.max(ui.min_size()),
+                Self::Kit | Self::Melody => available.max(ui.min_size()),
                 Self::Drums => egui::vec2(available.x.max(ui.min_size().x), ui.min_size().y),
             }
         });

@@ -1,6 +1,9 @@
 //! The status.json layout: what the app remembers between runs.
 use super::{ProgramTarget, Session};
-use cat_smf_editor::{patch_identity::PatchIdentity, score::pattern::recording};
+use cat_smf_editor::{
+    patch_identity::PatchIdentity,
+    score::{harmony, pattern::recording},
+};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -51,6 +54,12 @@ pub(crate) struct Status {
     /// The app closed with the Virtual MIDI keyboard open and its phrase loop on.
     #[serde(default)]
     pub phrase_loop: bool,
+    /// Per container: which pitches the step sequencer of its patterns shows as rows.
+    #[serde(default)]
+    pub melody_row_sets: std::collections::BTreeMap<u64, harmony::Set>,
+    /// Per container: the step grid's row height relative to the unzoomed grid.
+    #[serde(default)]
+    pub melody_zooms: std::collections::BTreeMap<u64, f32>,
     /// The keyboard, not the window it opened from, had the focus last when the app closed.
     #[serde(default)]
     pub keyboard_focused: bool,
@@ -94,6 +103,8 @@ impl Default for Status {
             drum_window_sizes: Default::default(),
             keyboard_windows: Default::default(),
             phrase_loop: false,
+            melody_row_sets: Default::default(),
+            melody_zooms: Default::default(),
             keyboard_focused: false,
             keyboard_settings: None,
             keyboard_voicings: Default::default(),

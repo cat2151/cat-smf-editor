@@ -46,6 +46,7 @@ fn fixture() -> (tempfile::TempDir, PathBuf) {
         split: None,
         split_active: 0,
         edited_pattern: None,
+        step_containers: vec![],
     });
     config.persist();
     (root, path)

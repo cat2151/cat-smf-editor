@@ -21,6 +21,15 @@ mod kit_edit_tests;
 mod kit_native_tests;
 #[cfg(test)]
 mod layout_tests;
+pub(crate) mod melody;
+#[cfg(test)]
+mod melody_open_tests;
+#[cfg(test)]
+mod melody_rows_tests;
+#[cfg(test)]
+mod melody_tests;
+#[cfg(test)]
+mod melody_view_tests;
 #[cfg(test)]
 mod mute_tests;
 #[cfg(test)]
@@ -44,6 +53,7 @@ mod window;
 #[derive(Default)]
 pub struct State {
     pub(crate) kit: kit::State,
+    melody: melody::State,
     target: Option<presentation::Target>,
     pub(super) confirm_create: bool,
     row: usize,
@@ -262,6 +272,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
     if kit::active(app) {
         kit::show(app, ctx);
+        return;
+    }
+    if melody::active(app) {
+        melody::show(app, ctx);
         return;
     }
     super::commands::route(app, ctx);

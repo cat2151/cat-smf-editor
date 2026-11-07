@@ -88,6 +88,7 @@ impl App {
             edited_pattern: crate::view::patterns::mode::editing(self, self.track)
                 .filter(|c| c.standalone)
                 .map(|c| c.pattern),
+            step_containers: self.patterns.navigation.steps.iter().copied().collect(),
         })
     }
 
@@ -131,6 +132,7 @@ impl App {
     }
 
     pub fn restore_position(&mut self, session: &Session) {
+        self.patterns.navigation.steps = session.step_containers.iter().copied().collect();
         self.restore_cursor(session);
         let target = session.edited_pattern.filter(|id| {
             session.note_mode

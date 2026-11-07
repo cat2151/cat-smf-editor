@@ -8,6 +8,7 @@ pub mod drum_kit;
 pub mod drums;
 pub mod event_content;
 mod gm_programs;
+pub mod harmony;
 pub mod instrument;
 pub mod key_signature;
 pub mod layer_track;
@@ -19,6 +20,7 @@ pub mod program_name;
 pub mod same_measure;
 pub mod scene;
 pub mod state_cache;
+pub mod step_notes;
 
 pub mod macro_values;
 

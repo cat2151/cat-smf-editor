@@ -137,3 +137,48 @@ fn swapped_assignments_retain_authored_pitches_and_unknown_rows() {
     patch.drums = Some(Default::default());
     assert!(patch.validate().is_err());
 }
+#[test]
+fn rows_take_pitches_from_normal_patterns_but_not_from_captures() {
+    use crate::score::pattern::{self, Kind, PatternRecord, Record};
+    let body = |tick: u64, kind: Kind, id: u64| {
+        pattern::event(
+            tick,
+            &Record::Pattern(PatternRecord {
+                version: pattern::VERSION,
+                id,
+                kind,
+                name: kind.label().into(),
+                meters: vec![pattern::Meter {
+                    numerator: 4,
+                    exponent: 2,
+                    ticks: 1920,
+                }],
+            }),
+        )
+    };
+    let hit = |tick: u64, note: u8| Event {
+        tick,
+        delta: 0,
+        status: 0x90,
+        meta_type: 0,
+        data: vec![note, 100],
+    };
+    let track = Track {
+        events: vec![
+            body(0, Kind::Normal, 1),
+            hit(0, 50),
+            body(1920, Kind::Capture, 2),
+            hit(1920, 70),
+            hit(3839, 71),
+            body(3840, Kind::Normal, 3),
+            hit(3840, 52),
+        ],
+    };
+    assert_eq!(
+        layout::rows(&track, &kit()),
+        [Some(52), Some(50)]
+            .into_iter()
+            .chain(layout::DEFAULT)
+            .collect::<Vec<_>>()
+    );
+}

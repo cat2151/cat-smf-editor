@@ -4,7 +4,7 @@ use cat_smf_editor::score::drum_kit;
 pub(crate) mod commands;
 #[cfg(test)]
 mod control_tests;
-mod controls;
+pub(super) mod controls;
 mod picker;
 mod row_edit;
 mod widgets;
@@ -21,7 +21,8 @@ pub(crate) struct State {
     focus: bool,
     reveal: bool,
     composing: bool,
-    preview: Option<(u8, std::time::Instant)>,
+    /// The placed or picked note sounding briefly; the melody grid shares it.
+    pub(super) preview: Option<(u8, std::time::Instant)>,
 }
 struct Velocity {
     hit: bool,
@@ -225,8 +226,8 @@ fn cancel(a: &mut App) {
         super::dismiss(a);
     }
 }
-pub(super) fn show(a: &mut App, ctx: &egui::Context) {
-    sync(a);
+/// A placed-note preview sounds for 350 ms; the melody grid shares it.
+pub(super) fn expire_preview(a: &mut App) {
     if a.drum_editor
         .kit
         .preview
@@ -235,6 +236,10 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
         a.audition.stop_key();
         a.drum_editor.kit.preview = None;
     }
+}
+pub(super) fn show(a: &mut App, ctx: &egui::Context) {
+    sync(a);
+    expire_preview(a);
     for event in ctx.input(|i| i.events.clone()) {
         if let egui::Event::Ime(event) = event {
             a.drum_editor.kit.composing =

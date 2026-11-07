@@ -184,6 +184,7 @@ fn installed_kit_process_restart_restore() {
         split: None,
         split_active: 0,
         edited_pattern: Some(id),
+        step_containers: vec![],
     });
     config.persist();
     store::startup::save(&root.join("status.json"), Some(path)).unwrap();

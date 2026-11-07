@@ -59,7 +59,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
                 if ui.button("▶").on_hover_text("PageDown").clicked() {
                     action = Some(Action::Common(super::super::commands::Op::Page(true)));
                 }
-                controls::boundaries(ui, state, &mut action);
+                controls::boundaries(ui, state, |op| action = Some(Action::Common(op)));
                 if ui
                     .selectable_label(state.loop_enabled, "Loop")
                     .on_hover_text("R")

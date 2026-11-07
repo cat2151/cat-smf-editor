@@ -47,7 +47,7 @@ play-serverと同じ`CMRT_SURGE_MINIMAL_DATA_HOME=0`、`false`、`no`で無効�
 
 ## patch一覧だけを最小化した段階の実測と検証
 
-2026-10-19、ADR 0011と同じ実曲`concerto-in-e-major-mids/score.mid`、既定音源5個、release buildで比較した。両条件とも同じ新しいexeを使い、`scripts/measure_startup.ps1`で実設定とcacheを隔離先へ複製した。最小構成cacheのjunctionは接続として複製し、元資源の配下はコピーしない。OSのcold boot測定ではない。
+ADR 0011と同じ実曲`concerto-in-e-major-mids/score.mid`、既定音源5個、release buildで比較した。両条件とも同じ新しいexeを使い、`scripts/measure_startup.ps1`で実設定とcacheを隔離先へ複製した。最小構成cacheのjunctionは接続として複製し、元資源の配下はコピーしない。OSのcold boot測定ではない。
 
 | プロセス起動から最初の非無音出力blockまで | 1回目 | 2回目 | 3回目 | 中央値 |
 | --- | ---: | ---: | ---: | ---: |
@@ -80,7 +80,7 @@ envで最小構成を指定する方法をさらに試し、62件の実利用音
 
 測定の再現手順・出力比較の限界・raw FXP経路は[音声比較の記録](../measurements/surge-resources-audio-20261019.md)へ記載し、[play-server ADR 0010](../../../clap-mml-play-server/docs/adr/0010-surge-data-home-and-plugin-identity.md)にも最小化方針と成功結果をフィードバックした。server自身の実装や測定値は今回変更していない。
 
-### 実利用での聴感確認とUX評価（2026-10-19）
+### 実利用での聴感確認とUX評価
 
 ユーザーが普段使う曲での聴感確認を完了し、FX preset・wavetablesを含む最小化の効果が発揮され、UXが劇的に改善されたと報告した。上記の機械検証とは別に、採用後のeditorを使ったユーザー評価として記録する。普段使う曲の聴感確認は完了済みである。
 

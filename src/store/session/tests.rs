@@ -194,6 +194,8 @@ fn session_json_is_renamed_and_existing_status_takes_priority() {
         drum_window_sizes: Default::default(),
         keyboard_windows: Default::default(),
         phrase_loop: false,
+        melody_row_sets: Default::default(),
+        melody_zooms: Default::default(),
         keyboard_focused: false,
         keyboard_settings: None,
         keyboard_voicings: Default::default(),

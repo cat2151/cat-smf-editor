@@ -6,12 +6,14 @@ use cat_smf_editor::score::{
     musical_time::MusicalTime,
     pattern::{editing::Context, Catalog},
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Default)]
 pub struct State {
     // Stable container IDs survive track insertions; this is document-local, not persisted.
     last: BTreeMap<u64, u64>,
+    /// Ordinary containers last edited on the melody step grid; the session keeps them.
+    pub(crate) steps: BTreeSet<u64>,
 }
 
 /// Keep user intent across the intermediate track/cursor states of a bulk edit or Undo.
@@ -43,12 +45,30 @@ pub fn restore(a: &mut App, snapshot: Snapshot) {
     crate::view::drums::reconcile(a);
 }
 
+/// A Drum or Drum kit container, or an ordinary one last edited on the step grid.
+fn grid(a: &App, container: u64) -> bool {
+    a.patterns.navigation.steps.contains(&container)
+        || a.loaded
+            .as_ref()
+            .is_some_and(|l| l.patches.get(a.track).is_some_and(|p| p.sequencer()))
+}
+
+/// The melody grid was opened (`true`) or dismissed for the edited pattern's container.
+pub fn remember_grid(a: &mut App, open: bool) {
+    if let Some(container) = a.patterns.container {
+        let steps = &mut a.patterns.navigation.steps;
+        if open {
+            steps.insert(container);
+        } else {
+            steps.remove(&container);
+        }
+    }
+}
+
 /// Every restored or newly entered body uses the same editor-selection policy.
 pub fn present(a: &mut App) {
-    let drum = mode::editing(a, a.track).is_some()
-        && a.loaded
-            .as_ref()
-            .is_some_and(|l| l.patches[a.track].sequencer());
+    let drum =
+        mode::editing(a, a.track).is_some() && a.patterns.container.is_some_and(|c| grid(a, c));
     if drum {
         crate::view::drums::display(a);
     } else {
@@ -172,7 +192,7 @@ fn select_source(a: &mut App) -> Result<(), String> {
         .find_map(|(&id, &t)| (t == a.track).then_some(id))
         .ok_or(message::MISSING_SOUND_CONTAINER)?;
     let selected = shown::resolve(a);
-    let drum = l.patches.get(a.track).is_some_and(|p| p.sequencer());
+    let drum = grid(a, owner);
     a.patterns.container = Some(owner);
     a.patterns.selected = selected;
     // Repeated notifications must not erase numeric input, restart the editor or move the cursor.

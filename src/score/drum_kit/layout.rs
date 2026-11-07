@@ -2,18 +2,35 @@
 use super::*;
 pub const DEFAULT: [Option<u8>; 4] = [Some(49), Some(42), Some(38), Some(36)];
 
+/// Pitches recorded only into a Capture body add no row.
 pub fn rows(track: &Track, kit: &Kit) -> Vec<Option<u8>> {
     let mut rows = kit.rows.clone().unwrap_or_else(|| DEFAULT.to_vec());
+    let captures = captures(track);
     let mut extra: Vec<_> = track
         .events
         .iter()
-        .filter(|e| note_on(e))
+        .filter(|e| note_on(e) && !captures.iter().any(|r| r.contains(&e.tick)))
         .map(|e| e.data[0])
         .filter(|n| !rows.contains(&Some(*n)))
         .collect();
     extra.sort_unstable_by(|a, b| b.cmp(a));
     extra.dedup();
     extra.into_iter().map(Some).chain(rows.drain(..)).collect()
+}
+
+fn captures(track: &Track) -> Vec<std::ops::Range<u64>> {
+    use crate::score::pattern::{self, Kind, Record};
+    track
+        .events
+        .iter()
+        .filter_map(|e| match pattern::record(e) {
+            Ok(Some(Record::Pattern(r))) if r.kind == Kind::Capture => {
+                let length = pattern::body::length(&r.meters).ok()?;
+                Some(e.tick..e.tick.checked_add(length)?)
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// Remap the whole container, including every stored pattern body. No tick/velocity edits.

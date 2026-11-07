@@ -1,5 +1,5 @@
 //! Compare the real command registrations, so a new operation or changed binding
-//! on either sequencer requires matching behavior or an explicit layout exception.
+//! on any of the three sequencers requires matching behavior or an explicit layout exception.
 use super::*;
 use crate::view::commands::{Command, Screen};
 use std::collections::BTreeMap;
@@ -21,6 +21,11 @@ fn common_commands(app: &App) -> BTreeMap<String, (Vec<(Key, egui::Modifiers)>, 
                 "kit.row-next" => "drum.row-next".into(),
                 "kit.row-prev" => "drum.row-prev".into(),
                 "kit.toggle" => "drum.toggle".into(),
+                // Rows are pitches: notes have a length, 128 rows need octave jumps,
+                // and the song's harmony narrows them.
+                "melody.extend" | "melody.shorten" | "melody.octave-down" | "melody.octave-up"
+                | "melody.filter" => return None,
+                id if id.starts_with("melody.") => id.replacen("melody.", "drum.", 1),
                 id => id.to_owned(),
             };
             Some((id, (command.keys, command.repeat)))
@@ -39,6 +44,36 @@ fn both_sequencers_offer_the_same_common_operations_and_bindings() {
     kit.undo = Default::default();
     assert_eq!(common_commands(&drums), common_commands(&kit));
     assert!(!common_commands(&drums).contains_key("app.undo"));
+}
+
+/// Melody rows are pitches of one instrument: no row setting to open with Enter, no row Mute.
+const NOT_IN_MELODY: [&str; 2] = ["drum.activate", "drum.mute"];
+
+#[test]
+fn the_melody_grid_offers_the_drum_grids_common_operations_and_bindings() {
+    let mut drums = super::tests::fixture();
+    let mut melody = super::melody_tests::fixture();
+    let without = |app: &App| {
+        let mut c = common_commands(app);
+        for id in NOT_IN_MELODY {
+            c.remove(id);
+        }
+        c
+    };
+    drums.undo = Default::default();
+    melody.undo = Default::default();
+    for undo in [false, true] {
+        if undo {
+            super::commands::apply(&mut drums, super::commands::Op::Toggle);
+            let track = melody.track;
+            melody
+                .edit_music(|m| cat_smf_editor::score::step_notes::toggle(m, track, 60, 1, 0, 100))
+                .unwrap();
+        }
+        assert_eq!(drums.undo.available(), undo);
+        assert_eq!(melody.undo.available(), undo);
+        assert_eq!(without(&drums), common_commands(&melody));
+    }
 }
 
 #[test]
@@ -96,11 +131,12 @@ fn both_swing_controls_hide_disabled_amount_without_moving_the_steps() {
 }
 
 #[test]
-fn both_grids_draw_gray_boundaries_every_four_steps() {
+fn every_grid_draws_gray_boundaries_every_four_steps() {
     let drums = super::tests::fixture();
     let mut kit = super::kit_edit_tests::fixture(4);
     super::open(&mut kit);
-    for mut app in [drums, kit] {
+    let melody = super::melody_tests::fixture();
+    for mut app in [drums, kit, melody] {
         let ctx = egui::Context::default();
         ctx.style_mut(|s| s.animation_time = 0.0);
         let mut output = Default::default();

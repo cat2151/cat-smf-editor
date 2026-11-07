@@ -23,15 +23,12 @@ pub(super) fn edit(a: &mut App) -> Result<(), String> {
         return Ok(());
     }
     let l = a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?;
-    if !l.patches[a.track].sequencer() {
-        return Err("drum sound containerを選んでください".into());
-    }
     let c = Catalog::read(&l.music)?;
     let owner = c
         .tracks
         .iter()
         .find_map(|(&id, &t)| (t == a.track).then_some(id))
-        .ok_or("drum containerが見つかりません")?;
+        .ok_or(message::MISSING_SOUND_CONTAINER)?;
     a.patterns.container = Some(owner);
     let selected = a
         .patterns

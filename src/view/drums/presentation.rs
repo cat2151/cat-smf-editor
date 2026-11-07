@@ -15,8 +15,8 @@ pub(crate) fn is_open(app: &App) -> bool {
     match app.drum_editor.target {
         Some(Target::Track(track)) => track == app.track,
         Some(Target::Pattern(id)) => {
+            // An ordinary container's pattern shows the melody grid.
             crate::view::patterns::mode::editing(app, app.track).is_some_and(|c| c.pattern == id)
-                && l.patches.get(app.track).is_some_and(|p| p.sequencer())
         }
         None => false,
     }
@@ -29,6 +29,9 @@ pub(crate) fn open(app: &mut App) {
     }
     let prepare = pattern::edit(app).and_then(|()| {
         drums::tick(app.loaded.as_ref().unwrap().music.division, 0)?;
+        if super::melody::active(app) {
+            return Ok(());
+        }
         ensure(app)
     });
     if let Err(error) = prepare {
@@ -37,6 +40,9 @@ pub(crate) fn open(app: &mut App) {
     }
     if !is_open(app) {
         display(app);
+    }
+    if super::melody::active(app) {
+        crate::view::patterns::navigation::remember_grid(app, true);
     }
 }
 
@@ -55,11 +61,24 @@ pub(crate) fn display(app: &mut App) {
         .map_or(1, |map| {
             u64::try_from(map.position(tick).measure).unwrap_or(1)
         });
+    let melody = super::melody::active(app);
+    // Undo and other re-presentations of the same pattern keep the pitch and step.
+    let kept = matches!((app.drum_editor.target, target), (Some(Target::Pattern(a)), Target::Pattern(b)) if a == b)
+        && melody;
+    let (field, melody_state) = if kept {
+        (
+            app.drum_editor.field,
+            std::mem::take(&mut app.drum_editor.melody),
+        )
+    } else {
+        (2, Default::default())
+    };
     playback::close(app);
     app.drum_editor = State {
         target: Some(target),
-        confirm_create: needs_track(app),
-        field: 2,
+        confirm_create: !melody && needs_track(app),
+        field,
+        melody: melody_state,
         page: number.saturating_sub(1),
         first: number,
         last: number,
@@ -102,6 +121,9 @@ pub(crate) fn close(app: &mut App) {
 }
 
 pub(crate) fn dismiss(app: &mut App) {
+    if super::melody::active(app) {
+        crate::view::patterns::navigation::remember_grid(app, false);
+    }
     if matches!(app.drum_editor.target, Some(Target::Pattern(_))) {
         crate::view::patterns::navigation::browse(app);
     } else {

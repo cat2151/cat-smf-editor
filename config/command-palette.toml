@@ -307,8 +307,8 @@ name = "Mute"
 
 [[command]]
 ids = ["drum.open"]
-name = "Drum sequencer"
-search = "drum sequencer ドラム"
+name = "Drum / Step sequencer"
+search = "drum step sequencer ドラム メロディ"
 
 [[command]]
 ids = ["drum.page-next"]
@@ -840,6 +840,46 @@ search = "voicevox ずんだもん mascot playback"
 [[command]]
 ids = ["meta.all"]
 name = "All tracks meta text"
+
+[[command]]
+ids = ["melody.extend"]
+name = "伸ばす"
+
+[[command]]
+ids = ["melody.filter"]
+name = "行の絞り込み"
+
+[[command]]
+ids = ["melody.octave-down"]
+name = "1 octave下"
+
+[[command]]
+ids = ["melody.octave-up"]
+name = "1 octave上"
+
+[[command]]
+ids = ["melody.row-next"]
+name = "低い音高"
+
+[[command]]
+ids = ["melody.row-prev"]
+name = "高い音高"
+
+[[command]]
+ids = ["melody.shorten"]
+name = "縮める"
+
+[[command]]
+ids = ["melody.step-next"]
+name = "次のStep"
+
+[[command]]
+ids = ["melody.step-prev"]
+name = "前のStep"
+
+[[command]]
+ids = ["melody.toggle"]
+name = "Note"
 
 [[command]]
 ids = ["missing.new"]

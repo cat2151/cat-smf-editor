@@ -101,6 +101,8 @@ pub(super) struct Surface {
     sounding: Option<usize>,
     beat: Rect,
     playing: Rect,
+    /// The playing column shows as one line through its middle instead of a frame.
+    line: bool,
 }
 
 impl Surface {
@@ -117,7 +119,14 @@ impl Surface {
             sounding,
             beat: Rect::NOTHING,
             playing: Rect::NOTHING,
+            line: false,
         }
+    }
+
+    /// For a column taller than the view, whose frame would show only as two side lines.
+    pub fn playing_line(mut self) -> Self {
+        self.line = true;
+        self
     }
 
     pub fn selection(&self, ui: &egui::Ui, rect: Rect, selected: bool) {
@@ -141,7 +150,21 @@ impl Surface {
     }
 
     pub fn finish(&self, ui: &egui::Ui) {
-        if self.playing.is_positive() {
+        if self.playing.is_positive() && self.line {
+            let clip = ui.clip_rect();
+            let (top, bottom) = (
+                self.playing.top().max(clip.top()),
+                self.playing.bottom().min(clip.bottom()),
+            );
+            let x = self.playing.center().x;
+            ui.painter().line_segment(
+                [egui::pos2(x, top), egui::pos2(x, bottom)],
+                Stroke::new(2.0_f32, crate::view::timeline_repeat::PLAYHEAD),
+            );
+            #[cfg(test)]
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("drum-playing"), self.playing));
+        } else if self.playing.is_positive() {
             ui.painter().rect_stroke(
                 self.playing.expand(2.0),
                 2.0,

@@ -38,6 +38,10 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         super::kit::commands::collect(app, screen, out);
         return;
     }
+    if super::melody::active(app) {
+        super::melody::commands::collect(app, screen, out);
+        return;
+    }
     let own = if app.drum_editor.confirm_create {
         Screen::DrumCreate
     } else if app.drum_editor.input.is_some() {

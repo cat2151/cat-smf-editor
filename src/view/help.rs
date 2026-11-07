@@ -139,10 +139,18 @@ pub(super) fn body(app: &mut App, ui: &mut egui::Ui) {
             }
         }
         Target::Drums => {
+            let melody = crate::view::drums::melody::active(app);
             if let Some(l) = &app.loaded {
-                ui.heading(format!("Drum sequencer · {}", l.track_titles[app.track]));
+                let name = if melody {
+                    "Step sequencer"
+                } else {
+                    "Drum sequencer"
+                };
+                ui.heading(format!("{name} · {}", l.track_titles[app.track]));
             }
-            if crate::view::drums::kit::active(app) {
+            if melody {
+                pages::melody(ui);
+            } else if crate::view::drums::kit::active(app) {
                 pages::kit(ui);
             } else {
                 pages::drums(ui);

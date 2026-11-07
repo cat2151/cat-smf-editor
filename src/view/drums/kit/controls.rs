@@ -148,10 +148,11 @@ pub(super) fn wheel(ui: &mut egui::Ui, response: &egui::Response) -> Option<bool
     Some(delta > 0.0)
 }
 
-pub(super) fn boundaries(
+/// The A and B measure buttons; the melody grid shows the same ones.
+pub(in crate::view::drums) fn boundaries(
     ui: &mut egui::Ui,
     state: &super::super::State,
-    action: &mut Option<commands::Action>,
+    mut set: impl FnMut(super::super::commands::Op),
 ) {
     for (end, label, number, hint) in [
         (false, "A", state.first, "[ / ]"),
@@ -163,8 +164,9 @@ pub(super) fn boundaries(
         ui.ctx()
             .data_mut(|d| d.insert_temp(egui::Id::new(("kit-boundary", end)), response.rect));
         if let Some(up) = wheel(ui, &response) {
-            *action = Some(commands::Action::Common(
-                super::super::commands::Op::Boundary(end, if up { 1 } else { -1 }),
+            set(super::super::commands::Op::Boundary(
+                end,
+                if up { 1 } else { -1 },
             ));
         }
     }
