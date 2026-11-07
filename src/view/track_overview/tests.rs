@@ -127,7 +127,7 @@ fn opened_from(mut app: App) -> (App, egui::Context) {
     render(&mut app, &ctx, vec![]);
     let command = commands::candidates(&app, &ctx)
         .into_iter()
-        .find(|c| c.id == "track-overview")
+        .find(|c| c.id == "overview.open")
         .unwrap();
     assert!(commands::execute(&mut app, &ctx, &command));
     render(&mut app, &ctx, vec![]);
@@ -287,3 +287,4 @@ fn right_click_menu_offers_track_play_and_jump() {
 
 mod drawing;
 mod pattern_edit;
+pub(crate) mod song;

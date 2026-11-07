@@ -173,7 +173,9 @@ pub(super) fn body(app: &mut App, ui: &mut egui::Ui) {
                 Target::Piano => piano_roll::rows(ui),
                 Target::Tempo => tempo_curve::rows(ui),
                 Target::Parameter => parameter_curve::rows(ui),
-                Target::Overview => track_overview::rows(ui),
+                Target::Overview => {
+                    track_overview::rows(ui, crate::view::track_overview::is_song(app))
+                }
                 _ => key_groups(ui, &KEYS),
             });
             close_guide(ui);

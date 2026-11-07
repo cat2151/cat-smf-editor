@@ -134,7 +134,7 @@ mod recording_tests {
             .play_key(0, &app.loaded.as_ref().unwrap().patches[0], 60, None);
         let record = commands::definitions(&app, Screen::Song)
             .into_iter()
-            .find(|c| c.id == "record-pattern")
+            .find(|c| c.id == "pattern.record")
             .unwrap();
         commands::run_direct(&mut app, &ctx, &record);
         assert!(app.patterns.recording.is_open());

@@ -3,7 +3,7 @@ use super::measure_lyrics_tests::{
 };
 use crate::view::{
     edit_menu::lyric_tests::{settle, wav},
-    palette::tests::{frame, open, press, query},
+    palette::tests::{choose, frame, open, press},
 };
 use eframe::egui::{self, Key};
 fn sing(_: &str, rate: u32) -> Result<Vec<u8>, String> {
@@ -20,7 +20,7 @@ fn both_orders_preview_confirm_next_measure_and_one_undo() {
         frame(&mut app, &ctx, vec![]);
         let before = tracks(&app);
         open(&mut app, &ctx);
-        query(&mut app, &ctx, "同時に差し替え");
+        choose(&mut app, &ctx, "mml.measure-lyrics");
         press(&mut app, &ctx, Key::Enter);
         frame(&mut app, &ctx, vec![]);
         assert!(app.voicevox.lyrics.as_ref().unwrap().combined);
@@ -52,7 +52,7 @@ fn escape_restores_both_notes_and_lyrics() {
     frame(&mut app, &ctx, vec![]);
     let before = tracks(&app);
     open(&mut app, &ctx);
-    query(&mut app, &ctx, "同時に差し替え");
+    choose(&mut app, &ctx, "mml.measure-lyrics");
     press(&mut app, &ctx, Key::Enter);
     frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![egui::Event::Text("o5 c1 どん".into())]);
@@ -72,7 +72,7 @@ fn empty_measure_starts_loop_after_input_and_oversized_input_stays_open() {
         frame(&mut app, &ctx, vec![]);
         let before = tracks(&app);
         open(&mut app, &ctx);
-        query(&mut app, &ctx, "同時に差し替え");
+        choose(&mut app, &ctx, "mml.measure-lyrics");
         press(&mut app, &ctx, Key::Enter);
         frame(&mut app, &ctx, vec![]);
         frame(&mut app, &ctx, vec![egui::Event::Text(text.into())]);
@@ -98,7 +98,7 @@ fn next_empty_measure_keeps_the_previous_loop_until_combined_input_can_play() {
     on_note(&mut app, 2400);
     frame(&mut app, &ctx, vec![]);
     open(&mut app, &ctx);
-    query(&mut app, &ctx, "同時に差し替え");
+    choose(&mut app, &ctx, "mml.measure-lyrics");
     press(&mut app, &ctx, Key::Enter);
     frame(&mut app, &ctx, vec![]);
     frame(
@@ -116,7 +116,7 @@ fn next_empty_measure_keeps_the_previous_loop_until_combined_input_can_play() {
     let empty = (5760, 7680);
     crate::cursor::moves::at_tick(&mut app, empty.0);
     open(&mut app, &ctx);
-    query(&mut app, &ctx, "同時に差し替え");
+    choose(&mut app, &ctx, "mml.measure-lyrics");
     press(&mut app, &ctx, Key::Enter);
     frame(&mut app, &ctx, vec![]);
     assert_looping(&app);

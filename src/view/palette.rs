@@ -3,6 +3,7 @@ use super::commands::{self, Command};
 use crate::app::App;
 use eframe::egui::{self, Key, Modifiers};
 mod history;
+mod tooltip;
 use super::command_row as row;
 use super::modal::Origin;
 use super::modal::{clear, frame_token};
@@ -12,6 +13,7 @@ pub(crate) mod tests;
 #[derive(Default)]
 pub struct State {
     history: history::History,
+    descriptions: commands::descriptions::Catalog,
     origin: Option<Origin>,
     query: String,
     search: commands::SearchQuery,
@@ -19,10 +21,16 @@ pub struct State {
     commands: Vec<Command>,
     reveal: bool,
     composing: bool,
+    description_open: bool,
     geometry: Option<(f32, f32)>,
     handled: Option<(egui::ViewportId, u64)>,
 }
 impl State {
+    pub(crate) fn owns_viewport(&self, ctx: &egui::Context) -> bool {
+        self.origin
+            .as_ref()
+            .is_some_and(|o| o.viewport == ctx.viewport_id())
+    }
     pub fn is_open(&self) -> bool {
         self.origin.is_some()
     }
@@ -43,10 +51,14 @@ pub(crate) fn begin(a: &mut App, ctx: &egui::Context) -> Option<egui::InputState
     let opening=ctx.input(|i|i.events.iter().any(|e|matches!(e,egui::Event::Key{key:Key::P,pressed:true,repeat:false,modifiers,..} if commands::matches(*modifiers,Modifiers::CTRL|Modifiers::SHIFT))));
     if !a.palette.is_open() && opening && a.palette.handled != Some(token) {
         let origin = Origin::capture(a, ctx);
+        let mut descriptions = std::mem::take(&mut a.palette.descriptions);
+        descriptions.reload(&mut a.load_error);
+        let commands = descriptions.apply(commands::candidates(a, ctx));
         a.palette = State {
             history: history::History::load(a),
             origin: Some(origin),
-            commands: commands::candidates(a, ctx),
+            commands,
+            descriptions,
             reveal: true,
             ..Default::default()
         };
@@ -91,9 +103,10 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     let mut execute = false;
     let mut cancel = false;
     if invalid {
-        palette.commands = commands::candidates(a, ctx);
+        palette.commands = palette.descriptions.apply(commands::candidates(a, ctx));
         palette.origin = Some(Origin::capture_with_focus(a, ctx, origin));
         palette.selected = 0;
+        palette.description_open = false;
         palette.reveal = true;
     }
     let events = ctx.input(|i| i.events.clone());
@@ -129,6 +142,7 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
                     && let Some(action) = super::list_navigation::movement(*key, *modifiers)
                 {
                     palette.selected = action.apply(palette.selected, filtered.len());
+                    palette.description_open = false;
                     palette.reveal = true;
                     continue;
                 }
@@ -136,6 +150,16 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
                     continue;
                 }
                 match key {
+                    Key::F1 if !*repeat && !ime_enter => {
+                        palette.description_open = !palette.description_open
+                            && filtered
+                                .get(palette.selected)
+                                .is_some_and(|&i| !palette.commands[i].description().is_empty());
+                        palette.reveal = true;
+                    }
+                    Key::Escape if !ime_enter && palette.description_open => {
+                        palette.description_open = false;
+                    }
                     Key::Escape if !ime_enter => cancel = true,
                     Key::Enter if !*repeat && !ime_enter && !invalid => execute = true,
                     _ => {}
@@ -149,7 +173,7 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
                 && !(matches!(
                     e,
                     egui::Event::Key {
-                        key: Key::Enter | Key::Escape,
+                        key: Key::Enter | Key::Escape | Key::F1,
                         ..
                     }
                 ) && !ime_enter)
@@ -193,7 +217,7 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
             ctx.request_repaint();
             return;
         }
-        palette.commands = commands::candidates(a, ctx);
+        palette.commands = palette.descriptions.apply(commands::candidates(a, ctx));
         palette.selected = 0;
         palette.reveal = true;
         filtered = filter(
@@ -239,6 +263,7 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
         response.request_focus();
         if response.changed() {
             palette.selected = 0;
+            palette.description_open = false;
             palette.reveal = true;
             filtered = filter(
                 &palette.commands,
@@ -260,8 +285,15 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
                         response.scroll_to_me(Some(egui::Align::Center));
                     }
                     if response.clicked() {
+                        palette.description_open = false;
                         palette.selected = row;
                     }
+                    tooltip::show(
+                        &response,
+                        command,
+                        palette.description_open && row == palette.selected,
+                        !palette.description_open,
+                    );
                 }
             });
     });
@@ -282,6 +314,15 @@ fn filter(
         .enumerate()
         .filter_map(|(i, c)| c.matches_query(search).then_some(i))
         .collect();
-    result.sort_by_key(|&i| history.rank(query, &commands[i]));
+    // A choice learned for this query wins. Otherwise a recently used command
+    // matching only an explanation must not displace a name/key match.
+    result.sort_by_cached_key(|&i| {
+        let rank = history.rank(query, &commands[i]);
+        (
+            rank.0 != 0,
+            rank.0 != 0 && !commands[i].matches_primary_query(search),
+            rank,
+        )
+    });
     result
 }

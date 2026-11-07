@@ -30,8 +30,8 @@ pub fn prepare(a: &App, scene: Option<u64>) -> Result<Prepared, String> {
 }
 fn tempo(a: &App, scene: Option<u64>) -> Result<TempoMap, String> {
     let music = &a.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
-    if scene.is_some() {
-        TempoMap::constant(music.division, a.patterns.tempo.0)
+    if let Some(scene) = scene {
+        crate::view::patterns::timing::scene(a, scene)
     } else {
         Ok(TempoMap::new(music, 0))
     }
@@ -102,6 +102,7 @@ pub(crate) fn prepare_occurrences(
     )?;
     Ok(Prepared {
         active: Active {
+            containers: None,
             automation,
             mode,
             clock_track,
@@ -149,6 +150,11 @@ pub fn start_from(a: &mut App, scene: Option<u64>, tick: u64) {
 fn begin(a: &mut App, p: Result<Prepared, String>) {
     match p {
         Ok(p) => {
+            if let Mode::Arrangement(Some(scene)) = p.active.mode
+                && let Ok(tick) = crate::view::patterns::timing::scene_tick(a, scene)
+            {
+                a.patterns.timing.playing = Some((arrangement::PatternOrScene::Scene(scene), tick));
+            }
             a.playback.follow = false;
             a.playback.last = p.active.mode;
             a.playback.pending = Some(p);
@@ -157,7 +163,44 @@ fn begin(a: &mut App, p: Result<Prepared, String>) {
     }
 }
 pub fn remaining(a: &App, scene: Option<u64>, start: f64, duration: f64) -> Option<Prepared> {
-    let mut p = prepare(a, scene).ok()?;
+    remaining_tracks(a, scene, start, duration, None)
+}
+
+/// Keeps an arrangement's time and controls while auditioning only selected containers.
+pub(crate) fn remaining_tracks(
+    a: &App,
+    scene: Option<u64>,
+    start: f64,
+    duration: f64,
+    tracks: Option<&[usize]>,
+) -> Option<Prepared> {
+    let mut p = if let Some(tracks) = tracks {
+        let music = &a.loaded.as_ref()?.music;
+        let catalog = Catalog::read(music).ok()?;
+        let (mut occurrences, end) = arrangement::occurrences(music, scene).ok()?;
+        occurrences.retain(|(id, _)| tracks.contains(&catalog.patterns[id].track));
+        prepare_occurrences(
+            a,
+            &occurrences,
+            end,
+            tempo(a, scene).ok()?,
+            Mode::Arrangement(scene),
+            0,
+        )
+        .ok()?
+    } else {
+        prepare(a, scene).ok()?
+    };
+    if let Some(tracks) = tracks {
+        let catalog = Catalog::read(&a.loaded.as_ref()?.music).ok()?;
+        p.active.containers = Some(
+            catalog
+                .tracks
+                .iter()
+                .filter_map(|(&id, track)| tracks.contains(track).then_some(id))
+                .collect(),
+        );
+    }
     let duration = duration.min(p.active.end - start);
     if start < 0.0 || duration <= 0.0 {
         return None;

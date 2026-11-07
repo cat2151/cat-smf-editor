@@ -147,7 +147,7 @@ fn pattern_switch_drops_numeric_input_and_an_old_command_cannot_edit_the_new_bod
     assert_eq!(commands::owner(&a, &c), Screen::DrumInput);
     let old = commands::definitions(&a, Screen::DrumInput)
         .into_iter()
-        .find(|c| c.id == "drum-confirm")
+        .find(|c| c.id == "drum.confirm")
         .unwrap();
     library::edit(&mut a, ids[1]).unwrap();
     assert_body(&a, &c, ids[1]);

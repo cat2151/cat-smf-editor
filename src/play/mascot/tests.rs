@@ -34,6 +34,7 @@ fn fixture() -> (Music, Active) {
         )
     };
     let active = Active {
+        containers: None,
         automation: Default::default(),
         mode: Mode::AllTracks,
         clock_track: 0,

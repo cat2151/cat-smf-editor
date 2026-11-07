@@ -20,20 +20,13 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if s != Screen::Recent {
         return;
     }
-    out.push(Command::plain(
-        s,
-        "recent-close",
-        "取消",
-        &[Key::Escape],
-        |a, _| {
-            a.recent.open = false;
-            silence(a);
-        },
-    ));
+    out.push(Command::plain(s, "recent.close", &[Key::Escape], |a, _| {
+        a.recent.open = false;
+        silence(a);
+    }));
     out.push(Command::new(
         s,
-        "recent-stop",
-        "プレビュー停止",
+        "recent.stop",
         &[(Key::Space, Modifiers::SHIFT)],
         |a, _| silence(a),
     ));
@@ -41,24 +34,14 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if count == 0 {
         return;
     }
-    for (id, name, keys, delta) in [
-        (
-            "recent-next",
-            "次のファイル",
-            &[Key::J, Key::ArrowDown][..],
-            1,
-        ),
-        (
-            "recent-prev",
-            "前のファイル",
-            &[Key::K, Key::ArrowUp][..],
-            -1,
-        ),
-        ("recent-page-next", "10ファイル下", &[Key::PageDown][..], 10),
-        ("recent-page-prev", "10ファイル上", &[Key::PageUp][..], -10),
+    for (id, keys, delta) in [
+        ("recent.next", &[Key::J, Key::ArrowDown][..], 1),
+        ("recent.prev", &[Key::K, Key::ArrowUp][..], -1),
+        ("recent.page-next", &[Key::PageDown][..], 10),
+        ("recent.page-prev", &[Key::PageUp][..], -10),
     ] {
         out.push(
-            Command::plain(s, id, name, keys, move |a, c| {
+            Command::plain(s, id, keys, move |a, c| {
                 a.recent.cursor = a.recent.cursor.saturating_add_signed(delta).min(count - 1);
                 a.recent.reveal = true;
                 preview(a);
@@ -67,13 +50,9 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             .repeating(),
         );
     }
-    out.push(Command::plain(
-        s,
-        "recent-choose",
-        "開く",
-        &[Key::Enter],
-        |a, _| choose(a, a.recent.cursor),
-    ));
+    out.push(Command::plain(s, "recent.choose", &[Key::Enter], |a, _| {
+        choose(a, a.recent.cursor)
+    }));
     for (index, entry) in a.recent.history.entries.iter().enumerate() {
         let path = entry.path.clone();
         let label = shortcut(index);
@@ -96,16 +75,19 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             })
             .into_iter()
             .collect::<Vec<_>>();
-        out.push(Command::new(
-            s,
-            format!("recent-{}", entry.path.display()),
-            entry.path.display().to_string(),
-            &keys,
-            move |a, _| {
-                if let Some(i) = a.recent.history.entries.iter().position(|e| e.path == path) {
-                    choose(a, i);
-                }
-            },
-        ));
+        out.push(
+            Command::new(
+                s,
+                format!("recent.entry-{}", entry.path.display()),
+                &keys,
+                move |a, _| {
+                    if let Some(i) = a.recent.history.entries.iter().position(|e| e.path == path) {
+                        choose(a, i);
+                    }
+                },
+            )
+            .named(entry.path.display().to_string())
+            .text_id("recent.entry"),
+        );
     }
 }

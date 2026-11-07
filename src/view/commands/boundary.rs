@@ -117,15 +117,15 @@ fn boundary_checker_rejects_domain_examples_and_allows_search_display_and_histor
         "match command.id.as_str() { _ => () }",
         "use crate::edit::insert;",
         "Operation::Views",
-        "if command.id == \"insert-tempo\" { run(); }",
-        "matches!(command.id, \"insert-tempo\")",
+        "if command.id == \"event.insert-tempo\" { run(); }",
+        "matches!(command.id, \"event.insert-tempo\")",
     ] {
         assert!(check(forbidden).is_err(), "{forbidden}");
     }
     for allowed in [
         "let id = command.id.clone(); history.record(id);",
         "row.label(command.name);",
-        "search.matches_text(\"insert-event pattern_args\");",
+        "search.matches_text(\"event.insert pattern_args\");",
         "// patterns::mutate()\ncommands::execute(app,ctx,command);",
         "/* edit_music */ history.save(app);",
     ] {

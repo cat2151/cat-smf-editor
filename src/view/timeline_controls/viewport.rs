@@ -88,17 +88,30 @@ impl Viewport {
         }
     }
 
-    pub(crate) fn zoom_horizontal(&mut self, enlarge: bool) {
-        self.zoom_axis(
-            0,
-            if enlarge {
-                timeline_zoom::CLICK
-            } else {
-                1.0 / timeline_zoom::CLICK
-            },
-            self.axis_length(0) / 2.0,
-            self.axis_length(0) / 2.0,
-        );
+    /// Zooms time around `at` px of content: it keeps its place on screen, or comes to the
+    /// center when it was out of view.
+    pub(crate) fn zoom_horizontal(&mut self, enlarge: bool, at: f32) {
+        if self.panel.is_none() {
+            return;
+        }
+        let width = self.axis_length(0);
+        let anchor = at - self.scroll.x;
+        let target = if (0.0..=width).contains(&anchor) {
+            anchor
+        } else {
+            width / 2.0
+        };
+        let from = self.zoom().x;
+        let factor = if enlarge {
+            timeline_zoom::CLICK
+        } else {
+            1.0 / timeline_zoom::CLICK
+        };
+        let to = timeline_zoom::clamp(from * factor).max(self.min_time_zoom);
+        let mut offset = self.pending.unwrap_or(self.scroll);
+        offset.x = timeline_zoom::rescroll(self.scroll.x, anchor, from, to, target);
+        self.zoom = egui::vec2(to, self.zoom().y);
+        self.pending = Some(offset);
     }
 
     /// Zooms one axis and moves the content at `anchor` px to `target` px.

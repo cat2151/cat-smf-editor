@@ -62,6 +62,9 @@ pub(in crate::view::recording) fn poll(a: &mut App, s: &mut Session) {
         s.kit_creation = None;
         return;
     }
+    if play::armed(s) {
+        return;
+    }
     let result = match job.result.try_recv() {
         Ok(result) => result,
         Err(TryRecvError::Empty) => return,
@@ -69,10 +72,27 @@ pub(in crate::view::recording) fn poll(a: &mut App, s: &mut Session) {
     };
     s.kit_creation = None;
     match result.and_then(|(patch, cache)| {
+        if s.sound().container.is_none() {
+            play::leave(s);
+            super::super::capture::flush(a, s, true)?;
+        }
         a.state_cache.absorb(cache);
         super::super::super::patterns::library::new_container_with(a, Some(patch))
     }) {
-        Ok(_) => s.error = None,
-        Err(error) => s.error = Some(error),
+        Ok(id) => {
+            s.error = None;
+            if super::super::phrase::adopt(a, s) {
+                super::super::phrase::retune(a, s);
+            }
+            if let Some(i) = s.sounds.iter().position(|x| x.container == Some(id)) {
+                super::super::setup::select(a, s, i);
+            }
+        }
+        Err(error) => {
+            if s.recorder.is_none() {
+                play::start(a, s);
+            }
+            s.error = Some(error);
+        }
     }
 }

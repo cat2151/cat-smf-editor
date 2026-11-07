@@ -6,7 +6,7 @@ struct State {
     position: Option<(usize, u64)>,
     offset: f32,
     width: f32,
-    end: u64,
+    reach: u64,
     head: Option<f32>,
 }
 
@@ -24,6 +24,7 @@ impl Matrix {
         pane: Pane,
         position: (usize, u64),
         end: u64,
+        columns: u64,
         cell_width: f32,
     ) -> Self {
         let id = ui.id().with((pane.title(), "matrix-position"));
@@ -52,9 +53,11 @@ impl Matrix {
             }
         }
         state.position = Some(position);
-        // Keep the reachable range when the cursor moves back to earlier cells.
+        // Keep the reachable range when the cursor moves back to earlier cells, padded
+        // by the current zoom's screenful so zooming back in leaves no stale blank space.
         let end = if pane == Pane::Song {
-            end.max(state.end)
+            state.reach = state.reach.max(position.1);
+            end.max(state.reach.saturating_add(columns))
         } else {
             end
         };
@@ -85,6 +88,9 @@ impl Matrix {
     }
 
     pub fn visible(&mut self, ui: &mut egui::Ui, viewport: egui::Rect) -> (egui::Rect, u64, u64) {
+        // A zoom keeps its pointed measure in place, so the content reaches whatever it scrolls to.
+        let shown = ((self.offset + self.state.width - self.label).max(0.0) / self.stride).ceil();
+        self.end = self.end.max(shown as u64 + 2);
         let width = self.label + self.end.saturating_sub(1) as f32 * self.stride;
         ui.set_min_width(width);
         let first = (((viewport.left() - self.label).max(0.0) / self.stride).floor() as u64)
@@ -162,7 +168,6 @@ impl Matrix {
     ) {
         self.state.offset = output.state.offset.x;
         self.state.width = output.inner_rect.width();
-        self.state.end = self.end;
         ui.ctx().data_mut(|d| {
             d.insert_temp(ui.id().with((pane.title(), "matrix-position")), self.state)
         });

@@ -130,17 +130,10 @@ fn movement(a: &mut App, delta: isize) {
     }
 }
 pub(super) fn collect(s: Screen, out: &mut Vec<Command>) {
+    out.push(Command::plain(s, "first-pattern.edit", &[Key::Enter], edit));
     out.push(Command::plain(
         s,
-        "first-pattern-edit",
-        "Create",
-        &[Key::Enter],
-        edit,
-    ));
-    out.push(Command::plain(
-        s,
-        "first-pattern-back",
-        "Cancel",
+        "first-pattern.back",
         &[Key::Escape],
         |a, _| back(a),
     ));
@@ -148,11 +141,10 @@ pub(super) fn collect(s: Screen, out: &mut Vec<Command>) {
         out.push(Command::plain(
             s,
             if delta < 0 {
-                "first-container-prev"
+                "first-pattern.container-prev"
             } else {
-                "first-container-next"
+                "first-pattern.container-next"
             },
-            "Container",
             &[key],
             move |a, _| movement(a, delta),
         ));

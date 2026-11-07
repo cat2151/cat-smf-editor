@@ -10,6 +10,8 @@ use cat_smf_editor::score::{
 };
 use eframe::egui::{self, Key, Modifiers};
 mod commands;
+mod editing;
+pub use editing::{click_body, edit, edit_choice};
 mod deletion;
 mod dialog;
 mod minimap;
@@ -185,6 +187,7 @@ pub fn open_scene(a: &mut App, id: u64) -> Result<(), String> {
         return Err(message::MISSING_SCENE.into());
     }
     a.patterns.workspace.scene = Some(id);
+    a.patterns.timing.scene = None;
     a.patterns.workspace.scene_cell.row = 0;
     a.patterns.workspace.scene_cell.measure = 1;
     a.patterns.workspace.scene_cell.focus = true;
@@ -264,89 +267,6 @@ pub fn current(a: &App, p: Pane) -> Option<PatternOrScene> {
     let c = scene::read(&a.loaded.as_ref()?.music).ok()?;
     let s = a.patterns.workspace.selection(p);
     model::covering(&c, scene_id(a, p), lane(a, p)?, s.measure).map(|(part, _)| part)
-}
-pub fn edit(a: &mut App, ctx: &egui::Context, p: Pane) {
-    match current(a, p) {
-        Some(PatternOrScene::Pattern(id)) => {
-            let r = show_body(a, p, id);
-            if r.is_ok() {
-                a.patterns.workspace.return_to = Some(p);
-                presentation::focus_root(a, ctx);
-            }
-            result(a, r);
-        }
-        Some(PatternOrScene::Scene(id)) => {
-            let r = open_scene(a, id);
-            result(a, r);
-            focus(a, ctx, Pane::Scene);
-        }
-        None => {}
-    }
-}
-/// The chosen part opens independently of any placement; Escape returns to this pane.
-/// A drum pattern opens in the drum editor and an empty one in MML input.
-pub fn edit_choice(a: &mut App, ctx: &egui::Context, p: Pane) {
-    match a.patterns.workspace.selection(p).choice {
-        Some(PatternOrScene::Pattern(id)) => {
-            let r = library::edit(a, id);
-            if r.is_ok() {
-                a.patterns.workspace.return_to = Some(p);
-                presentation::focus_root(a, ctx);
-                let l = a.loaded.as_ref().unwrap();
-                if !crate::view::drums::is_open(a) && super::beacon::empty(l, id) {
-                    crate::view::drums::input(a, ctx);
-                }
-            }
-            result(a, r);
-        }
-        Some(PatternOrScene::Scene(id)) => {
-            let r = open_scene(a, id);
-            result(a, r);
-            focus(a, ctx, Pane::Scene);
-        }
-        None => result(a, Err(message::SELECT_A_PATTERN_OR_SCENE.into())),
-    }
-}
-/// Open the body editor, bound to the placement under the selected cell.
-fn show_body(a: &mut App, p: Pane, id: u64) -> Result<(), String> {
-    let lane = lane(a, p);
-    let placement = a
-        .loaded
-        .as_ref()
-        .and_then(|l| scene::read(&l.music).ok())
-        .and_then(|c| {
-            let selection = a.patterns.workspace.selection(p);
-            let measure = model::covering(&c, scene_id(a, p), lane?, selection.measure)?.1;
-            if p == Pane::Scene {
-                c.scenes
-                    .iter()
-                    .find(|s| Some(s.id) == a.patterns.workspace.scene)?
-                    .cells
-                    .iter()
-                    .find(|cell| Some(cell.lane) == lane && cell.measure + 1 == measure)
-                    .map(|cell| cell.id)
-            } else {
-                c.song
-                    .iter()
-                    .find(|cell| Some(cell.lane) == lane && cell.measure == measure)
-                    .map(|cell| cell.id)
-            }
-        });
-    library::edit(a, id)?;
-    if let Some(c) = &mut a.patterns.editing {
-        c.placement = placement;
-    }
-    Ok(())
-}
-/// A click on a placed pattern opens its body editor and focus stays here;
-/// a click on a placed scene opens it in the scene window, which takes focus.
-pub fn click_body(a: &mut App, p: Pane) {
-    let r = match current(a, p) {
-        Some(PatternOrScene::Pattern(id)) => show_body(a, p, id),
-        Some(PatternOrScene::Scene(id)) => open_scene(a, id),
-        None => return,
-    };
-    result(a, r);
 }
 pub fn open_dialog(a: &mut App, ctx: &egui::Context, purpose: dialog::Purpose, p: Pane) {
     enable(a);

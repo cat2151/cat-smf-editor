@@ -26,7 +26,7 @@ fn event(tick: u64, status: u8, meta_type: u8, data: &[u8]) -> Event {
     }
 }
 
-/// The Song runs at 150 BPM; Scenes and auditions at the preview tempo (120 BPM by default).
+/// Song, Scene and pattern auditions all follow the conductor at 150 BPM.
 /// The container sings a pattern of "ど" (60) then, a quarter rest later, "れ" (64). A Scene puts
 /// the pattern at its measure 2, and the Song puts that Scene at its measure 2.
 /// Returns the app, the pattern and the Scene.

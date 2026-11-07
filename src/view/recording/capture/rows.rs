@@ -37,7 +37,7 @@ pub(super) fn list(
     ui: &mut egui::Ui,
     s: &Session,
     position: Option<(usize, u64)>,
-    bpm: f64,
+    tempo: Option<&cat_smf_editor::score::audition_timing::TempoMap>,
 ) -> Option<Click> {
     let b = s.capture.as_ref()?;
     let name = |c: u64| {
@@ -69,8 +69,7 @@ pub(super) fn list(
                 response,
             } = ui.horizontal(|ui| {
                 ui.monospace(format!("#{}", p.sequence));
-                let quarters = p.end() as f64 / f64::from(s.division.max(1));
-                let seconds = (quarters * 60.0 / bpm) as u64;
+                let seconds = tempo.map_or(0.0, |t| t.duration(p.range.0, p.end())) as u64;
                 ui.monospace(format!("{:>2}:{:02}", seconds / 60, seconds % 60));
                 let (rect, _) = ui.allocate_exact_size(ROLL, egui::Sense::hover());
                 let playing = position.filter(|&(row, _)| row == i);

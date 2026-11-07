@@ -28,14 +28,13 @@ fn choose(app: &mut App, ctx: &egui::Context, style: Style) {
 }
 
 pub fn collect(out: &mut Vec<Command>) {
-    for (id, name, key, style) in [
-        ("style-pattern", "Patternスタイル", Key::P, Style::Pattern),
-        ("style-direct", "Directスタイル", Key::D, Style::Direct),
+    for (id, key, style) in [
+        ("style.pattern", Key::P, Style::Pattern),
+        ("style.direct", Key::D, Style::Direct),
     ] {
         out.push(Command::plain(
             Screen::EditStyle,
             id,
-            name,
             &[key],
             move |a, c| {
                 choose(a, c, style);
@@ -44,8 +43,7 @@ pub fn collect(out: &mut Vec<Command>) {
     }
     out.push(Command::plain(
         Screen::EditStyle,
-        "style-select",
-        "スタイル選択",
+        "style.select",
         &[
             Key::ArrowUp,
             Key::ArrowDown,
@@ -62,8 +60,7 @@ pub fn collect(out: &mut Vec<Command>) {
     ));
     out.push(Command::plain(
         Screen::EditStyle,
-        "style-confirm",
-        "確定",
+        "style.confirm",
         &[Key::Enter],
         |a, c| {
             if let Some(style) = a.edit_style {
@@ -73,8 +70,7 @@ pub fn collect(out: &mut Vec<Command>) {
     ));
     out.push(Command::plain(
         Screen::EditStyle,
-        "style-cancel",
-        "閉じる",
+        "style.cancel",
         &[Key::Escape],
         |a, _| {
             a.edit_style = None;

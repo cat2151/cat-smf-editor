@@ -9,7 +9,7 @@ use cat_smf_editor::voicevox::is_singer;
 use eframe::egui::{self, Key, Modifiers};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const LABEL: &str = "Event list: VOICEVOX: 現在のtrackの歌声を選ぶ";
+const ID: &str = "voicevox.singer";
 
 fn event(tick: u64, status: u8, meta_type: u8, data: &[u8]) -> Event {
     Event {
@@ -58,7 +58,7 @@ fn track(app: &App, index: usize) -> &Track {
 fn offered(app: &mut App, ctx: &egui::Context) -> bool {
     open(app, ctx);
     query(app, ctx, "voicevox");
-    let offered = listed(app).iter().any(|label| label == LABEL);
+    let offered = listed(app).iter().any(|id| id == ID);
     press(app, ctx, Key::Escape);
     offered
 }
@@ -66,7 +66,7 @@ fn offered(app: &mut App, ctx: &egui::Context) -> bool {
 fn run(app: &mut App, ctx: &egui::Context) {
     open(app, ctx);
     query(app, ctx, "voicevox");
-    assert_eq!(listed(app).first().map(String::as_str), Some(LABEL));
+    assert_eq!(listed(app).first().map(String::as_str), Some(ID));
     press(app, ctx, Key::Enter);
     assert!(!crate::view::modal::is_open(app));
     press(app, ctx, Key::Enter);

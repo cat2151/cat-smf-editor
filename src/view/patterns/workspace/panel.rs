@@ -174,7 +174,6 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                         .map(0)
                         .map_or(1, |map| map.position(c.song_length).measure as u64 + 1),
                 )
-                .max(s.measure.saturating_add(columns))
         },
         |n| n.saturating_add(1),
     );
@@ -191,7 +190,7 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
     let mut dropped = None;
     let mut moved = None;
     let mut commented = None;
-    let mut scrolling = scrolling::Matrix::new(ui, p, position, end, cell_width);
+    let mut scrolling = scrolling::Matrix::new(ui, p, position, end, columns, cell_width);
     let head = playhead::x(a, &c, p, cell_width, scrolling.label());
     let timeline = if p == Pane::Song {
         &mut a.patterns.workspace.timeline

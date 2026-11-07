@@ -104,6 +104,8 @@ fn destination(a: &App, id: u64) -> Result<(Context, u64, u64), String> {
 
 /// The projection of `context`, leaving the transport, the candidate and every editor alone.
 fn install(a: &mut App, context: Context, container: u64, tick: u64) {
+    a.patterns.timing.pattern = None;
+    let pattern = context.pattern;
     a.patterns.container = Some(container);
     a.patterns.selected = Some(context.pattern);
     a.patterns
@@ -115,6 +117,7 @@ fn install(a: &mut App, context: Context, container: u64, tick: u64) {
     a.generation = a.generation.wrapping_add(1);
     refresh(a);
     crate::cursor::moves::at_tick(a, tick);
+    crate::view::recording::follow_pattern(a, pattern);
 }
 
 /// Shows `id`, a pattern of the current track, as `shown` decides it.

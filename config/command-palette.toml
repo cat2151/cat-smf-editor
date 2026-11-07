@@ -1,0 +1,1605 @@
+# コマンドパレットの文言。画面の文字でこのファイルを検索して直す。
+# 開発中はパレットを開き直すと読み直す。
+#
+# ids     同じ文言を使う command ID。効果や対象が違う操作は別の項目にする
+# screen  その画面だけの文言。無い欄は screen の無い項目の値を使う
+# name    機能名。track.entry と recent.entry は実データの名前を出すので、書いても効かない
+# tooltip 説明。改行は \n
+# search  名前と同格の検索語。空白で区切る
+
+[screens]
+Main = "Event list"
+EditStyle = "Edit style"
+TrackRename = "Track name"
+Settings = "Settings"
+Program = "Program target"
+Edit = "Edit"
+Go = "Go"
+Tracks = "Tracks"
+Split = "Columns"
+Play = "Play"
+Mixer = "Mixer"
+Layers = "Layers"
+Drums = "Drum sequencer"
+DrumInput = "Drum sequencer"
+DrumCreate = "Drum sequencer"
+LayerInput = "Layers"
+Effects = "Effects"
+Selection = "Selection"
+SelectionMenu = "Selection"
+ChordTiming = "Chord timing"
+Mml = "MML"
+Note = "Note"
+Lyrics = "Lyrics"
+Trill = "Trill"
+Timeline = "Timeline"
+Overview = "Track Overview"
+Help = "Help"
+Recent = "Recent"
+Confirm = "File"
+Backup = "Backup"
+Invalid = "Invalid SMF"
+Missing = "Missing SMF"
+Waiting = "Waiting"
+Browser = "Browser"
+Analysis = "Spectrum"
+Voicevox = "VOICEVOX"
+Singer = "VOICEVOX voice"
+MacroEditor = "Macro edit"
+ParameterPicker = "Automation"
+ParameterInput = "Automation"
+Patterns = "Patterns"
+Scene = "Scene"
+Song = "Pattern / Song"
+ArrangementInput = "Arrangement"
+Recording = "Virtual MIDI keyboard"
+
+[[command]]
+ids = ["app.help"]
+name = "ヘルプ"
+tooltip = "操作キーの一覧を開きます。"
+search = "help"
+
+[[command]]
+ids = ["app.help"]
+screen = "Scene"
+name = "Help"
+
+[[command]]
+ids = ["app.help"]
+screen = "Song"
+name = "Help"
+
+[[command]]
+ids = ["app.quit"]
+name = "アプリ終了"
+tooltip = "アプリを終了します。未保存の編集があれば保存を確認します。"
+search = "quit exit"
+
+[[command]]
+ids = ["app.stop", "play.stop"]
+name = "停止"
+tooltip = "演奏を停止します。"
+search = "stop"
+
+[[command]]
+ids = ["app.stop"]
+screen = "Scene"
+name = "Stop"
+
+[[command]]
+ids = ["app.stop"]
+screen = "Song"
+name = "Stop"
+
+[[command]]
+ids = ["app.undo", "edit.undo"]
+name = "元に戻す"
+tooltip = "直前の編集を元に戻します。"
+search = "undo"
+
+[[command]]
+ids = ["app.undo"]
+screen = "Scene"
+name = "Undo"
+
+[[command]]
+ids = ["app.undo"]
+screen = "Song"
+name = "Undo"
+
+[[command]]
+ids = ["backup.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["backup.open"]
+name = "Backup directory"
+
+[[command]]
+ids = ["browser.close-error"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["chord.cancel"]
+name = "取消"
+search = "cancel"
+
+[[command]]
+ids = ["chord.confirm"]
+name = "確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["chord.earlier"]
+name = "16分前へ"
+
+[[command]]
+ids = ["chord.later"]
+name = "16分後ろへ"
+
+[[command]]
+ids = ["chord.longer"]
+name = "16分長く"
+
+[[command]]
+ids = ["chord.next"]
+name = "次のchord"
+
+[[command]]
+ids = ["chord.prev"]
+name = "前のchord"
+
+[[command]]
+ids = ["chord.quantize"]
+name = "16分quantize"
+
+[[command]]
+ids = ["chord.shorter"]
+name = "16分短く"
+
+[[command]]
+ids = ["chord.timing"]
+name = "Chord timing"
+
+[[command]]
+ids = ["container.delete-track"]
+name = "Delete current container track"
+search = "delete remove current container track コンテナ 削除"
+
+[[command]]
+ids = ["container.new"]
+name = "New Init Saw container"
+tooltip = "Containerを作ります。Containerは配下のPatternで共有する音色を持ちます。"
+search = "add create container track コンテナ"
+
+[[command]]
+ids = ["container.new-drum"]
+name = "New Drums container"
+tooltip = "Containerを作ります。ドラム用。Containerは配下のPatternで共有する音色を持ちます。"
+search = "add create container track コンテナ"
+
+[[command]]
+ids = ["cursor.beat-next"]
+name = "次の拍"
+
+[[command]]
+ids = ["cursor.beat-prev"]
+name = "前の拍"
+
+[[command]]
+ids = ["cursor.first-row"]
+name = "先頭の行"
+
+[[command]]
+ids = ["cursor.last-row"]
+name = "末尾の行"
+
+[[command]]
+ids = ["cursor.measure-next"]
+name = "次の小節"
+
+[[command]]
+ids = ["cursor.measure-prev"]
+name = "前の小節"
+
+[[command]]
+ids = ["cursor.page-down"]
+name = "10行下"
+
+[[command]]
+ids = ["cursor.page-up"]
+name = "10行上"
+
+[[command]]
+ids = ["cursor.row-down"]
+name = "次の行"
+
+[[command]]
+ids = ["cursor.row-up"]
+name = "前の行"
+
+[[command]]
+ids = ["curve.add"]
+name = "Point追加"
+search = "add insert"
+
+[[command]]
+ids = ["curve.edit"]
+name = "Point / Control編集"
+
+[[command]]
+ids = ["curve.next-control"]
+name = "次のcontrol"
+
+[[command]]
+ids = ["curve.next-point"]
+name = "次のpoint"
+
+[[command]]
+ids = ["curve.prev-control"]
+name = "前のcontrol"
+
+[[command]]
+ids = ["curve.prev-point"]
+name = "前のpoint"
+
+[[command]]
+ids = ["curve.remove"]
+name = "Point削除"
+
+[[command]]
+ids = ["curve.zoom-in"]
+name = "時間拡大"
+
+[[command]]
+ids = ["curve.zoom-out"]
+name = "時間縮小"
+
+[[command]]
+ids = ["drum.a-next"]
+name = "A-B Repeat A +"
+
+[[command]]
+ids = ["drum.a-prev"]
+name = "A-B Repeat A −"
+
+[[command]]
+ids = ["drum.activate"]
+name = "音色 / Note / Velocity / Level / Swing / Step"
+
+[[command]]
+ids = ["drum.add-track"]
+name = "ドラムトラック追加"
+search = "add drum kit track ドラム"
+
+[[command]]
+ids = ["drum.b-next"]
+name = "A-B Repeat B +"
+
+[[command]]
+ids = ["drum.b-prev"]
+name = "A-B Repeat B −"
+
+[[command]]
+ids = ["drum.cancel"]
+name = "閉じる / 取消"
+search = "cancel"
+
+[[command]]
+ids = ["drum.confirm"]
+name = "確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["drum.create"]
+name = "Yes"
+
+[[command]]
+ids = ["drum.loop"]
+name = "Loop"
+
+[[command]]
+ids = ["drum.mute"]
+name = "Mute"
+
+[[command]]
+ids = ["drum.open"]
+name = "Drum sequencer"
+search = "drum sequencer ドラム"
+
+[[command]]
+ids = ["drum.page-next"]
+name = "次の小節"
+
+[[command]]
+ids = ["drum.page-prev"]
+name = "前の小節"
+
+[[command]]
+ids = ["drum.row-next"]
+name = "次の行"
+
+[[command]]
+ids = ["drum.row-prev"]
+name = "前の行"
+
+[[command]]
+ids = ["drum.scope"]
+name = "Loop Solo"
+
+[[command]]
+ids = ["drum.step-next"]
+name = "次の項目"
+
+[[command]]
+ids = ["drum.step-prev"]
+name = "前の項目"
+
+[[command]]
+ids = ["drum.toggle"]
+name = "Step"
+
+[[command]]
+ids = ["edit.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["edit.duration"]
+name = "Duration"
+
+[[command]]
+ids = ["edit.lyrics"]
+name = "Lyrics"
+search = "voicevox 歌詞 ずんだもん"
+
+[[command]]
+ids = ["edit.mbt"]
+name = "MBT"
+
+[[command]]
+ids = ["edit.open"]
+name = "編集menu"
+search = "edit"
+
+[[command]]
+ids = ["edit.pitch"]
+name = "Pitch"
+
+[[command]]
+ids = ["edit.repeat"]
+name = "編集反復"
+
+[[command]]
+ids = ["edit.velocity"]
+name = "Velocity"
+
+[[command]]
+ids = ["effect.add"]
+name = "エフェクト追加"
+search = "add effect effects insert"
+
+[[command]]
+ids = ["effect.bypass"]
+name = "Bypass"
+search = "bypass effect effects"
+
+[[command]]
+ids = ["effect.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["effect.move-down"]
+name = "順番を下へ"
+
+[[command]]
+ids = ["effect.move-up"]
+name = "順番を上へ"
+
+[[command]]
+ids = ["effect.next"]
+name = "次のエフェクト"
+
+[[command]]
+ids = ["effect.open"]
+name = "エフェクト"
+tooltip = "楽器のエフェクトを編集します。"
+search = "effects"
+
+[[command]]
+ids = ["effect.open"]
+screen = "Drums"
+name = "Effects"
+
+[[command]]
+ids = ["effect.prev"]
+name = "前のエフェクト"
+
+[[command]]
+ids = ["effect.remove"]
+name = "エフェクト削除"
+search = "remove delete effect effects"
+
+[[command]]
+ids = ["effect.replace"]
+name = "エフェクト差し替え"
+search = "replace effect effects"
+
+[[command]]
+ids = ["event.generate-same-measures"]
+name = "Generate same measures"
+
+[[command]]
+ids = ["event.insert"]
+name = "Insert event…"
+
+[[command]]
+ids = ["event.insert-key-signature"]
+name = "Insert key signature"
+
+[[command]]
+ids = ["event.insert-same-measure"]
+name = "Insert same measure"
+
+[[command]]
+ids = ["event.insert-tempo"]
+name = "Insert tempo"
+
+[[command]]
+ids = ["file.auto-save"]
+name = "Auto save"
+
+[[command]]
+ids = ["file.export-performance"]
+name = "Export performance SMF"
+
+[[command]]
+ids = ["file.new"]
+name = "新規SMF"
+tooltip = "新しいSMFを作ります。"
+search = "new file"
+
+[[command]]
+ids = ["file.open"]
+name = "開く"
+tooltip = "SMFファイルを選んで開きます。"
+search = "open file"
+
+[[command]]
+ids = ["file.save"]
+name = "保存"
+tooltip = "編集中のSMFを保存します。"
+search = "save"
+
+[[command]]
+ids = ["first-pattern.back"]
+name = "Cancel"
+
+[[command]]
+ids = ["first-pattern.container-next"]
+name = "Container"
+
+[[command]]
+ids = ["first-pattern.container-prev"]
+name = "Container"
+
+[[command]]
+ids = ["first-pattern.edit"]
+name = "Create"
+
+[[command]]
+ids = ["go.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["go.end"]
+name = "Track end"
+
+[[command]]
+ids = ["go.next"]
+name = "Next track"
+
+[[command]]
+ids = ["go.open"]
+name = "移動menu"
+
+[[command]]
+ids = ["go.prev"]
+name = "Previous track"
+
+[[command]]
+ids = ["go.start"]
+name = "Track start"
+
+[[command]]
+ids = ["go.tracks"]
+name = "Track list"
+
+[[command]]
+ids = ["guide.add-track"]
+name = "Add chord guide track"
+
+[[command]]
+ids = ["guide.delete-event"]
+name = "Delete guide event"
+
+[[command]]
+ids = ["guide.edit-event"]
+name = "Edit guide event"
+
+[[command]]
+ids = ["guide.insert-chord"]
+name = "Insert chord"
+
+[[command]]
+ids = ["guide.move-event"]
+name = "Move guide event (tick)"
+
+[[command]]
+ids = ["help.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["invalid.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["keyboard.reset-windows"]
+name = "Reset virtual MIDI keyboard windows position"
+
+[[command]]
+ids = ["kit-picker.cancel"]
+name = "取消"
+search = "cancel"
+
+[[command]]
+ids = ["kit-picker.confirm"]
+name = "Note確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["kit-picker.down"]
+name = "次のnote"
+
+[[command]]
+ids = ["kit-picker.preview"]
+name = "試聴"
+
+[[command]]
+ids = ["kit-picker.query"]
+name = "Note検索"
+
+[[command]]
+ids = ["kit-picker.up"]
+name = "前のnote"
+
+[[command]]
+ids = ["kit.activate"]
+name = "Note選択 / Velocity / Step / Kit / Swing"
+
+[[command]]
+ids = ["kit.add-rows"]
+name = "4行追加"
+
+[[command]]
+ids = ["kit.add-track"]
+name = "Drum kitトラック追加"
+search = "add drum kit track ドラム"
+
+[[command]]
+ids = ["kit.context"]
+name = "Step menu"
+
+[[command]]
+ids = ["kit.field-next"]
+name = "次の項目"
+
+[[command]]
+ids = ["kit.field-prev"]
+name = "前の項目"
+
+[[command]]
+ids = ["kit.mute"]
+name = "Mute"
+
+[[command]]
+ids = ["kit.note-picker"]
+name = "Note割り当て"
+
+[[command]]
+ids = ["kit.query"]
+name = "Note検索"
+
+[[command]]
+ids = ["kit.row-next"]
+name = "次のnote"
+
+[[command]]
+ids = ["kit.row-prev"]
+name = "前のnote"
+
+[[command]]
+ids = ["kit.toggle"]
+name = "Step"
+
+[[command]]
+ids = ["layer.add"]
+name = "レイヤー複製"
+search = "add insert"
+
+[[command]]
+ids = ["layer.analysis"]
+name = "Spectrum / Lissajous"
+
+[[command]]
+ids = ["layer.automation"]
+name = "Automation…"
+
+[[command]]
+ids = ["layer.cancel"]
+name = "数値取消"
+search = "cancel"
+
+[[command]]
+ids = ["layer.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["layer.confirm"]
+name = "数値確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["layer.edit"]
+name = "音色選択 / 数値入力"
+
+[[command]]
+ids = ["layer.field-next"]
+name = "次の項目"
+
+[[command]]
+ids = ["layer.field-prev"]
+name = "前の項目"
+
+[[command]]
+ids = ["layer.mute"]
+name = "Mute"
+
+[[command]]
+ids = ["layer.next"]
+name = "次のレイヤー"
+
+[[command]]
+ids = ["layer.octave-down"]
+name = "Octave −1"
+
+[[command]]
+ids = ["layer.octave-up"]
+name = "Octave +1"
+
+[[command]]
+ids = ["layer.open"]
+name = "レイヤー"
+tooltip = "楽器の音色レイヤー（複数の音色を重ねる）を編集します。"
+search = "layers"
+
+[[command]]
+ids = ["layer.prev"]
+name = "前のレイヤー"
+
+[[command]]
+ids = ["layer.remove"]
+name = "レイヤー削除"
+
+[[command]]
+ids = ["layer.solo"]
+name = "Solo"
+
+[[command]]
+ids = ["layer.volume-down"]
+name = "音量 −6 dB"
+
+[[command]]
+ids = ["layer.volume-up"]
+name = "音量 +6 dB"
+
+[[command]]
+ids = ["lyrics.cancel"]
+name = "取消"
+search = "voicevox cancel ずんだもん"
+
+[[command]]
+ids = ["lyrics.confirm"]
+name = "確定"
+search = "voicevox ok confirm ずんだもん"
+
+[[command]]
+ids = ["lyrics.measure"]
+name = "VOICEVOX: 1小節の歌詞を差し替え"
+search = "measure replace voicevox ずんだもん"
+
+[[command]]
+ids = ["macro.cancel"]
+name = "取消"
+search = "cancel"
+
+[[command]]
+ids = ["macro.confirm"]
+name = "確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["macro.count-0"]
+name = "反復回数 0"
+
+[[command]]
+ids = ["macro.count-1"]
+name = "反復回数 1"
+
+[[command]]
+ids = ["macro.count-2"]
+name = "反復回数 2"
+
+[[command]]
+ids = ["macro.count-3"]
+name = "反復回数 3"
+
+[[command]]
+ids = ["macro.count-4"]
+name = "反復回数 4"
+
+[[command]]
+ids = ["macro.count-5"]
+name = "反復回数 5"
+
+[[command]]
+ids = ["macro.count-6"]
+name = "反復回数 6"
+
+[[command]]
+ids = ["macro.count-7"]
+name = "反復回数 7"
+
+[[command]]
+ids = ["macro.count-8"]
+name = "反復回数 8"
+
+[[command]]
+ids = ["macro.count-9"]
+name = "反復回数 9"
+
+[[command]]
+ids = ["macro.duplicate"]
+name = "Variation複製"
+
+[[command]]
+ids = ["macro.less"]
+name = "値を下げる"
+
+[[command]]
+ids = ["macro.max"]
+name = "最大"
+
+[[command]]
+ids = ["macro.min"]
+name = "最小"
+
+[[command]]
+ids = ["macro.more"]
+name = "値を上げる"
+
+[[command]]
+ids = ["macro.next"]
+name = "次のMacro"
+
+[[command]]
+ids = ["macro.prev"]
+name = "前のMacro"
+
+[[command]]
+ids = ["macro.randomize"]
+name = "全MacroをVariation範囲内でランダム化"
+
+[[command]]
+ids = ["macro.randomize-full"]
+name = "全Macroを全範囲でランダム化"
+
+[[command]]
+ids = ["macro.step-less"]
+name = "変化量を半分"
+
+[[command]]
+ids = ["macro.step-more"]
+name = "変化量を2倍"
+
+[[command]]
+ids = ["macro.variation-max"]
+name = "Macro variation curve always maximized"
+
+[[command]]
+ids = ["macro.variation-next"]
+name = "次のVariation"
+
+[[command]]
+ids = ["macro.variation-prev"]
+name = "前のVariation"
+
+[[command]]
+ids = ["mascot.playback"]
+name = "ずんだもん演奏連動"
+search = "voicevox ずんだもん mascot playback"
+
+[[command]]
+ids = ["meta.all"]
+name = "All tracks meta text"
+
+[[command]]
+ids = ["missing.new"]
+name = "新規SMF"
+
+[[command]]
+ids = ["missing.quit"]
+name = "アプリ終了"
+
+[[command]]
+ids = ["mixer.effects"]
+name = "選択対象のエフェクト"
+
+[[command]]
+ids = ["mixer.left"]
+name = "前のtrack / master"
+
+[[command]]
+ids = ["mixer.open"]
+name = "Mixer"
+tooltip = "トラックとマスターの音量を調整するミキサーを開きます。"
+search = "mixer"
+
+[[command]]
+ids = ["mixer.right"]
+name = "次のtrack"
+
+[[command]]
+ids = ["mixer.unfocus"]
+name = "Event listへ戻る"
+
+[[command]]
+ids = ["mml.cancel"]
+name = "取消"
+search = "cancel"
+
+[[command]]
+ids = ["mml.confirm"]
+name = "確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["mml.measure"]
+name = "MML / コード進行: 1小節を上書き"
+search = "mml measure overwrite replace"
+
+[[command]]
+ids = ["mml.measure-lyrics"]
+name = "VOICEVOX: 1小節のMMLと歌詞を同時に差し替え"
+search = "voicevox mml lyrics measure replace simultaneous ずんだもん"
+
+[[command]]
+ids = ["mml.open"]
+name = "MML / コード進行"
+search = "mml insert"
+
+[[command]]
+ids = ["note.cancel"]
+name = "取消"
+search = "cancel"
+
+[[command]]
+ids = ["note.confirm"]
+name = "確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["overview.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["overview.container-play"]
+name = "Container"
+
+[[command]]
+ids = ["overview.jump"]
+name = "jump"
+
+[[command]]
+ids = ["overview.measure-next"]
+name = "次の小節"
+
+[[command]]
+ids = ["overview.measure-prev"]
+name = "前の小節"
+
+[[command]]
+ids = ["overview.open"]
+name = "Track Overview"
+
+[[command]]
+ids = ["overview.play-all"]
+name = "全trackをこの小節から演奏"
+
+[[command]]
+ids = ["overview.play-container"]
+name = "Container play"
+
+[[command]]
+ids = ["overview.play-song"]
+name = "Songをこの小節から演奏"
+
+[[command]]
+ids = ["overview.play-track"]
+name = "track play"
+
+[[command]]
+ids = ["overview.song-play"]
+name = "Song"
+
+[[command]]
+ids = ["overview.track-next"]
+name = "次のtrack"
+
+[[command]]
+ids = ["overview.track-prev"]
+name = "前のtrack"
+
+[[command]]
+ids = ["parameter.cancel"]
+name = "閉じる"
+search = "cancel"
+
+[[command]]
+ids = ["parameter.create"]
+name = "Create automation track"
+
+[[command]]
+ids = ["parameter.help"]
+name = "ヘルプ"
+
+[[command]]
+ids = ["parameter.input-cancel"]
+name = "数値取消"
+search = "cancel"
+
+[[command]]
+ids = ["parameter.input-confirm"]
+name = "数値確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["parameter.max"]
+name = "Parameter curve always maximized"
+
+[[command]]
+ids = ["parameter.nav-End"]
+name = "候補末尾"
+
+[[command]]
+ids = ["parameter.nav-Home"]
+name = "候補先頭"
+
+[[command]]
+ids = ["parameter.nav-PageDown"]
+name = "10候補下"
+
+[[command]]
+ids = ["parameter.nav-PageUp"]
+name = "10候補上"
+
+[[command]]
+ids = ["parameter.next"]
+name = "次の候補"
+
+[[command]]
+ids = ["parameter.prev"]
+name = "前の候補"
+
+[[command]]
+ids = ["parameter.value-down"]
+name = "値を下げる"
+
+[[command]]
+ids = ["parameter.value-up"]
+name = "値を上げる"
+
+[[command]]
+ids = ["pattern.create"]
+name = "Add pattern"
+tooltip = "音色を持つContainerを選び、その配下に新しいPatternを作ります。Patternを作っただけではSongへ配置されません。"
+search = "add create pattern"
+
+[[command]]
+ids = ["pattern.delete-candidate"]
+name = "Delete candidate pattern"
+
+[[command]]
+ids = ["pattern.duplicate"]
+name = "Duplicate pattern"
+tooltip = "既存のPatternの内容を複製して、別のPatternを作ります。所属Containerの音色は共有します。"
+
+[[command]]
+ids = ["pattern.midi-baseline"]
+name = "Container CC default outside patterns"
+tooltip = "Patternの演奏表現に使うCCやpitch bendについて、Patternの演奏範囲外で使うContainerの基準値を設定します。"
+search = "midi baseline cc bend"
+
+[[command]]
+ids = ["pattern.move-container"]
+name = "Move pattern to container"
+tooltip = "Patternの所属Containerを変更します。そのPatternを使うすべての配置の音色が変わります。"
+
+[[command]]
+ids = ["pattern.preview"]
+name = "Preview pattern"
+tooltip = "Patternを選び、そのPatternだけを所属Containerの音色で試聴します。曲全体や他のPatternは鳴らしません。配置先を指定せず、Songカーソル位置を開始位置としてconductorのテンポと、その後のテンポ変化に従います。"
+
+[[command]]
+ids = ["pattern.record"]
+name = "Virtual MIDI keyboard"
+tooltip = "Virtual MIDI keyboardを開き、演奏を録音してPatternを作ります。録音中のテンポは録音設定で指定します。作成したPatternの試聴やSong再生はconductorに従います。"
+search = "recording 録音"
+
+[[command]]
+ids = ["pattern.reset-windows"]
+name = "Reset pattern windows position"
+
+[[command]]
+ids = ["pattern.structure"]
+name = "Pattern measures / meter"
+tooltip = "Patternを構成する小節と各小節の拍子を変更します。"
+
+[[command]]
+ids = ["piano-roll.max"]
+name = "Piano roll always maximized"
+
+[[command]]
+ids = ["placement.candidate"]
+name = "Pattern / scene"
+
+[[command]]
+ids = ["placement.cell"]
+name = "Cell"
+
+[[command]]
+ids = ["placement.comment-out"]
+name = "Comment out placement"
+
+[[command]]
+ids = ["placement.create-pattern"]
+name = "New pattern"
+
+[[command]]
+ids = ["placement.edit-candidate"]
+name = "Edit candidate"
+
+[[command]]
+ids = ["placement.edit-cell"]
+name = "Edit cell contents"
+
+[[command]]
+ids = ["placement.edit-choice"]
+name = "Edit candidate"
+
+[[command]]
+ids = ["placement.event-list"]
+name = "Event list"
+
+[[command]]
+ids = ["placement.move"]
+name = "Move placement"
+
+[[command]]
+ids = ["placement.play"]
+screen = "Scene"
+name = "Play"
+tooltip = "Sceneを演奏します。PatternをSceneウィンドウに配置しておく必要があります。 テンポはconductorに従います。"
+
+[[command]]
+ids = ["placement.play"]
+screen = "Song"
+name = "Play"
+tooltip = "Songを演奏します。PatternをSongウィンドウに配置しておく必要があります。 テンポはconductorに従います。"
+
+[[command]]
+ids = ["placement.put"]
+name = "Put"
+tooltip = "候補のPatternまたはSceneを、選択した配置セルへ置きます。"
+search = "ok confirm"
+
+[[command]]
+ids = ["placement.remove"]
+name = "Remove placement"
+tooltip = "選択した配置を外します。参照していたPatternやSceneの本体は残ります。"
+
+[[command]]
+ids = ["placement.return"]
+name = "Return to placement"
+
+[[command]]
+ids = ["placement.select-candidate"]
+name = "Select candidate"
+tooltip = "候補のPatternまたはSceneを、選択した配置セルへ置きます。"
+search = "ok confirm"
+
+[[command]]
+ids = ["play.all"]
+name = "All tracks from start"
+search = "play"
+
+[[command]]
+ids = ["play.all-measure"]
+name = "All tracks from measure"
+search = "play"
+
+[[command]]
+ids = ["play.beat"]
+name = "Beat start to end"
+search = "play"
+
+[[command]]
+ids = ["play.beat-only"]
+name = "Current beat"
+search = "play"
+
+[[command]]
+ids = ["play.chord"]
+name = "Same-tick notes"
+search = "play"
+
+[[command]]
+ids = ["play.close"]
+name = "閉じる"
+search = "close cancel"
+
+[[command]]
+ids = ["play.follow"]
+name = "再生位置追従"
+
+[[command]]
+ids = ["play.last"]
+name = "前回の方法で再生"
+tooltip = "前回選んだ再生方法で再生します。Pattern本体の編集では、そのPatternを対象にします。"
+search = "play"
+
+[[command]]
+ids = ["play.measure"]
+name = "Current measure"
+search = "play"
+
+[[command]]
+ids = ["play.measure-start"]
+name = "Measure start to end"
+search = "play"
+
+[[command]]
+ids = ["play.note"]
+name = "Single note"
+search = "play"
+
+[[command]]
+ids = ["play.open"]
+name = "再生menu"
+tooltip = "再生する範囲や対象を選ぶメニューを開きます。"
+search = "play"
+
+[[command]]
+ids = ["play.position"]
+name = "Current MBT to end"
+search = "play"
+
+[[command]]
+ids = ["play.track"]
+name = "Entire current track"
+search = "play"
+
+[[command]]
+ids = ["program.auto"]
+name = "Auto"
+
+[[command]]
+ids = ["program.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["program.current"]
+name = "Current track"
+
+[[command]]
+ids = ["program.target"]
+name = "Program change target"
+
+[[command]]
+ids = ["recent.choose"]
+name = "開く"
+
+[[command]]
+ids = ["recent.close"]
+name = "取消"
+search = "close"
+
+[[command]]
+ids = ["recent.entry"]
+tooltip = "選んだ履歴のSMFファイルを開きます。"
+
+[[command]]
+ids = ["recent.next"]
+name = "次のファイル"
+
+[[command]]
+ids = ["recent.open"]
+name = "最近開いたファイル"
+tooltip = "最近開いたファイルを選んで開きます。"
+search = "recent files history"
+
+[[command]]
+ids = ["recent.page-next"]
+name = "10ファイル下"
+
+[[command]]
+ids = ["recent.page-prev"]
+name = "10ファイル上"
+
+[[command]]
+ids = ["recent.prev"]
+name = "前のファイル"
+
+[[command]]
+ids = ["recent.stop"]
+name = "プレビュー停止"
+
+[[command]]
+ids = ["save.cancel"]
+name = "取消"
+search = "cancel"
+
+[[command]]
+ids = ["save.confirm"]
+name = "保存"
+search = "save"
+
+[[command]]
+ids = ["save.discard"]
+name = "破棄 / 続行"
+
+[[command]]
+ids = ["scene.create"]
+name = "Create scene"
+tooltip = "複数のPatternをまとめて配置するSceneを作ります。"
+
+[[command]]
+ids = ["scene.delete"]
+name = "Delete scene"
+
+[[command]]
+ids = ["scene.edit"]
+name = "Edit scene"
+tooltip = "Sceneの名前や小節構成を編集します。"
+
+[[command]]
+ids = ["scene.play"]
+name = "Play scene"
+tooltip = "Sceneを演奏します。PatternをSceneウィンドウに配置しておく必要があります。 テンポはconductorに従います。"
+search = "play"
+
+[[command]]
+ids = ["scene.structure"]
+name = "Scene measures / meter"
+
+[[command]]
+ids = ["scene.window"]
+name = "Scene window"
+
+[[command]]
+ids = ["selection.begin"]
+name = "範囲選択"
+
+[[command]]
+ids = ["selection.cancel"]
+name = "範囲取消"
+search = "cancel"
+
+[[command]]
+ids = ["selection.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["selection.crop"]
+name = "Crop"
+
+[[command]]
+ids = ["selection.delete"]
+name = "イベント削除"
+
+[[command]]
+ids = ["selection.delete-track"]
+name = "Track削除"
+
+[[command]]
+ids = ["selection.init"]
+name = "Track初期化"
+
+[[command]]
+ids = ["selection.menu"]
+name = "範囲menu"
+
+[[command]]
+ids = ["selection.quantize"]
+name = "16分quantize"
+
+[[command]]
+ids = ["selection.repeat"]
+name = "A-B repeat"
+
+[[command]]
+ids = ["settings.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["settings.open"]
+name = "設定menu"
+tooltip = "アプリの設定メニューを開きます。"
+search = "settings"
+
+[[command]]
+ids = ["singer.cancel"]
+name = "取消"
+search = "cancel voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.confirm"]
+name = "確定"
+search = "ok confirm voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.disable"]
+name = "歌声を解除"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.nav-End"]
+name = "候補末尾"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.nav-Home"]
+name = "候補先頭"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.nav-PageDown"]
+name = "10候補下"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.nav-PageUp"]
+name = "10候補上"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.next"]
+name = "次の候補"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.prev"]
+name = "前の候補"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["singer.retry"]
+name = "再取得"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["song.open"]
+name = "Pattern / Song"
+tooltip = "Patternを作成・編集し、PatternやSceneをSongへ配置する画面を開きます。Patternは音符やCCなどを持つ部品、Sceneは部品の配置をまとめたもの、Songは曲全体の配置です。"
+search = "edit scene order song matrix"
+
+[[command]]
+ids = ["song.play"]
+name = "Play song"
+tooltip = "Songを演奏します。PatternをSongウィンドウに配置しておく必要があります。 テンポはconductorに従います。"
+search = "play scene order song"
+
+[[command]]
+ids = ["song.repeat-a"]
+name = "Song A-B Repeat A：選択小節の先頭を開始点に設定"
+
+[[command]]
+ids = ["song.repeat-b"]
+name = "Song A-B Repeat B：選択小節の末尾を終了点に設定して再生"
+
+[[command]]
+ids = ["song.repeat-clear"]
+name = "Song A-B Repeat 解除"
+
+[[command]]
+ids = ["song.zoom-in"]
+name = "時間拡大"
+
+[[command]]
+ids = ["song.zoom-out"]
+name = "時間縮小"
+
+[[command]]
+ids = ["spectrum.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["spectrum.reset"]
+name = "Reset spectrum window position"
+
+[[command]]
+ids = ["spectrum.toggle"]
+name = "Spectrum / Lissajous"
+
+[[command]]
+ids = ["split.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["split.left"]
+name = "左の列"
+
+[[command]]
+ids = ["split.next"]
+name = "次のtrack"
+
+[[command]]
+ids = ["split.off"]
+name = "1列"
+
+[[command]]
+ids = ["split.open"]
+name = "2列menu"
+
+[[command]]
+ids = ["split.prev"]
+name = "前のtrack"
+
+[[command]]
+ids = ["split.right"]
+name = "右の列"
+
+[[command]]
+ids = ["style.cancel"]
+name = "閉じる"
+search = "cancel"
+
+[[command]]
+ids = ["style.confirm"]
+name = "確定"
+search = "ok confirm"
+
+[[command]]
+ids = ["style.direct"]
+name = "Directスタイル"
+
+[[command]]
+ids = ["style.pattern"]
+name = "Patternスタイル"
+
+[[command]]
+ids = ["style.select"]
+name = "スタイル選択"
+
+[[command]]
+ids = ["tempo.max"]
+name = "Tempo curve always maximized"
+
+[[command]]
+ids = ["timeline.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["timeline.open"]
+name = "Piano roll / Tempo curve"
+
+[[command]]
+ids = ["track.add"]
+name = "トラック追加"
+search = "add insert track"
+
+[[command]]
+ids = ["track.entry"]
+tooltip = "選んだトラックへ移動します。"
+
+[[command]]
+ids = ["track.next"]
+name = "次のtrack"
+
+[[command]]
+ids = ["track.patch"]
+name = "音色選択"
+tooltip = "楽器の音色を選びます。"
+search = "sound instrument"
+
+[[command]]
+ids = ["track.prev"]
+name = "前のtrack"
+
+[[command]]
+ids = ["track.rename"]
+name = "トラック名変更"
+
+[[command]]
+ids = ["track.volume-down"]
+name = "現在のtrackを減音 −3 dB"
+search = "volume down"
+
+[[command]]
+ids = ["track.volume-up"]
+name = "現在のtrackを増音 +3 dB"
+search = "volume up"
+
+[[command]]
+ids = ["tracks.close"]
+name = "閉じる"
+search = "close"
+
+[[command]]
+ids = ["trill.cancel"]
+name = "取消"
+search = "cancel"
+
+[[command]]
+ids = ["view.browse"]
+name = "Views…"
+search = "views view track ビュー 視点"
+
+[[command]]
+ids = ["view.mode"]
+name = "Notes / Raw"
+
+[[command]]
+ids = ["voicevox.close"]
+name = "閉じる"
+search = "close voicevox ずんだもん"
+
+[[command]]
+ids = ["voicevox.kill-quit"]
+name = "VOICEVOX engine を終了してアプリ終了"
+search = "kill quit exit voicevox ずんだもん"
+
+[[command]]
+ids = ["voicevox.open"]
+name = "VOICEVOX engine"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["voicevox.page"]
+name = "公式ページ"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["voicevox.pick"]
+name = "run.exe"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["voicevox.singer"]
+name = "VOICEVOX: 現在のtrackの歌声を選ぶ"
+search = "voicevox ずんだもん"

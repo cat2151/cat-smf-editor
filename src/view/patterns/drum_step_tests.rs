@@ -33,7 +33,7 @@ fn step_in_song(a: &mut App, tick: u64) -> Option<usize> {
 }
 
 fn step_in_pattern(a: &mut App, id: u64, tick: u64) -> Option<usize> {
-    let tempo = TempoMap::constant(480, a.patterns.tempo.0).unwrap();
+    let tempo = timing::pattern(a, id).unwrap();
     preview::start(a, id).unwrap();
     transport::advance(a);
     a.audition.set_test_seconds(tempo.seconds_at(tick) + 0.001);

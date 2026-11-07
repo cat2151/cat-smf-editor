@@ -3,7 +3,7 @@ use crate::{
     play::{playback::Mode, transport::Prepared},
 };
 use cat_smf_editor::message;
-use cat_smf_editor::score::{audition_timing::TempoMap, instrument::Patch, pattern::Catalog};
+use cat_smf_editor::score::{instrument::Patch, pattern::Catalog};
 
 /// Single-pattern audition shares the arrangement expansion and container voice plan.
 pub fn prepare(a: &App, id: u64) -> Result<Prepared, String> {
@@ -13,7 +13,7 @@ pub fn prepare(a: &App, id: u64) -> Result<Prepared, String> {
         .patterns
         .get(&id)
         .ok_or("試聴するpatternが見つかりません")?;
-    let tempo = TempoMap::constant(loaded.music.division, a.patterns.tempo.0)?;
+    let tempo = super::timing::pattern(a, id)?;
     crate::play::arrangement::prepare_occurrences(
         a,
         &[(id, 0)],
@@ -61,8 +61,13 @@ pub fn edit_sound(a: &App, track: usize) -> Option<(usize, Patch)> {
     sound(a, edit.pattern).ok()
 }
 pub fn start(a: &mut App, id: u64) -> Result<(), String> {
-    let prepared = prepare(a, id)?;
     crate::play::transport::stop(a);
+    let tick = super::timing::pattern_tick(a, id)?;
+    let prepared = prepare(a, id)?;
+    a.patterns.timing.playing = Some((
+        cat_smf_editor::score::scene::arrangement::PatternOrScene::Pattern(id),
+        tick,
+    ));
     a.playback.last = Mode::Pattern(id);
     a.playback.follow = false;
     a.playback.pending = Some(prepared);

@@ -116,7 +116,7 @@ fn enter_pattern(app: &mut App, ctx: &egui::Context, palette: bool) {
     if palette {
         frame(app, ctx, &[Key::Escape]);
         super::super::palette::tests::open(app, ctx);
-        super::super::palette::tests::query(app, ctx, "pattern");
+        super::super::palette::tests::choose(app, ctx, "song.open");
         frame(app, ctx, &[Key::Enter]);
     } else {
         // Fixtures with an existing container have undo history, so idle does

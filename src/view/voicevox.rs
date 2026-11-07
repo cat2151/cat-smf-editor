@@ -126,87 +126,66 @@ pub(super) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
                 .and_then(|loaded| loaded.music.tracks.get(app.track))
                 .map(cat_smf_editor::voicevox::is_singer);
             if singer.is_some() {
-                out.push(Command::plain(
-                    screen,
-                    "voicevox-singer",
-                    "VOICEVOX: 現在のtrackの歌声を選ぶ",
-                    &[],
-                    |a, _| singer::open(a),
-                ));
+                out.push(Command::plain(screen, "voicevox.singer", &[], |a, _| {
+                    singer::open(a)
+                }));
             }
             if screen == Screen::Main && singer == Some(true) {
-                out.push(Command::plain(
-                    screen,
-                    "measure-mml-lyrics",
-                    "VOICEVOX: 1小節のMMLと歌詞を同時に差し替え",
-                    &[],
-                    |a, _| {
-                        lyrics::begin(a);
-                        if let Some(editing) = &mut a.voicevox.lyrics {
-                            editing.combined = true;
-                        }
-                    },
-                ));
+                out.push(Command::plain(screen, "mml.measure-lyrics", &[], |a, _| {
+                    lyrics::begin(a);
+                    if let Some(editing) = &mut a.voicevox.lyrics {
+                        editing.combined = true;
+                    }
+                }));
             }
             if screen == Screen::Main && app.loaded.is_some() {
-                out.push(Command::plain(
-                    screen,
-                    "lyrics-measure",
-                    "VOICEVOX: 1小節の歌詞を差し替え",
-                    &[],
-                    |a, _| lyrics::begin(a),
-                ));
+                out.push(Command::plain(screen, "lyrics.measure", &[], |a, _| {
+                    lyrics::begin(a)
+                }));
             }
         }
         Screen::Global => out.push(Command::plain(
             screen,
-            "voicevox-kill-quit",
-            "VOICEVOX engine を終了してアプリ終了",
+            "voicevox.kill-quit",
             &[],
             kill_engine_and_quit,
         )),
         Screen::Lyrics => {
             out.push(Command::plain(
                 screen,
-                "lyrics-confirm",
-                "確定",
+                "lyrics.confirm",
                 &[Key::Enter],
                 lyrics::confirm,
             ));
             out.push(Command::plain(
                 screen,
-                "lyrics-cancel",
-                "取消",
+                "lyrics.cancel",
                 &[Key::Escape],
                 |a, _| lyrics::cancel(a),
             ));
         }
         Screen::Settings => out.push(Command::plain(
             screen,
-            "voicevox",
-            "VOICEVOX engine",
+            "voicevox.open",
             &[Key::V],
             |a, _| open(a),
         )),
         Screen::Voicevox => {
             out.push(Command::plain(
                 screen,
-                "voicevox-pick",
-                "run.exe",
+                "voicevox.pick",
                 &[Key::R],
                 |a, _| a.voicevox.pick_requested = true,
             ));
             out.push(Command::plain(
                 screen,
-                "voicevox-page",
-                "公式ページ",
+                "voicevox.page",
                 &[Key::O],
                 open_page,
             ));
             out.push(Command::plain(
                 screen,
-                "voicevox-close",
-                "閉じる",
+                "voicevox.close",
                 &[Key::Escape],
                 |a, _| close(a),
             ));

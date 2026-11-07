@@ -2,7 +2,7 @@ use super::*;
 mod navigation;
 pub use navigation::{destinations, navigate};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Deserialize)]
 pub enum Screen {
     /// どの画面にも属さず、どの画面のパレットからも実行できる。
     Global,
@@ -54,51 +54,6 @@ pub enum Screen {
     Recording,
 }
 impl Screen {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Global => "",
-            Self::Main => "Event list",
-            Self::EditStyle => "Edit style",
-            Self::TrackRename => "Track name",
-            Self::Settings => "Settings",
-            Self::Program => "Program target",
-            Self::Edit => "Edit",
-            Self::Go => "Go",
-            Self::Tracks => "Tracks",
-            Self::Split => "Columns",
-            Self::Play => "Play",
-            Self::Mixer => "Mixer",
-            Self::Layers | Self::LayerInput => "Layers",
-            Self::Drums | Self::DrumInput | Self::DrumCreate => "Drum sequencer",
-            Self::Effects => "Effects",
-            Self::Selection | Self::SelectionMenu => "Selection",
-            Self::ChordTiming => "Chord timing",
-            Self::Mml => "MML",
-            Self::Note => "Note",
-            Self::Lyrics => "Lyrics",
-            Self::Trill => "Trill",
-            Self::Timeline => "Timeline",
-            Self::Overview => "Track Overview",
-            Self::Help => "Help",
-            Self::Recent => "Recent",
-            Self::Confirm => "File",
-            Self::Backup => "Backup",
-            Self::Invalid => "Invalid SMF",
-            Self::Missing => "Missing SMF",
-            Self::Waiting => "Waiting",
-            Self::Browser => "Browser",
-            Self::Analysis => "Spectrum",
-            Self::Voicevox => "VOICEVOX",
-            Self::Singer => "VOICEVOX voice",
-            Self::MacroEditor => "Macro edit",
-            Self::ParameterPicker | Self::ParameterInput => "Automation",
-            Self::Patterns => "Patterns",
-            Self::Scene => "Scene",
-            Self::Song => "Pattern / Song",
-            Self::ArrangementInput => "Arrangement",
-            Self::Recording => "Virtual MIDI keyboard",
-        }
-    }
     pub fn owns_keys(self) -> bool {
         !matches!(
             self,
@@ -340,20 +295,20 @@ impl Screen {
     /// The command leaving this root screen towards the Event list.
     pub(super) fn close(self) -> Option<&'static str> {
         Some(match self {
-            Self::Settings => "settings-close",
-            Self::Program => "program-close",
-            Self::Edit => "edit-close",
-            Self::Go => "go-close",
-            Self::Tracks => "tracks-close",
-            Self::Split => "split-close",
-            Self::Play => "play-close",
-            Self::Mixer => "mixer-unfocus",
-            Self::Layers => "layers-close",
-            Self::Effects => "effects-close",
-            Self::Recent => "recent-close",
-            Self::Timeline => "timeline-close",
-            Self::Overview => "overview-close",
-            Self::Drums => "drum-cancel",
+            Self::Settings => "settings.close",
+            Self::Program => "program.close",
+            Self::Edit => "edit.close",
+            Self::Go => "go.close",
+            Self::Tracks => "tracks.close",
+            Self::Split => "split.close",
+            Self::Play => "play.close",
+            Self::Mixer => "mixer.unfocus",
+            Self::Layers => "layer.close",
+            Self::Effects => "effect.close",
+            Self::Recent => "recent.close",
+            Self::Timeline => "timeline.close",
+            Self::Overview => "overview.close",
+            Self::Drums => "drum.cancel",
             _ => return None,
         })
     }

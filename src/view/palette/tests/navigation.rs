@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn list_navigation_repeats_clamps_and_preserves_query_and_owner() {
     let mut a = app();
+    let _wording = worded(&mut a, WORDING);
     let c = egui::Context::default();
     open(&mut a, &c);
     let count = listed(&mut a).len();

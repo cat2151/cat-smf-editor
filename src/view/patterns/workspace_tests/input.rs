@@ -54,11 +54,11 @@ fn workspace_form_invalid_ime_click_cancel_and_stale_target_are_atomic() {
     key(&mut a, &c, scene, Key::Z, Modifiers::CTRL);
     assert_eq!(bytes(&a), before);
     let song = Pane::Song.viewport();
-    command(&mut a, &c, song, "edit scene");
+    command(&mut a, &c, song, "scene.edit");
     text(&mut a, &c, song, "nihongo 日本語");
     key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
     assert_eq!(bytes(&a), before);
-    command(&mut a, &c, song, "edit scene");
+    command(&mut a, &c, song, "scene.edit");
     a.song_id += 1;
     key(&mut a, &c, song, Key::Enter, Modifiers::NONE);
     assert!(!a.patterns.workspace.input_open());
@@ -127,7 +127,7 @@ fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
         ),
         selected
     );
-    command(&mut a, &c, song, "play song");
+    command(&mut a, &c, song, "placement.play");
     assert!(a.playback.pending.is_some() || a.playback.active.is_some());
     key(&mut a, &c, song, Key::Escape, Modifiers::NONE); // Return focus from the filter.
     frame(&mut a, &c, song, vec![egui::Event::Text("?".into())]);
@@ -156,18 +156,7 @@ fn workspace_query_owns_letters_arrows_help_palette_and_scene_deletion() {
         Modifiers::NONE,
     );
     let scene = Pane::Scene.viewport();
-    key(
-        &mut a,
-        &c,
-        scene,
-        Key::P,
-        Modifiers::CTRL | Modifiers::SHIFT,
-    );
-    text(&mut a, &c, scene, "delete scene");
-    // The first result is Scene: Remove placement, which also matches the
-    // Delete key. Select the distinct Delete scene command before executing.
-    key(&mut a, &c, scene, Key::ArrowDown, Modifiers::NONE);
-    key(&mut a, &c, scene, Key::Enter, Modifiers::NONE);
+    command(&mut a, &c, scene, "scene.delete");
     assert_eq!(bytes(&a), before);
     assert!(a
         .patterns
@@ -189,17 +178,7 @@ fn palette_pattern_arguments_start_from_the_focused_song_filter() {
         song,
         egui::Id::new((Pane::Song.title(), "query")),
     );
-    key(&mut a, &c, song, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
-    text(&mut a, &c, song, "Pattern measures / meter");
-    let candidates = crate::view::palette::tests::listed(&mut a);
-    let index = candidates
-        .iter()
-        .position(|label| label == "Pattern measures / meter")
-        .expect("Pattern command candidate");
-    for _ in 0..index {
-        key(&mut a, &c, song, Key::ArrowDown, Modifiers::NONE);
-    }
-    key(&mut a, &c, song, Key::Enter, Modifiers::NONE);
+    command(&mut a, &c, song, "pattern.structure");
     let listed = crate::view::palette::tests::listed(&mut a);
     assert!(
         a.command_input.is_open(),

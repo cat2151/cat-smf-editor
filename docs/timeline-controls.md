@@ -39,11 +39,16 @@ let action = timeline.repeat(ui, row, range, repeat_state);
 | PianoRoll | tick比例 | 同上 | 表示移動 |
 | Tempo | tick比例 | 同上 | 表示移動 |
 | TrackOverview | tick比例、固定track名を除く | 同上 | 表示移動 |
+| TrackOverviewSong | Song tick比例、固定Container名を除く | 同上 | 表示移動 |
 | Parameter | tick比例、値axisを除く | 同上 | 表示・カーソル移動、auditionなし |
 | Song | Song拍子に対応する等幅セル | 同上 | 表示移動とSong再生 |
 | Scene | Scene自身の拍子に対応する等幅セル | minimap | 表示移動とScene再生 |
 
-Songのrepeat callbackは `start_song` を使い、pattern候補のscopeへ切り替えない。Parameterはownerとvariationの縦axisを保全する。Sceneにはrepeat/zoomバーを追加しない。背景や縦axisの違いを横gestureの例外に広げない。
+SongとTrackOverviewSongのrepeat callbackは `start_song` を使い、pattern候補のscopeへ切り替えない。
+
+TrackOverviewSongは入れ物がある曲で使い、Songの配置をContainerごとに展開する。同時配置は段を分け、配置IDとScene内cell IDを保持して本体へ移動する。小節・終端・curveは本体の格納座標やNotesの投影から取らない。minimapの再生中clickはSongだけをseekし、Container単独再生の範囲を維持する。Pattern・Sceneの単体試聴はSongの再生線にしない。
+
+Parameterはownerとvariationの縦axisを保全する。Sceneにはrepeat/zoomバーを追加しない。背景や縦axisの違いを横gestureの例外に広げない。
 
 ## 新画面を加えるとき
 

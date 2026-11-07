@@ -124,7 +124,7 @@ fn ctrl_slash_comments_out_scene_cell_and_palette_finds_it() {
     assert_eq!(notes(&a, Some(scene)), 1);
     key(&mut a, &c, Pane::Scene.viewport(), Key::Z, Modifiers::CTRL);
     assert_eq!(collection(&a), before);
-    command(&mut a, &c, Pane::Scene.viewport(), "comment out placement");
+    command(&mut a, &c, Pane::Scene.viewport(), "placement.comment-out");
     assert!(scene_disabled(&a, scene, lanes[0], 1));
     comment_out(&mut a, &c, Pane::Scene);
     assert_eq!(collection(&a), before);
@@ -168,7 +168,7 @@ fn comment_out_while_playing_stops_like_other_placement_edits() {
     // directly while the transport state is still observable.
     let toggle = crate::view::commands::definitions(&a, crate::view::commands::Screen::Song)
         .into_iter()
-        .find(|c| c.id == "arrangement-comment-out")
+        .find(|c| c.id == "placement.comment-out")
         .unwrap();
     crate::view::commands::run_direct(&mut a, &c, &toggle);
     assert!(a.playback.pending.is_none() && a.playback.active.is_none());
@@ -203,7 +203,7 @@ fn query_ime_and_dialog_keep_ctrl_slash() {
         vec![egui::Event::Ime(egui::ImeEvent::Disabled)],
     );
     key(&mut a, &c, song, Key::Escape, Modifiers::NONE);
-    command(&mut a, &c, song, "edit scene");
+    command(&mut a, &c, song, "scene.edit");
     assert!(a.patterns.workspace.input_open());
     comment_out(&mut a, &c, Pane::Song);
     assert_eq!(bytes(&a), before);

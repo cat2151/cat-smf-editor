@@ -56,7 +56,7 @@ fn native_geometry_survives_exit_reopen_and_reset_without_touching_score_or_spec
         &mut reopened,
         &fresh,
         Pane::Song.viewport(),
-        "reset pattern windows position",
+        "pattern.reset-windows",
     );
     assert!(reopened.config.pattern_windows.is_empty());
     assert!(Store::open(path.clone()).pattern_windows.is_empty());

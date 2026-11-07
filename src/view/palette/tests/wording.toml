@@ -1,0 +1,65 @@
+# Search tests read this instead of config/command-palette.toml, so its names stay free to edit.
+
+[[command]]
+ids = ["file.open"]
+name = "開く"
+search = "open file"
+
+[[command]]
+ids = ["recent.open"]
+name = "最近開いたファイル"
+
+[[command]]
+ids = ["file.save"]
+name = "保存"
+search = "save"
+
+[[command]]
+ids = ["app.quit"]
+name = "アプリ終了"
+search = "quit exit"
+
+[[command]]
+ids = ["voicevox.kill-quit"]
+name = "VOICEVOX engine を終了してアプリ終了"
+search = "quit exit"
+
+[[command]]
+ids = ["mascot.playback"]
+name = "ずんだもん演奏連動"
+search = "voicevox ずんだもん mascot playback"
+
+[[command]]
+ids = ["voicevox.singer"]
+name = "VOICEVOX: 現在のtrackの歌声を選ぶ"
+search = "voicevox ずんだもん"
+
+[[command]]
+ids = ["track.add"]
+name = "トラック追加"
+search = "add insert track"
+
+[[command]]
+ids = ["effect.add"]
+name = "エフェクト追加"
+search = "add effect effects insert"
+
+[[command]]
+ids = ["effect.replace"]
+name = "エフェクト差し替え"
+search = "replace effect effects"
+
+[[command]]
+ids = ["mml.measure"]
+name = "MML / コード進行: 1小節を上書き"
+search = "mml measure overwrite replace"
+
+[[command]]
+ids = ["lyrics.measure"]
+name = "VOICEVOX: 1小節の歌詞を差し替え"
+search = "measure replace voicevox ずんだもん"
+
+[[command]]
+ids = ["edit.lyrics"]
+name = "Lyrics"
+search = "voicevox 歌詞 ずんだもん"

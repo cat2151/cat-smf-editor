@@ -154,7 +154,7 @@ fn shared_container_voice_membership_move_patch_changes_and_undo_affect_all_and_
         .all(|p| p.0 != dest));
 }
 #[test]
-fn pattern_scene_audition_tempo_is_explicit_and_independent_of_storage_or_song_tempo() {
+fn pattern_scene_auditions_follow_conductor_at_the_song_cursor() {
     let (mut a, _, id) = crate::view::patterns::edit_tests::fixture();
     let mut scene_id = 0;
     a.edit_tracks(|m| {
@@ -182,15 +182,29 @@ fn pattern_scene_audition_tempo_is_explicit_and_independent_of_storage_or_song_t
     })
     .unwrap();
     assert_eq!(prepare(&a, None).unwrap().active.end, 4.0);
-    assert_eq!(prepare(&a, Some(scene_id)).unwrap().active.end, 2.0);
+    assert_eq!(prepare(&a, Some(scene_id)).unwrap().active.end, 4.0);
     assert_eq!(
         crate::view::patterns::preview::prepare(&a, id)
             .unwrap()
             .active
             .end,
-        2.0
+        4.0
     );
-    a.patterns.tempo.0 = 90.0;
-    assert!((prepare(&a, Some(scene_id)).unwrap().active.end - 8.0 / 3.0).abs() < 1e-9);
+    a.edit_tracks(|m| {
+        cat_smf_editor::edit::insert(
+            &mut m.tracks[0],
+            cat_smf_editor::model::Event {
+                tick: 1920,
+                delta: 0,
+                status: 0xff,
+                meta_type: 0x51,
+                data: vec![10, 44, 43],
+            },
+        );
+        Ok(())
+    })
+    .unwrap();
+    a.patterns.workspace.song_cell.measure = 2;
+    assert!((prepare(&a, Some(scene_id)).unwrap().active.end - 2.666668).abs() < 1e-9);
     assert_eq!(prepare(&a, None).unwrap().active.end, 4.0);
 }

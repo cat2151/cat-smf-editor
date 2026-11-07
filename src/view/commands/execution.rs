@@ -103,18 +103,17 @@ pub(crate) fn invoke(app: &mut App, ctx: &egui::Context, operation: Operation) -
     }
 }
 impl Command {
-    pub(crate) fn operation(
-        screen: Screen,
-        id: impl Into<String>,
-        name: impl Into<String>,
-        operation: Operation,
-    ) -> Self {
+    pub(crate) fn operation(screen: Screen, id: impl Into<String>, operation: Operation) -> Self {
         Self {
             id: id.into(),
             screen,
-            name: name.into(),
+            name: String::new(),
             keys: vec![],
             repeat: false,
+            description: String::new(),
+            search: String::new(),
+            screen_name: String::new(),
+            text_id: None,
             target: None,
             run: Box::new(move |a, c| invoke(a, c, operation.clone())),
         }

@@ -31,6 +31,11 @@ pub(super) fn show(
     }
     let selected = s.choice;
     let reveal = std::mem::take(&mut s.reveal_choice) || response.changed();
+    if response.changed()
+        && let Some(PatternOrScene::Pattern(id)) = selected
+    {
+        crate::view::recording::follow_pattern(a, id);
+    }
     let mut clicked = None;
     let mut card = None;
     let mut edit = false;

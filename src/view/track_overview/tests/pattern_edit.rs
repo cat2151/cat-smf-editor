@@ -1,4 +1,4 @@
-//! The overview draws a pattern container as it sounds, not as the stored records.
+//! A Song overview never mistakes the currently edited body for a placed occurrence.
 use super::super::panes::Panes;
 use super::*;
 use crate::view::patterns::library;
@@ -6,7 +6,7 @@ use crate::view::piano_roll::Layout;
 use crate::view::tests::unplaced::{fixture, CONTAINER};
 
 /// `(tick, pitch)` of the notes a roll draws, scaled to any pane height.
-fn drawn(layout: &Layout) -> Vec<(u64, u8)> {
+pub(super) fn drawn(layout: &Layout) -> Vec<(u64, u8)> {
     let row = layout.size.y / f32::from(layout.high - layout.low + 1);
     let mut notes: Vec<_> = layout
         .notes
@@ -41,8 +41,8 @@ fn overview_draws_nothing_of_a_container_outside_pattern_edit() {
 }
 
 #[test]
-fn overview_draws_only_the_edited_body_during_pattern_edit() {
+fn overview_never_confuses_an_unplaced_edit_with_a_song_occurrence() {
     let (mut a, p1) = fixture();
     library::edit(&mut a, p1).unwrap();
-    assert_eq!(performed(&a), (vec![(0, 60)], vec![(0, 60)], Kind::Notes));
+    assert_eq!(performed(&a), (vec![], vec![], Kind::Empty));
 }

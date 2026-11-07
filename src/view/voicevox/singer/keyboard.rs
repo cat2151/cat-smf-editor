@@ -3,16 +3,15 @@ pub fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
     if screen != Screen::Singer {
         return;
     }
-    for (key, modifiers, action, label) in crate::view::list_navigation::bindings() {
+    for (key, modifiers, action) in crate::view::list_navigation::bindings() {
         out.push(
             Command::new(
                 screen,
                 match key {
-                    Key::ArrowUp => "singer-prev".into(),
-                    Key::ArrowDown => "singer-next".into(),
-                    _ => format!("singer-nav-{key:?}"),
+                    Key::ArrowUp => "singer.prev".into(),
+                    Key::ArrowDown => "singer.next".into(),
+                    _ => format!("singer.nav-{key:?}"),
                 },
-                label,
                 &[(key, modifiers)],
                 move |a, _| {
                     let len = filtered(a).len();
@@ -27,33 +26,23 @@ pub fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
     }
     out.push(Command::plain(
         screen,
-        "singer-confirm",
-        "確定",
+        "singer.confirm",
         &[Key::Enter],
         confirm,
     ));
     out.push(Command::plain(
         screen,
-        "singer-cancel",
-        "取消",
+        "singer.cancel",
         &[Key::Escape],
         |a, _| close(a),
     ));
-    out.push(Command::plain(
-        screen,
-        "singer-disable",
-        "歌声を解除",
-        &[],
-        |a, _| apply(a, None),
-    ));
+    out.push(Command::plain(screen, "singer.disable", &[], |a, _| {
+        apply(a, None)
+    }));
     if app.voicevox.catalog.error.is_some() {
-        out.push(Command::plain(
-            screen,
-            "singer-retry",
-            "再取得",
-            &[],
-            |a, _| preview::retry(a),
-        ));
+        out.push(Command::plain(screen, "singer.retry", &[], |a, _| {
+            preview::retry(a)
+        }));
     }
 }
 

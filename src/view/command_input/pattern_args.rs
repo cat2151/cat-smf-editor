@@ -39,7 +39,6 @@ pub(super) struct State {
     pattern: Option<u64>,
     sound: bool,
     structure: bool,
-    tempo: bool,
     midi: bool,
     song: u64,
     query: String,
@@ -58,14 +57,9 @@ impl State {
             pattern: None,
             sound: false,
             structure: false,
-            tempo: action == Action::AuditionTempo,
             midi: false,
             song: a.song_id,
-            query: if action == Action::AuditionTempo {
-                a.patterns.tempo.0.to_string()
-            } else {
-                String::new()
-            },
+            query: String::new(),
             search: Default::default(),
             selected: 0,
             composing: false,
@@ -101,12 +95,7 @@ impl State {
         value: Option<String>,
         container: Option<u64>,
     ) -> Result<(), String> {
-        if value.is_some()
-            && !matches!(
-                self.action,
-                Action::Structure | Action::MidiBaseline | Action::AuditionTempo
-            )
-        {
+        if value.is_some() && !matches!(self.action, Action::Structure | Action::MidiBaseline) {
             return Err("このpattern操作には値の入力がありません".into());
         }
         if container.is_some() && self.action != Action::MoveContainer {
@@ -116,35 +105,9 @@ impl State {
         self.pending_container = container;
         Ok(())
     }
-    pub(super) fn supplied_tempo(&mut self, a: &mut App) -> Result<bool, String> {
-        if self.tempo
-            && let Some(value) = self.pending_value.take()
-        {
-            self.query = value;
-            return self.apply(a, None);
-        }
-        Ok(false)
-    }
     pub(super) fn apply(&mut self, a: &mut App, choice: Option<u64>) -> Result<bool, String> {
         if self.song != a.song_id {
             return Err("patternの入力先が変わりました".into());
-        }
-        if self.tempo {
-            let bpm = self
-                .query
-                .trim()
-                .parse::<f64>()
-                .map_err(|_| "試聴tempoが不正です")?;
-            cat_smf_editor::score::audition_timing::TempoMap::constant(
-                a.loaded
-                    .as_ref()
-                    .ok_or(message::NO_SMF_LOADED)?
-                    .music
-                    .division,
-                bpm,
-            )?;
-            a.patterns.tempo.0 = bpm;
-            return Ok(true);
         }
         if self.midi {
             let id = self.pattern.ok_or(message::MISSING_PATTERN)?;
@@ -185,9 +148,10 @@ impl State {
         }
         let id = choice.ok_or("patternを選んでください")?;
         match self.action {
-            Action::Create | Action::AuditionTempo => return Err("作成の入力が不正です".into()),
+            Action::Create => return Err("作成の入力が不正です".into()),
             Action::Duplicate => patterns::library::create(a, Some(id))?,
             Action::Preview => {
+                a.patterns.timing.pattern = None;
                 patterns::preview::start(a, id)?;
                 a.patterns.selected = Some(id);
             }
@@ -291,7 +255,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut State, fresh: bool)
         crate::play::transport::stop(a);
         return true;
     }
-    if enter && (s.structure || s.tempo || s.midi) {
+    if enter && (s.structure || s.midi) {
         match s.apply(a, s.pattern) {
             Ok(true) => return true,
             Err(e) => s.error = Some(e),
@@ -299,7 +263,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut State, fresh: bool)
         }
     }
     if enter
-        && !(s.structure || s.tempo || s.midi)
+        && !(s.structure || s.midi)
         && let Some((id, _)) = choices.get(s.selected)
     {
         match s.apply(a, *id) {
@@ -335,9 +299,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut State, fresh: bool)
     egui::Modal::new(egui::Id::new("pattern-argument")).show(ctx, |ui| {
         ui.set_width(380.0);
         ui.heading(s.action.label());
-        ui.label(if s.tempo {
-            "Audition BPM"
-        } else if s.midi {
+        ui.label(if s.midi {
             "Channel · CC / bend · value"
         } else if s.structure {
             "Measures (4/4 3/4)"
@@ -367,7 +329,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut State, fresh: bool)
                 for (i, (id, label)) in choices
                     .iter()
                     .enumerate()
-                    .filter(|_| !(s.structure || s.tempo || s.midi))
+                    .filter(|_| !(s.structure || s.midi))
                 {
                     if ui.selectable_label(i == s.selected, label).clicked() {
                         clicked = Some(*id);

@@ -27,17 +27,11 @@ fn target(a: &App) -> Option<(u64, usize)> {
 
 pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if s == Screen::Global && target(a).is_some() {
-        out.push(Command::plain(
-            s,
-            "delete-current-container-track",
-            "Delete current container track",
-            &[],
-            |a, _| {
-                if let Err(error) = delete(a) {
-                    a.load_error = Some(error);
-                }
-            },
-        ));
+        out.push(Command::plain(s, "container.delete-track", &[], |a, _| {
+            if let Err(error) = delete(a) {
+                a.load_error = Some(error);
+            }
+        }));
     }
 }
 
@@ -88,7 +82,7 @@ mod tests {
         let ctx = eframe::egui::Context::default();
         let command = crate::view::commands::candidates(&a, &ctx)
             .into_iter()
-            .find(|c| c.id == "delete-current-container-track")
+            .find(|c| c.id == "container.delete-track")
             .unwrap();
         assert!(crate::view::commands::execute(&mut a, &ctx, &command));
         assert!(!Catalog::read(&a.loaded.as_ref().unwrap().music)

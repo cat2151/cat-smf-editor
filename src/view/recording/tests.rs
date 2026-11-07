@@ -5,6 +5,7 @@ mod captions;
 mod capture;
 mod creation;
 mod expression;
+mod kit;
 mod layered;
 mod loop_takes;
 mod mouse;
@@ -251,9 +252,9 @@ fn ctrl_p_chooses_the_container_on_the_keyboard_and_cancel_is_atomic() {
 #[test]
 fn entry_binding_is_shared_and_text_editors_keep_their_input() {
     let a = app();
-    for s in [Screen::Main, Screen::Scene, Screen::Song] {
+    for s in [Screen::Main, Screen::Scene, Screen::Song, Screen::Drums] {
         let defs = commands::definitions(&a, s);
-        let c = defs.iter().find(|c| c.id == "record-pattern").unwrap();
+        let c = defs.iter().find(|c| c.id == "pattern.record").unwrap();
         assert_eq!(c.keys, vec![(Key::R, Modifiers::SHIFT)]);
         assert_eq!(
             defs.iter()
@@ -265,6 +266,6 @@ fn entry_binding_is_shared_and_text_editors_keep_their_input() {
     for s in [Screen::Mml, Screen::ArrangementInput, Screen::Browser] {
         assert!(!commands::definitions(&a, s)
             .iter()
-            .any(|c| c.id == "record-pattern"));
+            .any(|c| c.id == "pattern.record"));
     }
 }

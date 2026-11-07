@@ -91,7 +91,7 @@ pub(super) fn pointed(ui: &egui::Ui, keys: &[(Pad, egui::Response)]) -> Option<P
 }
 
 fn pad(ui: &mut egui::Ui, s: &Session, pad: Pad, label: &str) -> egui::Response {
-    let (caption, tonic) = caption(s.settings(), pad);
+    let (caption, tonic) = super::kit::caption(s, pad);
     // A fixed id, so a held press survives the LED appearing or going above the pads.
     let rect = ui
         .allocate_exact_size(egui::vec2(PAD, PAD), egui::Sense::hover())
@@ -108,7 +108,7 @@ fn pad(ui: &mut egui::Ui, s: &Session, pad: Pad, label: &str) -> egui::Response 
     } else {
         egui::Color32::from_gray(210)
     };
-    let p = ui.painter();
+    let p = ui.painter().with_clip_rect(rect);
     p.rect_filled(rect.shrink(1.0), 3.0, fill);
     p.text(
         rect.left_top() + egui::vec2(5.0, 3.0),
@@ -124,7 +124,14 @@ fn pad(ui: &mut egui::Ui, s: &Session, pad: Pad, label: &str) -> egui::Response 
         egui::FontId::proportional(11.0),
         egui::Color32::BLACK,
     );
-    response
+    if s.sound().patch.kit.is_some() {
+        response.on_hover_text(format!(
+            "{}  ·  Kit range  ↑ / ↓",
+            super::kit::caption(s, pad).0
+        ))
+    } else {
+        response
+    }
 }
 
 /// Position within the lap, and a short light on each beat (count-in included).

@@ -190,7 +190,7 @@ mod tests {
         app.help_open = false;
         crate::view::palette::tests::open(&mut app, &ctx);
         assert!(!companion_visible(&app, &ctx));
-        crate::view::palette::tests::query(&mut app, &ctx, "create scene");
+        crate::view::palette::tests::choose(&mut app, &ctx, "scene.create");
         crate::view::palette::tests::press(&mut app, &ctx, egui::Key::Enter);
         assert!(!companion_visible(&app, &ctx));
     }

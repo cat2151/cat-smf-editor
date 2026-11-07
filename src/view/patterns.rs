@@ -14,14 +14,9 @@ pub(crate) mod navigation;
 pub(crate) mod presentation;
 pub(crate) mod preview;
 pub(crate) mod shown;
+pub(crate) mod timing;
 pub(crate) mod windows;
 pub(crate) mod workspace;
-pub struct PreviewTempo(pub f64);
-impl Default for PreviewTempo {
-    fn default() -> Self {
-        Self(120.0)
-    }
-}
 #[derive(Default)]
 pub struct State {
     pub recording: crate::view::recording::State,
@@ -30,7 +25,7 @@ pub struct State {
     first: Option<first::Pending>,
     pub selected: Option<u64>,
     pub container: Option<u64>,
-    pub tempo: PreviewTempo,
+    pub timing: timing::State,
     pub editing: Option<cat_smf_editor::score::pattern::editing::Context>,
     pub raw_context: Option<cat_smf_editor::score::pattern::editing::Context>,
     pub edit_song: u64,
@@ -124,19 +119,17 @@ pub enum Action {
     Preview,
     MoveContainer,
     Structure,
-    AuditionTempo,
     MidiBaseline,
 }
 impl Action {
     pub fn id(self) -> &'static str {
         match self {
-            Self::Create => "create-pattern",
-            Self::Duplicate => "duplicate-pattern",
-            Self::Preview => "preview-pattern",
-            Self::MoveContainer => "move-pattern-container",
-            Self::Structure => "pattern-structure",
-            Self::AuditionTempo => "pattern-audition-tempo",
-            Self::MidiBaseline => "pattern-midi-baseline",
+            Self::Create => "pattern.create",
+            Self::Duplicate => "pattern.duplicate",
+            Self::Preview => "pattern.preview",
+            Self::MoveContainer => "pattern.move-container",
+            Self::Structure => "pattern.structure",
+            Self::MidiBaseline => "pattern.midi-baseline",
         }
     }
     pub fn label(self) -> &'static str {
@@ -146,7 +139,6 @@ impl Action {
             Self::Preview => "Preview pattern",
             Self::MoveContainer => "Move pattern to container",
             Self::Structure => "Pattern measures / meter",
-            Self::AuditionTempo => "Audition tempo",
             Self::MidiBaseline => "Container CC default outside patterns",
         }
     }
@@ -165,8 +157,7 @@ pub(crate) fn collect(app: &App, s: Screen, out: &mut Vec<Command>) {
     }
     out.push(Command::operation(
         s,
-        "open-song-matrix",
-        "Pattern / Song",
+        "song.open",
         super::commands::Operation::PatternWork,
     ));
     for action in [
@@ -175,21 +166,16 @@ pub(crate) fn collect(app: &App, s: Screen, out: &mut Vec<Command>) {
         Action::Preview,
         Action::MoveContainer,
         Action::Structure,
-        Action::AuditionTempo,
         Action::MidiBaseline,
     ] {
         out.push(Command::operation(
             s,
             action.id(),
-            action.label(),
             super::commands::Operation::pattern(action),
         ));
     }
-    for (id, name, drums) in [
-        ("new-container", "New Init Saw container", false),
-        ("new-drum-container", "New Drums container", true),
-    ] {
-        out.push(Command::plain(s, id, name, &[], move |a, _| {
+    for (id, drums) in [("container.new", false), ("container.new-drum", true)] {
+        out.push(Command::plain(s, id, &[], move |a, _| {
             if let Err(error) = library::new_container(a, drums) {
                 a.load_error = Some(error);
             }

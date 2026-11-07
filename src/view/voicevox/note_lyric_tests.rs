@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::view::{
     edit_menu::lyric_tests::{settle, wav},
     note_edit::{tests::editing, Field},
-    palette::tests::{frame, listed, open, press, query},
+    palette::tests::{choose, frame, listed, open, press, query, worded, WORDING},
     tests::app,
 };
 use cat_smf_editor::edit::lyric::text_at;
@@ -10,7 +10,7 @@ use cat_smf_editor::model::{Event, Music, Track};
 use eframe::egui::{self, Key, Modifiers};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const LABEL: &str = "Edit: Lyrics";
+const ID: &str = "edit.lyrics";
 
 fn event(tick: u64, status: u8, meta_type: u8, data: &[u8]) -> Event {
     Event {
@@ -82,12 +82,7 @@ fn offered(app: &mut App, ctx: &egui::Context, q: &str) -> Vec<String> {
 
 fn run(app: &mut App, ctx: &egui::Context) {
     open(app, ctx);
-    query(app, ctx, "lyrics");
-    let found = listed(app);
-    let row = found.iter().position(|label| label == LABEL).unwrap();
-    for _ in 0..row {
-        press(app, ctx, Key::ArrowDown);
-    }
+    choose(app, ctx, ID);
     press(app, ctx, Key::Enter);
     assert!(!crate::view::modal::is_open(app));
     frame(app, ctx, vec![]);
@@ -117,6 +112,7 @@ fn on_a_note_the_palette_offers_lyrics_and_writes_one_mora_that_undo_removes() {
     }
     let root = tempfile::tempdir().unwrap();
     let mut app = app(song("ずんだもん"));
+    let _wording = worded(&mut app, WORDING);
     app.voicevox.prerender.target = Some((50126, root.path().into()));
     app.voicevox.prerender.sing = Some(sing);
     let ctx = egui::Context::default();
@@ -129,7 +125,7 @@ fn on_a_note_the_palette_offers_lyrics_and_writes_one_mora_that_undo_removes() {
     for q in ["lyrics", "歌詞"] {
         let found = offered(&mut app, &ctx, q);
         eprintln!("query {q:?}: {found:?}");
-        assert!(found.contains(&LABEL.to_owned()));
+        assert!(found.contains(&ID.to_owned()));
     }
 
     run(&mut app, &ctx);
@@ -157,6 +153,6 @@ fn off_a_note_the_palette_does_not_offer_lyrics() {
     // The Track Name at the head of the track is not a note.
     on_event(&mut app, &ctx, 0);
     for q in ["lyrics", "歌詞"] {
-        assert!(!offered(&mut app, &ctx, q).contains(&LABEL.to_owned()));
+        assert!(!offered(&mut app, &ctx, q).contains(&ID.to_owned()));
     }
 }

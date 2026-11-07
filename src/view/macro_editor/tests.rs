@@ -95,7 +95,7 @@ fn live_binding_updates_without_restarting_transport_and_commands_own_input() {
     );
     let commands =
         crate::view::commands::definitions(&app, crate::view::commands::Screen::MacroEditor);
-    let command = commands.iter().find(|c| c.id == "macro-more").unwrap();
+    let command = commands.iter().find(|c| c.id == "macro.more").unwrap();
     crate::view::commands::run_direct(&mut app, &ctx, command);
     assert!((binding.at(0.0).unwrap() - 0.825).abs() < 1e-12);
     assert!(!commands.iter().any(|c| c.id == "next-track"));
@@ -143,7 +143,7 @@ fn playback_fixed_values_automation_precedence_and_repeat_draft() {
     assert_eq!(
         crate::view::commands::candidates(&app, &egui::Context::default())
             .iter()
-            .filter(|c| c.id.starts_with("macro-edit-"))
+            .filter(|c| c.id.starts_with("macro.edit-"))
             .count(),
         1
     );

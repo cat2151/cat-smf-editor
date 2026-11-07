@@ -18,33 +18,26 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
                 continue;
             };
             let id = layer.settings.id;
-            out.push(Command::plain(
-                screen,
-                format!("macro-variation-curve-{id}"),
-                format!(
-                    "Macro variation curve · {}",
-                    super::super::parameter_editor::layer_label(patch, id)
-                ),
-                &[],
-                move |a, _| {
-                    super::super::parameter_editor::open_variation(a, id);
-                },
-            ));
-            out.push(Command::plain(
-                screen,
-                format!("macro-edit-{id}"),
-                format!(
-                    "{} Macro edit · {}",
-                    instrument.name(),
-                    super::super::parameter_editor::layer_label(patch, id)
-                ),
-                &[],
-                move |a, _| {
+            let layer_name = super::super::parameter_editor::layer_label(patch, id);
+            out.push(
+                Command::plain(
+                    screen,
+                    format!("macro.variation-curve-{id}"),
+                    &[],
+                    move |a, _| {
+                        super::super::parameter_editor::open_variation(a, id);
+                    },
+                )
+                .named(format!("Macro variation curve · {layer_name}")),
+            );
+            out.push(
+                Command::plain(screen, format!("macro.edit-{id}"), &[], move |a, _| {
                     if let Err(e) = begin(a, id) {
                         a.player_selection.error = Some(e);
                     }
-                },
-            ));
+                })
+                .named(format!("{} Macro edit · {layer_name}", instrument.name())),
+            );
         }
     }
     if screen != Screen::MacroEditor {
@@ -52,8 +45,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
     }
     out.push(Command::plain(
         screen,
-        "macro-cancel",
-        "取消",
+        "macro.cancel",
         &[Key::Escape],
         |a, _| {
             if a.macro_editor
@@ -67,45 +59,27 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             }
         },
     ));
+    out.push(Command::plain(screen, "app.help", &[Key::F1], |a, _| {
+        if let Some(s) = &mut a.macro_editor.session {
+            s.keyboard.count = None;
+        }
+        crate::view::help::summon(a);
+    }));
     out.push(Command::plain(
         screen,
-        "help",
-        "ヘルプ",
-        &[Key::F1],
-        |a, _| {
-            if let Some(s) = &mut a.macro_editor.session {
-                s.keyboard.count = None;
-            }
-            crate::view::help::summon(a);
-        },
-    ));
-    out.push(Command::plain(
-        screen,
-        "macro-confirm",
-        "確定",
+        "macro.confirm",
         &[Key::Enter],
         |a, _| {
             finish(a, true);
         },
     ));
-    for (id, name, modifiers, full_range) in [
-        (
-            "macro-randomize",
-            "全MacroをVariation範囲内でランダム化",
-            egui::Modifiers::NONE,
-            false,
-        ),
-        (
-            "macro-randomize-full",
-            "全Macroを全範囲でランダム化",
-            egui::Modifiers::SHIFT,
-            true,
-        ),
+    for (id, modifiers, full_range) in [
+        ("macro.randomize", egui::Modifiers::NONE, false),
+        ("macro.randomize-full", egui::Modifiers::SHIFT, true),
     ] {
         out.push(Command::new(
             screen,
             id,
-            name,
             &[(Key::R, modifiers)],
             move |a, _| {
                 if let Some(s) = &mut a.macro_editor.session {
@@ -115,12 +89,12 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
             },
         ));
     }
-    for (id, name, key) in [
-        ("macro-duplicate", "Variation複製", Key::D),
-        ("macro-variation-prev", "前のVariation", Key::PageUp),
-        ("macro-variation-next", "次のVariation", Key::PageDown),
+    for (id, key) in [
+        ("macro.duplicate", Key::D),
+        ("macro.variation-prev", Key::PageUp),
+        ("macro.variation-next", Key::PageDown),
     ] {
-        out.push(Command::plain(screen, id, name, &[key], move |a, _| {
+        out.push(Command::plain(screen, id, &[key], move |a, _| {
             let Some(s) = &mut a.macro_editor.session else {
                 return;
             };

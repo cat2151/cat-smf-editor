@@ -2,9 +2,11 @@ use super::*;
 
 #[test]
 fn and_terms_match_english_keywords_in_any_order() {
-    let a = app();
+    let mut a = app();
+    let _wording = worded(&mut a, WORDING);
     let c = egui::Context::default();
-    let commands = commands::candidates(&a, &c);
+    open(&mut a, &c);
+    let commands = &a.palette.commands;
     let mut search = commands::SearchQuery::default();
     for text in [
         "add effect",
@@ -13,16 +15,16 @@ fn and_terms_match_english_keywords_in_any_order() {
         "add エフェクト",
     ] {
         let results = filter(
-            &commands,
+            commands,
             text,
             &mut search,
             &super::super::history::History::default(),
         );
         assert!(
-            results.iter().any(|&i| commands[i].id == "effect-add"),
+            results.iter().any(|&i| commands[i].id == "effect.add"),
             "{text}"
         );
-        assert!(!results.iter().any(|&i| commands[i].id == "effect-remove"));
+        assert!(!results.iter().any(|&i| commands[i].id == "effect.replace"));
     }
 }
 
@@ -43,18 +45,12 @@ fn query_history_wins_over_global_history_after_restart() {
     );
     a.palette.selected = candidates
         .iter()
-        .position(|&i| a.palette.commands[i].id == "view-mode")
+        .position(|&i| a.palette.commands[i].id == "view.mode")
         .unwrap();
     press(&mut a, &c, Key::Enter);
     assert!(!a.palette.is_open());
-    let view = Command::plain(
-        Screen::Main,
-        "view-mode",
-        "Notes / Raw",
-        &[Key::V],
-        |_, _| {},
-    );
-    let save = Command::plain(Screen::Main, "save", "保存", &[], |_, _| {});
+    let view = Command::plain(Screen::Main, "view.mode", &[Key::V], |_, _| {});
+    let save = Command::plain(Screen::Main, "file.save", &[], |_, _| {});
     // A later selection under another query leads the global list.
     a.palette.history.record("save", &save);
     a.palette.history.save(&a).unwrap();
@@ -64,7 +60,7 @@ fn query_history_wins_over_global_history_after_restart() {
     assert_eq!(b.palette.history.rank("v", &view), (0, 0));
     assert_eq!(b.palette.history.rank("", &save), (1, 0));
     query(&mut b, &c, "v");
-    assert_eq!(listed(&mut b).first().unwrap(), "Event list: Notes / Raw");
+    assert_eq!(listed(&mut b).first().unwrap(), "view.mode");
     press(&mut b, &c, Key::Escape);
     let bytes = std::fs::read(root.path().join("command-palette-history.json")).unwrap();
     open(&mut b, &c);

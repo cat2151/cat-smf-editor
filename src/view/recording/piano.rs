@@ -104,7 +104,17 @@ fn edge(
 /// A pressed or dragged key sounds and records like a pad.
 pub(super) fn show(ui: &mut egui::Ui, s: &mut Session) {
     let t = s.settings();
-    let (playable, labels) = playable(t);
+    let (mut playable, mut labels) = playable(t);
+    if s.sound().patch.kit.is_some() {
+        playable.fill(false);
+        labels.fill(None);
+        for (pad, label) in pads(t.mode) {
+            for pitch in super::kit::pitches(s, pad) {
+                playable[usize::from(pitch)] = true;
+                labels[usize::from(pitch)].get_or_insert(label);
+            }
+        }
+    }
     let mut sounding = [false; 128];
     if let Some(r) = &s.recorder {
         for (p, on) in sounding.iter_mut().enumerate() {

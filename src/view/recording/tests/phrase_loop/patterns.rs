@@ -1,6 +1,38 @@
 use super::*;
 
 #[test]
+fn following_a_pattern_keeps_its_selection_and_the_other_containers_loop() {
+    let (mut a, track) = container();
+    let ctx = egui::Context::default();
+    open_key(&mut a, &ctx);
+    start_loop(&mut a, &ctx);
+    let loop_id = looping_pattern(&a);
+    let mut other = 0;
+    let mut original = 0;
+    a.edit_tracks(|m| {
+        use cat_smf_editor::score::pattern::operations;
+        original = operations::create(m, track, None)?;
+        let second = operations::create_source(m)?;
+        other = operations::create(m, second, None)?;
+        Ok(())
+    })
+    .unwrap();
+    crate::view::patterns::library::edit(&mut a, other).unwrap();
+    assert_eq!(session(&a).sound().track, a.track);
+    assert!(session(&a).sounds.iter().any(|s| matches!(
+        s.looper, Looper::Looping { pattern, .. } if pattern == loop_id
+    )));
+    crate::view::patterns::library::edit(&mut a, original).unwrap();
+    assert_eq!(session(&a).sound().track, track);
+    assert!(phrase::looping(session(&a)));
+    assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, original);
+    assert_eq!(
+        a.patterns.workspace.song_cell.choice,
+        Some(PatternOrScene::Pattern(original))
+    );
+}
+
+#[test]
 fn the_repeating_measure_is_the_loop_pattern_shown_behind_the_keyboard() {
     use cat_smf_editor::score::{
         pattern::Catalog, pattern::Kind, scene::arrangement::PatternOrScene,

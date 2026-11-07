@@ -3,7 +3,7 @@ use crate::view::palette::tests::app;
 use cat_smf_editor::model::Event;
 use eframe::egui;
 /// Runs a palette command; an empty song first gets one sound container to confirm.
-fn command(a: &mut App, c: &egui::Context, s: &str) {
+fn command(a: &mut App, c: &egui::Context, id: &str) {
     use crate::view::palette::tests as palette;
     if cat_smf_editor::score::pattern::Catalog::read(&a.loaded.as_ref().unwrap().music)
         .unwrap()
@@ -14,7 +14,7 @@ fn command(a: &mut App, c: &egui::Context, s: &str) {
             .unwrap();
     }
     palette::open(a, c);
-    palette::query(a, c, s);
+    palette::choose(a, c, id);
     palette::press(a, c, eframe::egui::Key::Enter);
     if a.patterns.confirming_creation() {
         palette::press(a, c, eframe::egui::Key::Enter);
@@ -25,7 +25,7 @@ fn standalone_create_edits_only_body_and_preserves_normal_song() {
     let mut a = app();
     let c = egui::Context::default();
     let original = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
-    command(&mut a, &c, "create pattern");
+    command(&mut a, &c, "pattern.create");
     assert!(!a.palette.is_open());
     let edit = a.patterns.editing.as_ref().unwrap().clone();
     assert!(edit.standalone);

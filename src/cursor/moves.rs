@@ -84,12 +84,20 @@ fn audition(app: &mut App, chord: bool) {
             .filter(|&index| note_on(&events[index]))
             .map(|index| {
                 let duration = loaded.note_views[app.track].durations[index].map(|d| {
-                    cat_smf_editor::score::audition_timing::duration_seconds(
-                        loaded.visible(),
-                        app.track,
-                        tick,
-                        d,
-                    )
+                    app.patterns
+                        .editing
+                        .as_ref()
+                        .filter(|c| c.standalone && c.track == app.track)
+                        .and_then(|c| crate::view::patterns::timing::pattern(app, c.pattern).ok())
+                        .map(|tempo| tempo.duration(tick, d))
+                        .unwrap_or_else(|| {
+                            cat_smf_editor::score::audition_timing::duration_seconds(
+                                loaded.visible(),
+                                app.track,
+                                tick,
+                                d,
+                            )
+                        })
                 });
                 (events[index].data[0], events[index].data[1], duration)
             })

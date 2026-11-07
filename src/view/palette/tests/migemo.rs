@@ -2,29 +2,31 @@ use super::*;
 
 #[test]
 fn bundled_dictionary_matches_romaji_and_preserves_literal_search() {
-    let a = app();
+    let mut a = app();
+    let _wording = worded(&mut a, WORDING);
     let ctx = egui::Context::default();
-    let commands = commands::candidates(&a, &ctx);
+    open(&mut a, &ctx);
+    let commands = &a.palette.commands;
     let mut search = commands::SearchQuery::default();
     for (query, id) in [
-        ("hiraku", "open"),
-        ("HIRAKU", "open"),
-        ("hira", "open"),
-        ("hirak", "open"),
-        ("hozon", "save"),
-        ("syuuryou", "quit"),
-        ("開く", "open"),
-        ("保存", "save"),
-        ("open", "open"),
-        ("CTRL+O", "open"),
-        ("voicevox", "mascot-playback"),
-        ("VOICEVOX", "mascot-playback"),
-        ("ずんだもん", "mascot-playback"),
-        ("voicevox ずんだもん", "mascot-playback"),
-        ("voicevox zunda", "mascot-playback"),
-        ("ctrl+shift+n", "add-track"),
+        ("hiraku", "file.open"),
+        ("HIRAKU", "file.open"),
+        ("hira", "file.open"),
+        ("hirak", "file.open"),
+        ("hozon", "file.save"),
+        ("syuuryou", "app.quit"),
+        ("開く", "file.open"),
+        ("保存", "file.save"),
+        ("open", "file.open"),
+        ("CTRL+O", "file.open"),
+        ("voicevox", "mascot.playback"),
+        ("VOICEVOX", "mascot.playback"),
+        ("ずんだもん", "mascot.playback"),
+        ("voicevox ずんだもん", "mascot.playback"),
+        ("voicevox zunda", "mascot.playback"),
+        ("ctrl+shift+n", "track.add"),
     ] {
-        let result = filter(&commands, query, &mut search, &history::History::default());
+        let result = filter(commands, query, &mut search, &history::History::default());
         assert!(
             result.iter().any(|&i| commands[i].id == id),
             "{query}: {id}"
@@ -32,20 +34,21 @@ fn bundled_dictionary_matches_romaji_and_preserves_literal_search() {
     }
     for query in ["[", ".*", "(", "no-such-operation", "😀"] {
         assert!(
-            filter(&commands, query, &mut search, &history::History::default()).is_empty(),
+            filter(commands, query, &mut search, &history::History::default()).is_empty(),
             "{query}"
         );
     }
     assert_eq!(
-        filter(&commands, "", &mut search, &history::History::default()).len(),
+        filter(commands, "", &mut search, &history::History::default()).len(),
         commands.len()
     );
-    assert!(!filter(&commands, "a", &mut search, &history::History::default()).is_empty());
+    assert!(!filter(commands, "a", &mut search, &history::History::default()).is_empty());
 }
 
 #[test]
 fn romaji_search_keyboard_selection_execute_and_cancel() {
     let mut a = app();
+    let _wording = worded(&mut a, WORDING);
     let ctx = egui::Context::default();
     open(&mut a, &ctx);
     query(&mut a, &ctx, "hiraku");
@@ -55,7 +58,7 @@ fn romaji_search_keyboard_selection_execute_and_cancel() {
         &mut a.palette.search,
         &a.palette.history,
     );
-    assert_eq!(a.palette.commands[results[0]].id, "open");
+    assert_eq!(a.palette.commands[results[0]].id, "file.open");
     press(&mut a, &ctx, Key::ArrowDown);
     press(&mut a, &ctx, Key::ArrowUp);
     assert_eq!(a.palette.selected, 0);
@@ -72,6 +75,7 @@ fn romaji_search_keyboard_selection_execute_and_cancel() {
 #[test]
 fn mascot_toggle_is_searchable_and_keyboard_executable() {
     let mut a = app();
+    let _wording = worded(&mut a, WORDING);
     let ctx = egui::Context::default();
     open(&mut a, &ctx);
     query(&mut a, &ctx, "voicevox ずんだもん 演奏");
@@ -82,7 +86,7 @@ fn mascot_toggle_is_searchable_and_keyboard_executable() {
         &a.palette.history,
     );
     assert_eq!(results.len(), 1);
-    assert_eq!(a.palette.commands[results[0]].id, "mascot-playback");
+    assert_eq!(a.palette.commands[results[0]].id, "mascot.playback");
     press(&mut a, &ctx, Key::Enter);
     assert!(a.mascot.enabled);
     assert!(!a.palette.is_open());
@@ -96,7 +100,7 @@ fn mascot_toggle_is_searchable_and_keyboard_executable() {
     );
     assert!(results
         .iter()
-        .any(|&i| a.palette.commands[i].id == "mascot-playback"));
+        .any(|&i| a.palette.commands[i].id == "mascot.playback"));
     press(&mut a, &ctx, Key::Escape);
     assert!(a.mascot.enabled);
 }

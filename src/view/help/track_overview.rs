@@ -1,6 +1,6 @@
 use eframe::egui::{self, Color32};
 
-pub(super) fn rows(ui: &mut egui::Ui) {
+pub(super) fn rows(ui: &mut egui::Ui, song: bool) {
     super::key_groups(
         ui,
         &[
@@ -11,9 +11,17 @@ pub(super) fn rows(ui: &mut egui::Ui) {
             (
                 Color32::from_rgb(0xa6, 0xe2, 0x2e),
                 &[
-                    ("左クリック / Enter", "全track演奏"),
-                    ("右クリック", "track play / jump"),
-                    ("t / g", "track play / jump"),
+                    ("Enter", if song { "Song演奏" } else { "全track演奏" }),
+                    ("右クリック", "再生・移動menu"),
+                    (
+                        "T",
+                        if song {
+                            "Container演奏"
+                        } else {
+                            "track演奏"
+                        },
+                    ),
+                    ("G", if song { "pattern本体" } else { "track移動" }),
                     ("p / Space", "再生menu / 前回の再生"),
                     ("Shift+Space", "演奏停止"),
                     ("F", "再生位置への追従"),
@@ -30,7 +38,15 @@ pub(super) fn rows(ui: &mut egui::Ui) {
             (
                 Color32::from_rgb(0x66, 0xd9, 0xef),
                 &[
-                    ("l h / j k", "小節 / track"),
+                    ("← →", "小節"),
+                    (
+                        "↑ ↓",
+                        if song {
+                            "Container・配置段"
+                        } else {
+                            "track"
+                        },
+                    ),
                     ("minimap: 左クリック / ドラッグ", "位置 / 表示枠"),
                     ("上zoom: 左 / 右クリック", "時間の拡大 / 縮小"),
                     ("左zoom: 左 / 右クリック", "trackの高さの拡大 / 縮小"),

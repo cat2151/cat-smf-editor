@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::play::transport;
 use crate::view::{
     edit_menu::lyric_tests::{settle, wav},
-    palette::tests::{frame, listed, open, press, query},
+    palette::tests::{choose, frame, listed, open, press, query, worded, WORDING},
     tests::app,
 };
 use cat_smf_editor::edit::lyric::{set, LYRIC};
@@ -11,7 +11,7 @@ use cat_smf_editor::score::note_view::note_on;
 use eframe::egui::{self, Key};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const LABEL: &str = "Event list: VOICEVOX: 1小節の歌詞を差し替え";
+const ID: &str = "lyrics.measure";
 /// Measure 2 in 4/4 at 480 ticks per quarter note.
 pub(super) const MEASURE: (u64, u64) = (1920, 3840);
 
@@ -111,13 +111,10 @@ pub(super) fn assert_looping(app: &App) {
     assert!(transport::timeline::running(app));
 }
 
-/// Runs the palette command found by `q` and checks that the measure loops with the input open.
-fn begin(app: &mut App, ctx: &egui::Context, q: &str) {
+/// Runs the palette command and checks that the measure loops with the input open.
+fn begin(app: &mut App, ctx: &egui::Context) {
     open(app, ctx);
-    query(app, ctx, q);
-    let found = listed(app);
-    eprintln!("query {q:?}: {found:?}");
-    assert_eq!(found.first().map(String::as_str), Some(LABEL));
+    choose(app, ctx, ID);
     press(app, ctx, Key::Enter);
     assert!(!crate::view::modal::is_open(app));
     frame(app, ctx, vec![]);
@@ -136,6 +133,7 @@ fn the_palette_loops_the_measure_and_each_input_overwrites_its_lyrics_one_mora_p
     }
     let root = tempfile::tempdir().unwrap();
     let mut app = singing(root.path(), sing);
+    let _wording = worded(&mut app, WORDING);
     let ctx = egui::Context::default();
     on_note(&mut app, 2400);
     frame(&mut app, &ctx, vec![]);
@@ -147,10 +145,10 @@ fn the_palette_loops_the_measure_and_each_input_overwrites_its_lyrics_one_mora_p
         query(&mut app, &ctx, q);
         let found = listed(&mut app);
         eprintln!("query {q:?}: {found:?}");
-        assert!(found.iter().any(|label| label == LABEL));
+        assert!(found.iter().any(|id| id == ID));
         press(&mut app, &ctx, Key::Escape);
     }
-    begin(&mut app, &ctx, "1小節の歌詞");
+    begin(&mut app, &ctx);
     assert_eq!(tracks(&app), untouched);
 
     // The first input overwrites the sung note and removes the lyric without a note.
@@ -199,7 +197,7 @@ fn cancel_restores_the_measure_lyrics_and_keeps_looping() {
     on_note(&mut app, 3360);
     frame(&mut app, &ctx, vec![]);
     let untouched = tracks(&app);
-    begin(&mut app, &ctx, "1小節の歌詞");
+    begin(&mut app, &ctx);
     frame(&mut app, &ctx, vec![egui::Event::Text("きゃり".into())]);
     let got = lyrics(&app);
     assert!(got.contains(&(1920, "きゃ".into())) && got.contains(&(2400, "り".into())));
@@ -225,7 +223,7 @@ fn a_measure_with_one_note_takes_every_mora_on_notes_added_on_60_and_undo_remove
     frame(&mut app, &ctx, vec![]);
     let untouched = tracks(&app);
     open(&mut app, &ctx);
-    query(&mut app, &ctx, "1小節の歌詞");
+    choose(&mut app, &ctx, ID);
     press(&mut app, &ctx, Key::Enter);
     frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![egui::Event::Text("どんぐり".into())]);
@@ -269,7 +267,7 @@ fn the_enter_that_converts_the_ime_text_leaves_the_lyrics_open() {
     let ctx = egui::Context::default();
     on_note(&mut app, 2400);
     frame(&mut app, &ctx, vec![]);
-    begin(&mut app, &ctx, "1小節の歌詞");
+    begin(&mut app, &ctx);
     frame(
         &mut app,
         &ctx,

@@ -30,16 +30,12 @@ pub(crate) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
         return;
     }
     if !a.drum_editor.kit.has_input() {
-        out.push(Command::plain(
-            screen,
-            "effects",
-            "Effects",
-            &[Key::X],
-            |a, _| crate::play::mixer::open_effects(a, false),
-        ));
+        out.push(Command::plain(screen, "effect.open", &[Key::X], |a, _| {
+            crate::play::mixer::open_effects(a, false)
+        }));
     }
-    let mut add = |id, name, keys: &[Key], action| {
-        let command = Command::plain(screen, id, name, keys, move |a, ctx| {
+    let mut add = |id, keys: &[Key], action| {
+        let command = Command::plain(screen, id, keys, move |a, ctx| {
             if !a.drum_editor.kit.composing
                 && !ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Ime(_))))
             {
@@ -57,139 +53,103 @@ pub(crate) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
             },
         );
     };
-    add(
-        "drum-cancel",
-        "閉じる / 取消",
-        &[Key::Escape],
-        Action::Cancel,
-    );
+    add("drum.cancel", &[Key::Escape], Action::Cancel);
     if a.drum_editor.kit.has_input() {
-        add("drum-confirm", "確定", &[Key::Enter], Action::Confirm);
+        add("drum.confirm", &[Key::Enter], Action::Confirm);
         out.push(Command::new(
             screen,
-            "stop",
-            "停止",
+            "app.stop",
             &[(Key::Space, egui::Modifiers::SHIFT)],
             |a, _| apply(a, Action::Common(super::super::commands::Op::Stop)),
         ));
         return;
     }
-    for (id, name, keys, action) in [
+    for (id, keys, action) in [
+        ("kit.note-picker", vec![Key::N], Action::Pick),
+        ("kit.add-rows", vec![Key::A], Action::AddRows),
         (
-            "kit-note-picker",
-            "Note割り当て",
-            vec![Key::N],
-            Action::Pick,
-        ),
-        ("kit-add-rows", "4行追加", vec![Key::A], Action::AddRows),
-        (
-            "kit-row-next",
-            "次のnote",
+            "kit.row-next",
             vec![Key::J, Key::ArrowDown],
             Action::Move(1, 0),
         ),
         (
-            "kit-row-prev",
-            "前のnote",
+            "kit.row-prev",
             vec![Key::K, Key::ArrowUp],
             Action::Move(-1, 0),
         ),
         (
-            "kit-field-next",
-            "次の項目",
+            "kit.field-next",
             vec![Key::L, Key::ArrowRight],
             Action::Move(0, 1),
         ),
         (
-            "kit-field-prev",
-            "前の項目",
+            "kit.field-prev",
             vec![Key::H, Key::ArrowLeft],
             Action::Move(0, -1),
         ),
+        ("kit.activate", vec![Key::Enter], Action::Activate),
+        ("kit.toggle", vec![Key::F, Key::Space], Action::Toggle),
+        ("kit.query", vec![Key::Slash], Action::Query),
+        ("kit.mute", vec![Key::M], Action::Mute),
         (
-            "kit-activate",
-            "Note選択 / Velocity / Step / Kit / Swing",
-            vec![Key::Enter],
-            Action::Activate,
-        ),
-        (
-            "kit-toggle",
-            "Step",
-            vec![Key::F, Key::Space],
-            Action::Toggle,
-        ),
-        ("kit-query", "Note検索", vec![Key::Slash], Action::Query),
-        ("kit-mute", "Mute", vec![Key::M], Action::Mute),
-        (
-            "drum-a-prev",
-            "A-B Repeat A −",
+            "drum.a-prev",
             vec![Key::OpenBracket],
             Action::Common(super::super::commands::Op::Boundary(false, -1)),
         ),
         (
-            "drum-a-next",
-            "A-B Repeat A +",
+            "drum.a-next",
             vec![Key::CloseBracket],
             Action::Common(super::super::commands::Op::Boundary(false, 1)),
         ),
         (
-            "drum-page-next",
-            "次の小節",
+            "drum.page-next",
             vec![Key::PageDown],
             Action::Common(super::super::commands::Op::Page(true)),
         ),
         (
-            "drum-page-prev",
-            "前の小節",
+            "drum.page-prev",
             vec![Key::PageUp],
             Action::Common(super::super::commands::Op::Page(false)),
         ),
         (
-            "drum-loop",
-            "Loop",
+            "drum.loop",
             vec![Key::R],
             Action::Common(super::super::commands::Op::Loop),
         ),
         (
-            "drum-scope",
-            "Loop Solo",
+            "drum.scope",
             vec![Key::S],
             Action::Common(super::super::commands::Op::Scope),
         ),
         (
-            "help",
-            "ヘルプ",
+            "app.help",
             vec![Key::F1],
             Action::Common(super::super::commands::Op::Help),
         ),
     ] {
-        add(id, name, &keys, action);
+        add(id, &keys, action);
     }
-    for (id, name, key, modifiers, action) in [
+    for (id, key, modifiers, action) in [
         (
-            "drum-b-prev",
-            "A-B Repeat B −",
+            "drum.b-prev",
             Key::OpenBracket,
             egui::Modifiers::SHIFT,
             Action::Common(super::super::commands::Op::Boundary(true, -1)),
         ),
         (
-            "drum-b-next",
-            "A-B Repeat B +",
+            "drum.b-next",
             Key::CloseBracket,
             egui::Modifiers::SHIFT,
             Action::Common(super::super::commands::Op::Boundary(true, 1)),
         ),
         (
-            "kit-context",
-            "Step menu",
+            "kit.context",
             Key::F10,
             egui::Modifiers::SHIFT,
             Action::Menu,
         ),
         (
-            "stop",
-            "停止",
+            "app.stop",
             Key::Space,
             egui::Modifiers::SHIFT,
             Action::Common(super::super::commands::Op::Stop),
@@ -198,7 +158,6 @@ pub(crate) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
         out.push(Command::new(
             screen,
             id,
-            name,
             &[(key, modifiers)],
             move |a, ctx| {
                 if !a.drum_editor.kit.composing

@@ -216,10 +216,10 @@ fn song_timeline_keyboard_zoom_and_repeat_commands_preserve_cell_navigation() {
     let has_b = |a: &App| {
         crate::view::commands::definitions(a, Screen::Song)
             .iter()
-            .any(|command| command.id == "song-repeat-b")
+            .any(|command| command.id == "song.repeat-b")
     };
     assert!(!has_b(&a), "B needs a start point");
-    command(&mut a, &c, id, "Song A-B Repeat A");
+    command(&mut a, &c, id, "song.repeat-a");
     assert!(has_b(&a), "A and B can select the same measure");
     assert!(a.playback.repeat.is_none());
     frame(&mut a, &c, id, vec![]);
@@ -239,12 +239,7 @@ fn song_timeline_keyboard_zoom_and_repeat_commands_preserve_cell_navigation() {
         )),
         "A is marked on the repeat row"
     );
-    command(
-        &mut a,
-        &c,
-        id,
-        "Song A-B Repeat B：選択小節の末尾を終了点に設定して再生",
-    );
+    command(&mut a, &c, id, "song.repeat-b");
     assert_eq!(a.playback.repeat, Some((0, 1920)));
     a.patterns.workspace.song_cell.placing = true;
     for _ in 0..2 {
@@ -252,14 +247,9 @@ fn song_timeline_keyboard_zoom_and_repeat_commands_preserve_cell_navigation() {
     }
     assert_eq!(a.patterns.workspace.song_cell.measure, 3);
     assert!(has_b(&a));
-    command(
-        &mut a,
-        &c,
-        id,
-        "Song A-B Repeat B：選択小節の末尾を終了点に設定して再生",
-    );
+    command(&mut a, &c, id, "song.repeat-b");
     assert_eq!(a.playback.repeat, Some((0, 5760)));
-    command(&mut a, &c, id, "Song A-B Repeat 解除");
+    command(&mut a, &c, id, "song.repeat-clear");
     assert!(a.playback.repeat.is_none());
     assert!(!has_b(&a), "clear also discards the remembered A");
 }

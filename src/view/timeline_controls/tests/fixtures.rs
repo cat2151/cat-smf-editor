@@ -15,9 +15,11 @@ pub(super) struct Fixture {
 impl Fixture {
     pub fn expected_click(&self) -> Click {
         match self.screen {
-            Screen::Staff | Screen::PianoRoll | Screen::Tempo | Screen::TrackOverview => {
-                Click::SeekPlaying
-            }
+            Screen::Staff
+            | Screen::PianoRoll
+            | Screen::Tempo
+            | Screen::TrackOverview
+            | Screen::TrackOverviewSong => Click::SeekPlaying,
             Screen::Parameter => Click::Cursor,
             Screen::Song => Click::Song,
             Screen::Scene => Click::Scene,
@@ -26,6 +28,9 @@ impl Fixture {
 
     pub fn expected_mode(&self) -> crate::play::playback::Mode {
         use crate::play::playback::Mode;
+        if self.screen == Screen::TrackOverviewSong {
+            return Mode::Arrangement(None);
+        }
         match self.expected_click() {
             Click::Song => Mode::Arrangement(None),
             Click::Scene => Mode::Arrangement(self.app.patterns.workspace.scene),
@@ -51,7 +56,9 @@ impl Fixture {
             Screen::Song | Screen::Scene => self.app.comma_menu.open = !visible,
             Screen::PianoRoll => self.app.piano_roll.open = visible,
             Screen::Tempo => self.app.tempo_curve.open = visible,
-            Screen::TrackOverview => self.app.track_overview.open = visible,
+            Screen::TrackOverview | Screen::TrackOverviewSong => {
+                self.app.track_overview.open = visible
+            }
             Screen::Parameter => {
                 if visible {
                     self.app.parameter_editor.open = true;
@@ -65,6 +72,14 @@ impl Fixture {
     pub fn new(screen: Screen) -> Self {
         // A missing arm after adding a production ID is intentionally a compile error.
         let (mut app, ctx, workspace) = match screen {
+            Screen::TrackOverviewSong => {
+                let (mut a, _, _, second, _) = view::patterns::workspace_tests::verification_song();
+                view::patterns::workspace_tests::lengthen_song(&mut a, second, 80);
+                a.config.piano_roll_maximized = true;
+                a.patterns.workspace.song_cell.measure = 1;
+                view::track_overview::open(&mut a);
+                (a, egui::Context::default(), None)
+            }
             Screen::Song | Screen::Scene => {
                 let (mut a, c, _, second, scene) =
                     view::patterns::workspace_tests::verification_song();
@@ -117,7 +132,10 @@ impl Fixture {
                     }
                     Screen::Tempo => a.tempo_curve.open = true,
                     Screen::TrackOverview => a.track_overview.open = true,
-                    Screen::Song | Screen::Scene | Screen::Parameter => unreachable!(),
+                    Screen::Song
+                    | Screen::Scene
+                    | Screen::Parameter
+                    | Screen::TrackOverviewSong => unreachable!(),
                 }
                 (a, egui::Context::default(), None)
             }

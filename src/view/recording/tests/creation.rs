@@ -107,6 +107,64 @@ fn installed_default_kit_creation_and_disk_cache_restore() {
         slot.state
     );
     assert!(!a.player_selection.kit_open);
+    // Exercise the real installed kit through the keyboard, then render the committed take
+    // through normal playback without opening an audio device.
+    let _library = cat_smf_editor::native_library::load_at(work.path()).unwrap();
+    frame(
+        &mut a,
+        &ctx,
+        vec![
+            key(Key::Space, true, Modifiers::NONE),
+            key(Key::Z, true, Modifiers::NONE),
+        ],
+        true,
+    );
+    rewind(&mut a, Duration::from_millis(100));
+    frame(
+        &mut a,
+        &ctx,
+        vec![
+            key(Key::X, true, Modifiers::NONE),
+            key(Key::Z, false, Modifiers::NONE),
+        ],
+        true,
+    );
+    assert!(recorder(&a).sounding(36));
+    rewind(&mut a, Duration::from_millis(100));
+    frame(
+        &mut a,
+        &ctx,
+        vec![
+            key(Key::X, false, Modifiers::NONE),
+            key(Key::Escape, true, Modifiers::NONE),
+        ],
+        true,
+    );
+    let prepared =
+        crate::view::patterns::preview::prepare(&a, a.patterns.selected.unwrap()).unwrap();
+    let parts = prepared.parts;
+    let note_count: usize = parts.iter().map(|(_, _, s)| s.notes.len()).sum();
+    assert_eq!(note_count, 2);
+    let instruments =
+        crate::play::audition::offline::Instruments::open(48000, &parts, &Default::default())
+            .unwrap();
+    let job = unsafe {
+        instruments.job(
+            48000,
+            parts,
+            &vec![1.0; a.loaded.as_ref().unwrap().music.tracks.len()],
+            true,
+            vec![],
+        )
+    };
+    let audio = job
+        .run(&std::sync::atomic::AtomicBool::new(false))
+        .unwrap()
+        .unwrap();
+    assert!(audio.iter().all(|v| v.is_finite()));
+    let peak = audio.iter().fold(0.0_f32, |p, v| p.max(v.abs()));
+    assert!(peak > 0.00001, "recorded kit silent: {peak}");
+    eprintln!("recorded installed kit: {note_count} notes, peak={peak}");
 }
 
 fn press(a: &mut App, ctx: &egui::Context, keycode: Key, modifiers: Modifiers) {
@@ -171,7 +229,7 @@ fn enter_creates_the_selected_saw_without_a_pattern() {
 }
 
 #[test]
-fn kit_completion_adds_only_a_container_and_keeps_the_keyboard_play_target() {
+fn kit_completion_adds_and_selects_the_kit_container() {
     let mut a = app();
     let ctx = egui::Context::default();
     open_key(&mut a, &ctx);
@@ -203,8 +261,11 @@ fn kit_completion_adds_only_a_container_and_keeps_the_keyboard_play_target() {
     assert!(l.patches[*catalog.sources.iter().next().unwrap()]
         .kit
         .is_some());
-    assert!(session(&a).sound().patch.kit.is_none());
-    assert_eq!(session(&a).sound().track, l.music.tracks.len());
+    assert!(session(&a).sound().patch.kit.is_some());
+    assert_eq!(
+        session(&a).sound().track,
+        *catalog.sources.iter().next().unwrap()
+    );
     assert!(!a.player_selection.kit_open);
     a.undo_music().unwrap();
     assert!(Catalog::read(&a.loaded.as_ref().unwrap().music)

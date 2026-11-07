@@ -1,5 +1,5 @@
 use super::*;
-use crate::view::palette::tests::{app, frame, press};
+use crate::view::palette::tests::{app, choose, frame, press};
 fn bytes(a: &App) -> Vec<u8> {
     cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap()
 }
@@ -68,17 +68,16 @@ fn saved_requests_and_running_input_reject_external_target_changes() {
 #[test]
 fn every_registered_interactive_handler_runs_without_palette_special_cases() {
     for id in [
-        "insert-event",
-        "insert-tempo",
-        "insert-key-signature",
-        "insert-same-measure",
-        "browse-views",
-        "duplicate-pattern",
-        "preview-pattern",
-        "move-pattern-container",
-        "pattern-structure",
-        "pattern-audition-tempo",
-        "pattern-midi-baseline",
+        "event.insert",
+        "event.insert-tempo",
+        "event.insert-key-signature",
+        "event.insert-same-measure",
+        "view.browse",
+        "pattern.duplicate",
+        "pattern.preview",
+        "pattern.move-container",
+        "pattern.structure",
+        "pattern.midi-baseline",
     ] {
         let mut a = app();
         let c = egui::Context::default();
@@ -96,7 +95,7 @@ fn every_registered_interactive_handler_runs_without_palette_special_cases() {
 }
 #[test]
 fn tempo_supplied_public_input_and_palette_have_identical_atomic_results() {
-    use crate::view::palette::tests::{open, query};
+    use crate::view::palette::tests::open;
     let mut results = vec![];
     for entry in 0..3 {
         let mut a = app();
@@ -123,7 +122,7 @@ fn tempo_supplied_public_input_and_palette_have_identical_atomic_results() {
                 submit(&mut a, &c, request).unwrap();
             } else {
                 open(&mut a, &c);
-                query(&mut a, &c, "insert tempo");
+                choose(&mut a, &c, "event.insert-tempo");
                 press(&mut a, &c, Key::Enter);
             }
             frame(&mut a, &c, vec![]);

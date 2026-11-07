@@ -68,8 +68,7 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     {
         out.push(Command::plain(
             s,
-            "view-mode",
-            "Notes / Raw",
+            "view.mode",
             &[eframe::egui::Key::V],
             |a, ctx| {
                 toggle(a);

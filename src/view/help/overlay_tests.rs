@@ -32,13 +32,14 @@ fn palette_over_mml_owns_help_and_escape_restores_mml_help() {
     frame(&mut a, input(Key::P, Modifiers::CTRL | Modifiers::SHIFT));
     assert_eq!(a.help.target, Target::Palette);
     frame(&mut a, input(Key::F1, Modifiers::NONE));
-    assert!(a.help_open);
+    assert!(!a.help_open);
     assert!(a.palette.is_open());
     assert!(a.mml_input.open);
     assert_eq!(a.help.target, Target::Palette);
+    frame(&mut a, input(Key::F1, Modifiers::NONE));
     frame(&mut a, input(Key::Escape, Modifiers::NONE));
     assert!(!a.palette.is_open());
-    assert!(a.help_open);
+    assert!(!a.help_open);
     assert!(a.mml_input.open);
     assert_eq!(a.help.target, Target::Mml);
     a.mml_input.open = false;

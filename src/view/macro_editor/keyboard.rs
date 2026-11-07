@@ -35,8 +35,7 @@ pub(super) fn collect(screen: Screen, out: &mut Vec<Command>) {
     {
         out.push(Command::plain(
             screen,
-            format!("macro-count-{digit}"),
-            format!("反復回数 {digit}"),
+            format!("macro.count-{digit}"),
             &[key],
             move |a, _| {
                 let Some(s) = &mut a.macro_editor.session else {
@@ -54,12 +53,12 @@ pub(super) fn collect(screen: Screen, out: &mut Vec<Command>) {
             },
         ));
     }
-    for (id, name, key, factor) in [
-        ("macro-step-less", "変化量を半分", Key::OpenBracket, 0.5),
-        ("macro-step-more", "変化量を2倍", Key::CloseBracket, 2.0),
+    for (id, key, factor) in [
+        ("macro.step-less", Key::OpenBracket, 0.5),
+        ("macro.step-more", Key::CloseBracket, 2.0),
     ] {
         out.push(
-            Command::plain(screen, id, name, &[key], move |a, ctx| {
+            Command::plain(screen, id, &[key], move |a, ctx| {
                 if let Some(s) = &mut a.macro_editor.session {
                     s.keyboard.count = None;
                     s.keyboard.step = (s.keyboard.step * factor).clamp(f64::EPSILON, 1.0);
@@ -69,16 +68,16 @@ pub(super) fn collect(screen: Screen, out: &mut Vec<Command>) {
             .repeating(),
         );
     }
-    for (id, name, keys) in [
-        ("macro-prev", "前のMacro", &[Key::K, Key::ArrowUp][..]),
-        ("macro-next", "次のMacro", &[Key::J, Key::ArrowDown][..]),
-        ("macro-less", "値を下げる", &[Key::H, Key::ArrowLeft][..]),
-        ("macro-more", "値を上げる", &[Key::L, Key::ArrowRight][..]),
-        ("macro-min", "最小", &[Key::Home][..]),
-        ("macro-max", "最大", &[Key::End][..]),
+    for (id, keys) in [
+        ("macro.prev", &[Key::K, Key::ArrowUp][..]),
+        ("macro.next", &[Key::J, Key::ArrowDown][..]),
+        ("macro.less", &[Key::H, Key::ArrowLeft][..]),
+        ("macro.more", &[Key::L, Key::ArrowRight][..]),
+        ("macro.min", &[Key::Home][..]),
+        ("macro.max", &[Key::End][..]),
     ] {
         out.push(
-            Command::plain(screen, id, name, keys, move |a, _| {
+            Command::plain(screen, id, keys, move |a, _| {
                 let Some(s) = &mut a.macro_editor.session else {
                     return;
                 };

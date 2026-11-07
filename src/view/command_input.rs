@@ -136,14 +136,8 @@ pub(crate) fn start(
                 }
                 return Ok(Execution::Completed);
             }
-            if action == super::patterns::Action::AuditionTempo && pattern.is_some() {
-                return Err("試聴tempoの対象patternがありません".into());
-            }
             let mut input = pattern_args::State::new(a, action)?;
             input.preset(value, container)?;
-            if input.supplied_tempo(a)? {
-                return Ok(Execution::Completed);
-            }
             if let Some(id) = pattern
                 && input.apply(a, Some(id))?
             {

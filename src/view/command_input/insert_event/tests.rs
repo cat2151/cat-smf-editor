@@ -1,5 +1,5 @@
 use super::*;
-use crate::view::palette::tests::{app, frame, open, press, query};
+use crate::view::palette::tests::{app, choose, frame, open, press};
 
 #[test]
 fn inserts_immediately_before_current_event_in_notes_and_raw() {
@@ -84,7 +84,7 @@ fn invalid_tempo_and_escape_leave_song_and_undo_unchanged() {
     let c = egui::Context::default();
     let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
     open(&mut a, &c);
-    query(&mut a, &c, "insert event");
+    choose(&mut a, &c, "event.insert");
     press(&mut a, &c, Key::Enter);
     frame(&mut a, &c, vec![]);
     press(&mut a, &c, Key::Enter);
@@ -130,7 +130,7 @@ fn tempo_targets_cursor_track_tick_and_preserves_end_of_track() {
 /// Opens a direct insertion command from the palette and types `value` into its input.
 fn direct(a: &mut App, c: &egui::Context, command: &str, value: &str) {
     open(a, c);
-    query(a, c, command);
+    choose(a, c, command);
     press(a, c, Key::Enter);
     // The modal takes focus on the frame after the palette chose the command.
     frame(a, c, vec![]);
@@ -148,8 +148,8 @@ fn direct(a: &mut App, c: &egui::Context, command: &str, value: &str) {
 #[test]
 fn direct_commands_skip_the_kind_list_and_insert_undoably() {
     for (command, value, meta_type, data) in [
-        ("insert tempo", "140", 0x51, vec![6, 138, 27]),
-        ("insert key signature", "D minor", 0x59, vec![255, 1]),
+        ("event.insert-tempo", "140", 0x51, vec![6, 138, 27]),
+        ("event.insert-key-signature", "D minor", 0x59, vec![255, 1]),
     ] {
         let mut a = app();
         let c = egui::Context::default();
@@ -180,7 +180,7 @@ fn direct_tempo_rejects_invalid_value_and_escape_closes() {
     let mut a = app();
     let c = egui::Context::default();
     let before = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
-    direct(&mut a, &c, "insert tempo", "NaN");
+    direct(&mut a, &c, "event.insert-tempo", "NaN");
     let state = a.command_input.insert_event.as_ref().unwrap();
     assert_eq!(state.kind, Some(Kind::Tempo));
     assert_eq!(state.query, "NaN");
@@ -200,7 +200,7 @@ fn keyboard_insertion_is_atomic_undoable_and_suspends_shortcuts() {
     let c = egui::Context::default();
     let before = a.loaded.as_ref().unwrap().music.clone();
     open(&mut a, &c);
-    query(&mut a, &c, "insert event");
+    choose(&mut a, &c, "event.insert");
     press(&mut a, &c, Key::Enter);
     frame(&mut a, &c, vec![]);
     press(&mut a, &c, Key::ArrowDown);

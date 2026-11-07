@@ -1,5 +1,5 @@
 use super::*;
-use crate::view::palette::tests::{frame, open as palette, press, query};
+use crate::view::palette::tests::{choose, frame, open as palette, press};
 /// 選んだ track の数値欄を入力中にする。
 pub(crate) fn begin_input(a: &mut App) {
     open(a);
@@ -23,12 +23,12 @@ fn numeric_layer_buffer_survives_and_context_confirm_cancel_preserve_target() {
     a.layer_editor.editing.as_mut().unwrap().text = "2".into();
     let target = a.layer_editor.selected;
     palette(&mut a, &c);
-    query(&mut a, &c, "数値取消");
+    choose(&mut a, &c, "layer.cancel");
     press(&mut a, &c, egui::Key::Escape);
     assert_eq!(a.layer_editor.editing.as_ref().unwrap().text, "2");
     assert_eq!(a.layer_editor.selected, target);
     palette(&mut a, &c);
-    query(&mut a, &c, "数値確定");
+    choose(&mut a, &c, "layer.confirm");
     press(&mut a, &c, egui::Key::Enter);
     assert!(a.layer_editor.editing.is_none());
     assert_eq!(
@@ -47,7 +47,7 @@ fn numeric_layer_buffer_survives_and_context_confirm_cancel_preserve_target() {
     frame(&mut a, &c, vec![]);
     a.layer_editor.editing.as_mut().unwrap().text = "5".into();
     palette(&mut a, &c);
-    query(&mut a, &c, "数値取消");
+    choose(&mut a, &c, "layer.cancel");
     press(&mut a, &c, egui::Key::Enter);
     assert!(a.layer_editor.editing.is_none());
     assert_eq!(

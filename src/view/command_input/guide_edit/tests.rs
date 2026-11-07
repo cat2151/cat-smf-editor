@@ -1,10 +1,10 @@
 use super::*;
-use crate::view::palette::tests::{app, frame, open, press, query};
+use crate::view::palette::tests::{app, choose, frame, open, press};
 use eframe::egui::{self, Key};
 
-fn command(a: &mut App, c: &egui::Context, name: &str) {
+fn command(a: &mut App, c: &egui::Context, id: &str) {
     open(a, c);
-    query(a, c, name);
+    choose(a, c, id);
     press(a, c, Key::Enter);
     frame(a, c, vec![]);
 }
@@ -28,8 +28,8 @@ fn replace(a: &mut App, c: &egui::Context, text: &str) {
 fn chord_keyboard_insert_edit_move_cancel_delete_and_undo() {
     let mut a = app();
     let c = egui::Context::default();
-    command(&mut a, &c, "Add chord guide track");
-    command(&mut a, &c, "Insert chord");
+    command(&mut a, &c, "guide.add-track");
+    command(&mut a, &c, "guide.insert-chord");
     frame(&mut a, &c, vec![egui::Event::Text("Isus4".into())]);
     press(&mut a, &c, Key::Enter);
     assert!(!crate::view::modal::is_open(&a));
@@ -40,19 +40,19 @@ fn chord_keyboard_insert_edit_move_cancel_delete_and_undo() {
             .collect::<Vec<_>>()
     };
     assert_eq!(chord(&a), [(0, "Isus4".into())]);
-    command(&mut a, &c, "Edit guide event");
+    command(&mut a, &c, "guide.edit-event");
     replace(&mut a, &c, "V7");
     press(&mut a, &c, Key::Escape);
     assert_eq!(chord(&a), [(0, "Isus4".into())]);
-    command(&mut a, &c, "Edit guide event");
+    command(&mut a, &c, "guide.edit-event");
     replace(&mut a, &c, "I");
     press(&mut a, &c, Key::Enter);
     assert_eq!(chord(&a), [(0, "I".into())]);
-    command(&mut a, &c, "Move guide event");
+    command(&mut a, &c, "guide.move-event");
     replace(&mut a, &c, "1920");
     press(&mut a, &c, Key::Enter);
     assert_eq!(chord(&a), [(1920, "I".into())]);
-    command(&mut a, &c, "Delete guide event");
+    command(&mut a, &c, "guide.delete-event");
     assert!(chord(&a).is_empty());
     a.undo_music().unwrap();
     assert_eq!(chord(&a), [(1920, "I".into())]);
@@ -67,7 +67,7 @@ fn guide_creation_key_edit_delete_undo_and_disk_startup_restore() {
     let mut a = app();
     let c = egui::Context::default();
     let original = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
-    command(&mut a, &c, "Add chord guide track");
+    command(&mut a, &c, "guide.add-track");
     assert_eq!(a.track, 3);
     let music = &a.loaded.as_ref().unwrap().music;
     assert_eq!(chord_guide::track(music), Some(3));

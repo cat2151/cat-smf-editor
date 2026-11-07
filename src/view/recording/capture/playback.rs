@@ -1,6 +1,5 @@
 //! Capture auditions follow song-wide sequence order across containers.
 use super::*;
-use cat_smf_editor::score::audition_timing::TempoMap;
 
 pub(super) struct Playing {
     phrase: Captured,
@@ -17,17 +16,15 @@ fn next<'a>(p: &Captured, phrases: &'a [Captured]) -> Option<&'a Captured> {
 }
 
 pub(super) fn start(a: &mut App, p: &Captured, phrases: &[Captured]) -> Result<Playing, String> {
-    let division = a
-        .loaded
-        .as_ref()
-        .ok_or(message::NO_SMF_LOADED)?
-        .music
-        .division;
-    let tempo = TempoMap::constant(division, a.patterns.tempo.0)?;
+    let song_tick = crate::view::patterns::timing::pattern_tick(a, p.pattern)?;
+    let tempo = crate::view::patterns::timing::pattern(a, p.pattern)?;
     let start = tempo.seconds_at(p.range.0);
     let duration = tempo.duration(p.range.0, p.range.1 - p.range.0);
     let gap = if next(p, phrases).is_some() {
-        tempo.duration(0, u64::from(division) * 4)
+        tempo.duration(
+            p.range.1,
+            u64::from(a.loaded.as_ref().unwrap().music.division) * 4,
+        )
     } else {
         0.0
     };
@@ -48,6 +45,10 @@ pub(super) fn start(a: &mut App, p: &Captured, phrases: &[Captured]) -> Result<P
     a.playback.last = crate::play::playback::Mode::Pattern(p.pattern);
     a.playback.follow = false;
     a.playback.pending = Some(prepared);
+    a.patterns.timing.playing = Some((
+        cat_smf_editor::score::scene::arrangement::PatternOrScene::Pattern(p.pattern),
+        song_tick,
+    ));
     a.patterns.preview = Some(p.pattern);
     crate::cursor::moves::at_tick(a, p.range.0);
     Ok(Playing {

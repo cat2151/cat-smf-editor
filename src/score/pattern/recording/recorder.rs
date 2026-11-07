@@ -7,6 +7,8 @@ use std::time::Duration;
 pub struct Recorder {
     division: u16,
     settings: Settings,
+    kit_rows: Option<[Option<u8>; 48]>,
+    kit_chromatic: Option<(u8, [bool; 128])>,
     /// Free: Rec. Loop: the end of the count-in.
     origin: Option<Duration>,
     /// How many held pads sound each pitch.
@@ -54,6 +56,8 @@ impl Recorder {
         Ok(Self {
             division,
             settings,
+            kit_rows: None,
+            kit_chromatic: None,
             origin: None,
             sounding: [0; 128],
             held: vec![],
@@ -104,7 +108,7 @@ impl Recorder {
         if self.held(pad) {
             return Ok(vec![]);
         }
-        let notes = pitches(&self.settings, pad);
+        let notes = self.pitches(pad);
         if notes.is_empty() {
             return Ok(vec![]);
         }
@@ -295,3 +299,5 @@ impl Recorder {
 
 #[cfg(test)]
 mod tests;
+
+mod kit;

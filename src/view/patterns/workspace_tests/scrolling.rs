@@ -98,3 +98,40 @@ fn song_manual_scroll_returns_to_measure_one_without_moving_selection() {
     assert_eq!(offset(&c), 0.0);
     assert_eq!(a.patterns.workspace.song_cell.measure, 20);
 }
+
+fn cursor_center(c: &egui::Context, measure: u64) -> f32 {
+    c.data(|d| {
+        d.get_temp::<egui::Rect>(egui::Id::new((Pane::Song.title(), "cell", 0usize, measure)))
+    })
+    .expect("rendered cursor cell")
+    .center()
+    .x
+}
+
+#[test]
+fn song_keyboard_zoom_keeps_the_cursor_measure_in_place() {
+    let (mut a, c, _, _, _) = verification_song();
+    c.style_mut(|style| style.spacing.scroll.floating = false);
+    let song = Pane::Song.viewport();
+    // Far enough right that zooming out never has to scroll before measure one.
+    a.patterns.workspace.song_cell.measure = 20;
+    for _ in 0..3 {
+        frame(&mut a, &c, song, vec![]);
+    }
+    let before = cursor_center(&c, 20);
+    for k in [Key::PageDown, Key::PageUp] {
+        for _ in 0..2 {
+            key(&mut a, &c, song, k, Modifiers::NONE);
+            for _ in 0..2 {
+                frame(&mut a, &c, song, vec![]);
+            }
+            assert!(
+                (cursor_center(&c, 20) - before).abs() < 1.0,
+                "{k:?}: {} -> {}",
+                before,
+                cursor_center(&c, 20)
+            );
+        }
+    }
+    assert_eq!(a.patterns.workspace.song_cell.measure, 20);
+}

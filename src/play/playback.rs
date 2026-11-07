@@ -141,6 +141,7 @@ pub fn start(app: &mut App, mode: Mode) {
     app.playback.open = false;
     app.audition.stop();
     app.playback.active = None;
+    app.patterns.timing.playing = None;
     if let Some(loaded) = &app.loaded
         && let Err(error) = cat_smf_editor::score::same_measure::validate(&loaded.music)
     {
@@ -149,6 +150,15 @@ pub fn start(app: &mut App, mode: Mode) {
         return;
     }
     app.playback.pending = crate::play::transport::prepare(app, mode);
+    if app.playback.pending.is_some()
+        && let Some(context) = app.patterns.editing.as_ref().filter(|c| c.standalone)
+        && let Ok(tick) = crate::view::patterns::timing::pattern_tick(app, context.pattern)
+    {
+        app.patterns.timing.playing = Some((
+            cat_smf_editor::score::scene::arrangement::PatternOrScene::Pattern(context.pattern),
+            tick,
+        ));
+    }
 }
 
 pub fn parts(
@@ -225,6 +235,10 @@ pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
     if !app.playback.open {
+        return;
+    }
+    if crate::view::track_overview::is_song(app) {
+        crate::view::track_overview::song_playback::menu(app, ctx);
         return;
     }
     let mut open = true;

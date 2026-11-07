@@ -16,8 +16,7 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             if !cells {
                 out.push(Command::new(
                     s,
-                    "arrangement-delete-pattern",
-                    "Delete candidate pattern",
+                    "pattern.delete-candidate",
                     &[(Key::Delete, Modifiers::SHIFT)],
                     |a, _| {
                         if let Some(PatternOrScene::Pattern(id)) =
@@ -42,20 +41,22 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 out.push(
                     Command::plain(
                         s,
-                        format!("arrangement-{id}"),
-                        "Cell",
+                        format!("placement.cell-{id}"),
                         &keys[..if p == Pane::Song { 2 } else { 1 }],
                         move |a, _| movement(a, p, rows, measures),
                     )
-                    .repeating(),
+                    .repeating()
+                    .text_id("placement.cell"),
                 );
-                out.push(Command::new(
-                    s,
-                    format!("arrangement-move-{id}"),
-                    "Move placement",
-                    &[(key, Modifiers::CTRL)],
-                    move |a, _| move_placement(a, p, rows, measures),
-                ));
+                out.push(
+                    Command::new(
+                        s,
+                        format!("placement.move-{id}"),
+                        &[(key, Modifiers::CTRL)],
+                        move |a, _| move_placement(a, p, rows, measures),
+                    )
+                    .text_id("placement.move"),
+                );
             }
         }
         let candidate_keys = if p == Pane::Song {
@@ -73,18 +74,23 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             vec![(Key::PageUp, -1), (Key::PageDown, 1)]
         };
         for (key, delta) in candidate_keys {
-            out.push(Command::plain(
-                s,
-                format!("arrangement-part-{key:?}"),
-                "Pattern / scene",
-                &[key],
-                move |a, _| candidate(a, p, delta),
-            ));
+            out.push(
+                Command::plain(
+                    s,
+                    format!("placement.candidate-{key:?}"),
+                    &[key],
+                    move |a, _| candidate(a, p, delta),
+                )
+                .text_id("placement.candidate"),
+            );
         }
         out.push(Command::plain(
             s,
-            "arrangement-place-selected",
-            if cells { "Put" } else { "Select candidate" },
+            if cells {
+                "placement.put"
+            } else {
+                "placement.select-candidate"
+            },
             if p == Pane::Song {
                 &[Key::F, Key::Enter]
             } else {
@@ -94,11 +100,10 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         ));
         out.push(Command::plain(
             s,
-            "arrangement-edit",
             if cells {
-                "Edit cell contents"
+                "placement.edit-cell"
             } else {
-                "Edit candidate"
+                "placement.edit-choice"
             },
             &[Key::E],
             move |a, c| {
@@ -112,24 +117,21 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         if p == Pane::Scene || !cells {
             out.push(Command::new(
                 s,
-                "arrangement-edit-part",
-                "Edit candidate",
+                "placement.edit-candidate",
                 &[(Key::E, Modifiers::SHIFT)],
                 move |a, c| edit_choice(a, c, p),
             ));
         }
         out.push(Command::plain(
             s,
-            "arrangement-create-pattern",
-            "New pattern",
+            "placement.create-pattern",
             &[Key::N],
             crate::view::patterns::library::add,
         ));
         if cells {
             out.push(Command::plain(
                 s,
-                "arrangement-remove",
-                "Remove placement",
+                "placement.remove",
                 &[Key::Delete],
                 move |a, _| {
                     let r = place(a, p, None);
@@ -138,63 +140,46 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             ));
             out.push(Command::new(
                 s,
-                "arrangement-comment-out",
-                "Comment out placement",
+                "placement.comment-out",
                 &[(Key::Slash, Modifiers::CTRL)],
                 move |a, _| comment_out(a, p),
             ));
         }
         out.push(Command::plain(
             s,
-            "arrangement-play",
-            "Play",
+            "placement.play",
             &[Key::Space],
             move |a, _| play(a, p),
         ));
         out.push(Command::new(
             s,
-            "stop",
-            "Stop",
+            "app.stop",
             &[(Key::Space, Modifiers::SHIFT)],
             |a, _| crate::play::transport::stop(a),
         ));
         out.push(Command::new(
             s,
-            "undo",
-            "Undo",
+            "app.undo",
             &[(Key::Z, Modifiers::CTRL)],
             |a, _| {
                 let r = a.undo_music();
                 result(a, r);
             },
         ));
-        out.push(Command::plain(
-            s,
-            "play-menu",
-            "再生menu",
-            &[Key::P],
-            |a, _| a.playback.open = true,
-        ));
+        out.push(Command::plain(s, "play.open", &[Key::P], |a, _| {
+            a.playback.open = true
+        }));
         if p == Pane::Song {
-            out.push(Command::plain(
-                s,
-                "scene-window",
-                "Scene window",
-                &[Key::S],
-                |a, _| a.patterns.workspace.scene_window ^= true,
-            ));
+            out.push(Command::plain(s, "scene.window", &[Key::S], |a, _| {
+                a.patterns.workspace.scene_window ^= true
+            }));
         }
+        out.push(Command::plain(s, "app.help", &[Key::F1], move |a, _| {
+            crate::view::help::summon(a)
+        }));
         out.push(Command::plain(
             s,
-            "help",
-            "Help",
-            &[Key::F1],
-            move |a, _| crate::view::help::summon(a),
-        ));
-        out.push(Command::plain(
-            s,
-            "arrangement-event-list",
-            "Event list",
+            "placement.event-list",
             &[Key::Escape],
             move |a, c| {
                 if p == Pane::Song && a.patterns.workspace.song_cell.placing {
@@ -210,27 +195,20 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
         global(s, out);
     }
     if s == Screen::Scene {
-        out.push(Command::plain(
-            s,
-            "arrangement-delete-scene",
-            "Delete scene",
-            &[],
-            |a, _| {
-                let id = a.patterns.workspace.scene;
-                let r = id
-                    .ok_or(message::SELECT_A_SCENE.into())
-                    .and_then(|id| mutate(a, |m| model::delete_scene(m, id)));
-                result(a, r);
-            },
-        ));
+        out.push(Command::plain(s, "scene.delete", &[], |a, _| {
+            let id = a.patterns.workspace.scene;
+            let r = id
+                .ok_or(message::SELECT_A_SCENE.into())
+                .and_then(|id| mutate(a, |m| model::delete_scene(m, id)));
+            result(a, r);
+        }));
     }
     if s == Screen::Main
         && let Some(p) = a.patterns.workspace.return_to
     {
         out.push(Command::plain(
             s,
-            "arrangement-return",
-            "Return to placement",
+            "placement.return",
             &[Key::Escape],
             move |a, c| {
                 a.patterns.workspace.return_to = None;
@@ -240,41 +218,21 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     }
 }
 fn global(s: Screen, out: &mut Vec<Command>) {
-    out.push(Command::plain(
-        s,
-        "scene-structure",
-        "Scene measures / meter",
-        &[],
-        |a, c| open_dialog(a, c, dialog::Purpose::ResizeScene, Pane::Scene),
-    ));
-    out.push(Command::plain(
-        s,
-        "arrangement-create-scene",
-        "Create scene",
-        &[],
-        move |a, c| open_dialog(a, c, dialog::Purpose::Create, Pane::Scene),
-    ));
-    out.push(Command::plain(
-        s,
-        "arrangement-edit-scene",
-        "Edit scene",
-        &[],
-        |a, c| open_dialog(a, c, dialog::Purpose::Scene, Pane::Scene),
-    ));
-    out.push(Command::plain(
-        s,
-        "arrangement-play-song",
-        "Play song",
-        &[],
-        |a, _| play(a, Pane::Song),
-    ));
-    out.push(Command::plain(
-        s,
-        "arrangement-play-scene",
-        "Play scene",
-        &[],
-        |a, _| play(a, Pane::Scene),
-    ));
+    out.push(Command::plain(s, "scene.structure", &[], |a, c| {
+        open_dialog(a, c, dialog::Purpose::ResizeScene, Pane::Scene)
+    }));
+    out.push(Command::plain(s, "scene.create", &[], move |a, c| {
+        open_dialog(a, c, dialog::Purpose::Create, Pane::Scene)
+    }));
+    out.push(Command::plain(s, "scene.edit", &[], |a, c| {
+        open_dialog(a, c, dialog::Purpose::Scene, Pane::Scene)
+    }));
+    out.push(Command::plain(s, "song.play", &[], |a, _| {
+        play(a, Pane::Song)
+    }));
+    out.push(Command::plain(s, "scene.play", &[], |a, _| {
+        play(a, Pane::Scene)
+    }));
 }
 pub(super) fn confirm(a: &mut App, p: Pane) {
     let s = a.patterns.workspace.selection_mut(p);
@@ -350,6 +308,9 @@ fn candidate(a: &mut App, p: Pane, delta: isize) {
                 .min(all.len().saturating_sub(1)),
         )
         .map(|(part, _)| *part);
+    if let Some(PatternOrScene::Pattern(id)) = s.choice {
+        crate::view::recording::follow_pattern(a, id);
+    }
 }
 fn movement(a: &mut App, p: Pane, rows: isize, measures: isize) {
     let Some(l) = &a.loaded else { return };

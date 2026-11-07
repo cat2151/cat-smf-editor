@@ -13,8 +13,7 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if matches!(s, Screen::Selection | Screen::SelectionMenu) {
         let mut command = Command::operation(
             s,
-            "generate-same-measures",
-            "Generate same measures",
+            "event.generate-same-measures",
             crate::view::commands::Operation::SameMeasure {
                 batch: true,
                 number: None,
@@ -28,8 +27,7 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if s == Screen::Main && count(a) > 0 {
         out.push(Command::plain(
             s,
-            "selection-begin",
-            "範囲選択",
+            "selection.begin",
             &[egui::Key::S],
             |a, _| super::begin(a),
         ));
@@ -37,15 +35,13 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if s == Screen::Selection {
         out.push(Command::plain(
             s,
-            "selection-menu",
-            "範囲menu",
+            "selection.menu",
             &[egui::Key::S],
             |a, _| a.event_selection.menu = true,
         ));
         out.push(Command::plain(
             s,
-            "selection-cancel",
-            "範囲取消",
+            "selection.cancel",
             &[egui::Key::Escape],
             |a, _| a.event_selection = State::default(),
         ));
@@ -53,57 +49,38 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if s == Screen::SelectionMenu {
         out.push(Command::plain(
             s,
-            "selection-close",
-            "閉じる",
+            "selection.close",
             &[egui::Key::Escape],
             |a, _| a.event_selection.menu = false,
         ));
         let mut choices = vec![
+            ("selection.repeat", egui::Key::A, actions::Action::Repeat),
             (
-                "selection-repeat",
-                "A-B repeat",
-                egui::Key::A,
-                actions::Action::Repeat,
-            ),
-            (
-                "selection-delete",
-                "イベント削除",
+                "selection.delete",
                 egui::Key::D,
                 actions::Action::DeleteEvents,
             ),
             (
-                "selection-quantize",
-                "16分quantize",
+                "selection.quantize",
                 egui::Key::Q,
                 actions::Action::Quantize,
             ),
         ];
         if crate::view::patterns::mode::editing(a, a.track).is_some() {
-            choices.push((
-                "selection-crop",
-                "Crop",
-                egui::Key::C,
-                actions::Action::Crop,
-            ));
+            choices.push(("selection.crop", egui::Key::C, actions::Action::Crop));
         }
         if whole(a) {
             choices.extend([
+                ("selection.init", egui::Key::I, actions::Action::Init),
                 (
-                    "selection-init",
-                    "Track初期化",
-                    egui::Key::I,
-                    actions::Action::Init,
-                ),
-                (
-                    "selection-delete-track",
-                    "Track削除",
+                    "selection.delete-track",
                     egui::Key::T,
                     actions::Action::DeleteTrack,
                 ),
             ]);
         }
-        for (id, name, key, action) in choices {
-            out.push(Command::plain(s, id, name, &[key], move |a, _| {
+        for (id, key, action) in choices {
+            out.push(Command::plain(s, id, &[key], move |a, _| {
                 actions::apply(a, action)
             }));
         }

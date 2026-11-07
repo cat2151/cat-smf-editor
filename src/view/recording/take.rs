@@ -11,7 +11,7 @@ pub(super) fn finish(a: &mut App, s: &Session) -> Result<(), String> {
         Ok(())
     })?;
     let id = *created.last().ok_or("録音したpatternが見つかりません")?;
-    reveal(a, s, id, recorder.settings().tempo)
+    reveal(a, s, id)
 }
 
 /// The track of `container`; `None` for the fallback sound of a song without a container.
@@ -40,9 +40,7 @@ pub(super) fn adopt(a: &App, s: &mut Session, id: u64) -> Result<(), String> {
 }
 
 /// Selects a new take where the keyboard opened from: the pattern windows, or the editor.
-pub(super) fn reveal(a: &mut App, s: &Session, id: u64, tempo: u32) -> Result<(), String> {
-    // Candidates audition at the pattern preview tempo, so takes replay as recorded.
-    a.patterns.tempo.0 = 60_000_000.0 / f64::from(tempo);
+pub(super) fn reveal(a: &mut App, s: &Session, id: u64) -> Result<(), String> {
     let catalog = Catalog::read(&a.loaded.as_ref().unwrap().music)?;
     a.patterns.selected = Some(id);
     a.patterns.container = Some(catalog.patterns[&id].container);

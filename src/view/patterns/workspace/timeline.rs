@@ -136,37 +136,29 @@ pub(super) fn apply(a: &mut App, action: repeat::Action) {
 }
 
 pub(super) fn collect(app: &App, out: &mut Vec<Command>) {
-    for (id, name, key, enlarge) in [
-        ("song-zoom-in", "時間拡大", Key::PageUp, true),
-        ("song-zoom-out", "時間縮小", Key::PageDown, false),
+    for (id, key, enlarge) in [
+        ("song.zoom-in", Key::PageUp, true),
+        ("song.zoom-out", Key::PageDown, false),
     ] {
         out.push(
-            Command::plain(Screen::Song, id, name, &[key], move |a, _| {
-                a.patterns
-                    .workspace
-                    .timeline
-                    .viewport
-                    .zoom_horizontal(enlarge);
+            Command::plain(Screen::Song, id, &[key], move |a, _| {
+                let measure = a.patterns.workspace.song_cell.measure;
+                let timeline = &mut a.patterns.workspace.timeline;
+                let Some((stride, label)) = timeline.cells else {
+                    return;
+                };
+                // The cursor cell's center, in the content coordinates the viewport scrolls.
+                let at = label + (measure.saturating_sub(1) as f32 + 0.5) * stride;
+                timeline.viewport.zoom_horizontal(enlarge, at);
             })
             .repeating(),
         );
     }
-    for (id, name, end) in [
-        (
-            "song-repeat-a",
-            "Song A-B Repeat A：選択小節の先頭を開始点に設定",
-            false,
-        ),
-        (
-            "song-repeat-b",
-            "Song A-B Repeat B：選択小節の末尾を終了点に設定して再生",
-            true,
-        ),
-    ] {
+    for (id, end) in [("song.repeat-a", false), ("song.repeat-b", true)] {
         if end && end_range(app).is_none() {
             continue;
         }
-        out.push(Command::plain(Screen::Song, id, name, &[], move |a, _| {
+        out.push(Command::plain(Screen::Song, id, &[], move |a, _| {
             let Some(l) = &a.loaded else { return };
             let Ok(tick) =
                 model::measure_tick(&l.music, None, a.patterns.workspace.song_cell.measure)
@@ -184,8 +176,7 @@ pub(super) fn collect(app: &App, out: &mut Vec<Command>) {
     }
     out.push(Command::plain(
         Screen::Song,
-        "song-repeat-clear",
-        "Song A-B Repeat 解除",
+        "song.repeat-clear",
         &[],
         |a, _| {
             a.patterns.workspace.timeline.anchor = None;

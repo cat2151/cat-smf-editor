@@ -29,6 +29,7 @@ screens!(
     PianoRoll,
     Tempo,
     TrackOverview,
+    TrackOverviewSong,
     Parameter,
     Scene
 );
@@ -39,7 +40,11 @@ impl Screen {
             Self::Song => Click::Song,
             Self::Scene => Click::Scene,
             Self::Parameter => Click::Cursor,
-            Self::Staff | Self::PianoRoll | Self::Tempo | Self::TrackOverview => Click::SeekPlaying,
+            Self::Staff
+            | Self::PianoRoll
+            | Self::Tempo
+            | Self::TrackOverview
+            | Self::TrackOverviewSong => Click::SeekPlaying,
         }
     }
 

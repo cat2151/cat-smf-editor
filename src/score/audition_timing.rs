@@ -6,6 +6,20 @@ pub struct TempoMap {
     segments: Vec<(u64, f64, f64)>,
 }
 impl TempoMap {
+    /// Rebase the timeline at `start`: local tick 0 follows the tempo at that
+    /// song tick, including all later changes. Storage coordinates never enter it.
+    pub fn from_tick(&self, start: u64) -> Self {
+        let i = self.segments.partition_point(|s| s.0 <= start) - 1;
+        let seconds = self.at(start);
+        let mut segments = vec![(0, 0.0, self.segments[i].2)];
+        segments.extend(
+            self.segments[i + 1..]
+                .iter()
+                .map(|&(tick, at, slope)| (tick - start, at - seconds, slope)),
+        );
+        Self { segments }
+    }
+
     pub fn constant(division: u16, bpm: f64) -> Result<Self, String> {
         if division == 0 || division & 0x8000 != 0 || !bpm.is_finite() || bpm <= 0.0 {
             return Err("試聴tempoかPPQNの時間単位が不正です".into());

@@ -270,7 +270,7 @@ fn settings_is_not_hidden_under_the_keyboard_windows() {
         c.data(|d| d.get_temp::<bool>(egui::Id::new(("workspace-visible", keyboard))))
     };
     assert_eq!(visible(&c), Some(true));
-    harness::command(&mut a, &c, keyboard, "Tempo curve always maximized");
+    harness::command(&mut a, &c, keyboard, "tempo.max");
     harness::frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
     assert!(a.comma_menu.open);
     // egui reports the modal layer one frame later.

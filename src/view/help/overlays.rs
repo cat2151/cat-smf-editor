@@ -18,7 +18,7 @@ pub(super) fn recording(ui: &mut egui::Ui) {
                     &[
                         ("Space", "録音開始"),
                         ("Shift+Space", "録音停止"),
-                        ("↑ ↓", "Octave"),
+                        ("↑ ↓", "音域"),
                         ("Ctrl+E", "Phrase loop"),
                         ("Ctrl+Enter", "to song"),
                     ],
@@ -131,7 +131,13 @@ pub(super) fn palette(ui: &mut egui::Ui) {
     egui::Grid::new("command-palette-help").show(ui, |ui| {
         candidates(ui);
         ui.end_row();
-        super::key_groups(ui, &[(EDIT, &[("Enter", "実行"), ("Esc", "取消")])]);
+        super::key_groups(
+            ui,
+            &[(
+                EDIT,
+                &[("F1", "コマンド説明"), ("Enter", "実行"), ("Esc", "取消")],
+            )],
+        );
     });
 }
 

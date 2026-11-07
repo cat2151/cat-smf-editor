@@ -1,11 +1,13 @@
 use super::*;
 use crate::play::transport;
-use crate::view::palette::tests::{listed, open as open_palette, press, query};
+use crate::view::palette::tests::{
+    choose, listed, open as open_palette, press, query, worded, WORDING,
+};
 use cat_smf_editor::model::Event;
 
-const LABEL: &str = "Event list: MML / コード進行: 1小節を上書き";
+const ID: &str = "mml.measure";
 fn choose_measure(app: &mut App, ctx: &egui::Context) {
-    let index = listed(app).iter().position(|label| label == LABEL).unwrap();
+    let index = listed(app).iter().position(|id| id == ID).unwrap();
     for _ in 0..index {
         press(app, ctx, egui::Key::ArrowDown);
     }
@@ -73,6 +75,7 @@ fn assert_looping(app: &App) {
 #[test]
 fn the_palette_repeats_the_cursor_measure_and_typed_mml_overwrites_its_notes() {
     let mut app = song();
+    let _wording = worded(&mut app, WORDING);
     let ctx = egui::Context::default();
     app.track_view.cursor_tick = Some(2400);
     frame(&mut app, &ctx, vec![]);
@@ -84,7 +87,7 @@ fn the_palette_repeats_the_cursor_measure_and_typed_mml_overwrites_its_notes() {
         query(&mut app, &ctx, q);
         let found = listed(&mut app);
         eprintln!("query {q:?}: {found:?}");
-        assert!(found.iter().any(|label| label == LABEL));
+        assert!(found.iter().any(|id| id == ID));
         if q == "measure" {
             choose_measure(&mut app, &ctx);
         } else {
@@ -148,8 +151,8 @@ fn cancel_restores_the_measure_and_keeps_looping() {
     frame(&mut app, &ctx, vec![]);
     let before = smf_io::encode(&app.loaded.as_ref().unwrap().music).unwrap();
     open_palette(&mut app, &ctx);
-    query(&mut app, &ctx, "measure");
-    choose_measure(&mut app, &ctx);
+    choose(&mut app, &ctx, ID);
+    press(&mut app, &ctx, egui::Key::Enter);
     frame(&mut app, &ctx, vec![]);
     assert!(app.mml_input.open);
     frame(&mut app, &ctx, vec![egui::Event::Text("r1".into())]);
@@ -173,8 +176,8 @@ fn a_new_song_repeats_its_first_measure() {
     app.edit_start = Default::default();
     frame(&mut app, &ctx, vec![]);
     open_palette(&mut app, &ctx);
-    query(&mut app, &ctx, "measure");
-    choose_measure(&mut app, &ctx);
+    choose(&mut app, &ctx, ID);
+    press(&mut app, &ctx, egui::Key::Enter);
     frame(&mut app, &ctx, vec![]);
     assert!(app.mml_input.open && app.mml_input.repeat_session);
     assert_eq!(app.playback.repeat, Some((0, 1920)));

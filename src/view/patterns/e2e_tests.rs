@@ -4,7 +4,7 @@ use cat_smf_editor::score::note_view::note_on;
 use eframe::egui::{self, Key};
 
 /// Runs a palette command; an empty song first gets one sound container to confirm.
-fn command(a: &mut App, c: &egui::Context, s: &str) {
+fn command(a: &mut App, c: &egui::Context, id: &str) {
     use crate::view::palette::tests as palette;
     if cat_smf_editor::score::pattern::Catalog::read(&a.loaded.as_ref().unwrap().music)
         .unwrap()
@@ -15,7 +15,7 @@ fn command(a: &mut App, c: &egui::Context, s: &str) {
             .unwrap();
     }
     palette::open(a, c);
-    palette::query(a, c, s);
+    palette::choose(a, c, id);
     palette::press(a, c, eframe::egui::Key::Enter);
     if a.patterns.confirming_creation() {
         palette::press(a, c, eframe::egui::Key::Enter);
@@ -31,7 +31,7 @@ fn text(a: &mut App, c: &egui::Context, s: &str) {
 fn root_pattern_input_cancel_invalid_and_ime_keep_context_and_song() {
     let mut a = crate::view::palette::tests::app();
     let c = egui::Context::default();
-    command(&mut a, &c, "create pattern");
+    command(&mut a, &c, "pattern.create");
     let id = a.patterns.selected.unwrap();
     let saved = cat_smf_editor::smf_io::encode(&a.loaded.as_ref().unwrap().music).unwrap();
     frame(&mut a, &c, vec![]);
@@ -94,7 +94,7 @@ fn labels(a: &mut App, c: &egui::Context) -> Vec<String> {
 fn focused_ordinary_editors_and_event_pane_share_live_pattern_identity() {
     let mut a = crate::view::palette::tests::app();
     let c = egui::Context::default();
-    command(&mut a, &c, "create pattern");
+    command(&mut a, &c, "pattern.create");
     let name = presentation::name(&a, a.track).unwrap();
     frame(&mut a, &c, vec![]);
     let texts = labels(&mut a, &c);
@@ -134,7 +134,7 @@ fn focused_ordinary_editors_and_event_pane_share_live_pattern_identity() {
 fn full_measure_mml_keeps_independent_body_open_and_cursor_auditions_its_notes() {
     let mut a = crate::view::palette::tests::app();
     let c = egui::Context::default();
-    command(&mut a, &c, "create pattern");
+    command(&mut a, &c, "pattern.create");
     let id = a.patterns.selected.unwrap();
     frame(&mut a, &c, vec![]);
     text(&mut a, &c, "o5 l1 g");
@@ -158,7 +158,7 @@ fn full_measure_mml_keeps_independent_body_open_and_cursor_auditions_its_notes()
     a.audition.auditioned.clear();
     crate::cursor::moves::select(&mut a, row);
     assert_eq!(a.audition.auditioned, vec![p.parts[0].2.notes[0].pitch]);
-    command(&mut a, &c, "pattern song");
+    command(&mut a, &c, "song.open");
     assert_eq!(a.patterns.editing.as_ref().unwrap().pattern, id);
 }
 
@@ -173,7 +173,7 @@ fn typed_chord_keeps_pattern_input_alive_during_preview() {
                 if n > 0 {
                     press(&mut a, &c, Key::Escape);
                 }
-                command(&mut a, &c, "create pattern");
+                command(&mut a, &c, "pattern.create");
                 frame(&mut a, &c, vec![]);
                 assert!(a.mml_input.open);
             }

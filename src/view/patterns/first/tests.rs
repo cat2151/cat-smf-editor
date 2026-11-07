@@ -187,7 +187,7 @@ fn palette_new_container_adds_one_without_patterns_beside_empty_ones_and_undoes(
     let mut a = containers();
     let c = egui::Context::default();
     let before = bytes(&a);
-    command(&mut a, &c, egui::ViewportId::ROOT, "New Init Saw container");
+    command(&mut a, &c, egui::ViewportId::ROOT, "container.new");
     assert!(a.load_error.is_none(), "{:?}", a.load_error);
     let music = &a.loaded.as_ref().unwrap().music;
     let catalog = Catalog::read(music).unwrap();

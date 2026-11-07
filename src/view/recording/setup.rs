@@ -189,6 +189,10 @@ pub(super) fn choices(s: &Session, item: Item) -> Option<([&'static str; 2], usi
             usize::from(t.key().scale == Scale::MinorPentatonic),
         )),
         Item::Quantize => Some((["Off", "1/16"], usize::from(t.quantize))),
+        Item::Mode if s.sound().patch.kit.is_some() => Some((
+            Mode::KIT.map(Mode::label),
+            usize::from(t.mode == Mode::KIT[1]),
+        )),
         Item::Mode if t.drums => Some((
             Mode::DRUMS.map(Mode::label),
             usize::from(t.mode == Mode::DRUMS[1]),
@@ -248,6 +252,10 @@ pub(super) fn change(a: &mut App, s: &mut Session, item: Item, step: i32, big: b
             }
         }
         Item::Modulation => modulate(a, s, cycle(&Modulation::ALL, s.settings().modulation, step)),
+        Item::Mode if s.sound().patch.kit.is_some() => {
+            s.settings_mut().mode = cycle(&Mode::KIT, s.settings().mode, step);
+            super::kit::sync(a, s);
+        }
         _ => edit(s.settings_mut(), item, step, big),
     }
     if !enabled(s, s.item) {
@@ -274,6 +282,12 @@ pub(super) fn tip(item: Item) -> String {
 /// Plays another container while the phrases go on; one that cannot play opens the settings
 /// beside the error.
 pub(super) fn select(a: &mut App, s: &mut Session, index: usize) {
+    select_following(a, s, index);
+    super::phrase::reveal(a, s);
+}
+
+/// Follow the editor's choice without replacing it with this container's Loop pattern.
+pub(super) fn select_following(a: &mut App, s: &mut Session, index: usize) {
     play::leave(s);
     keep_voicing(a, s);
     s.selected = index;
@@ -290,7 +304,6 @@ pub(super) fn select(a: &mut App, s: &mut Session, index: usize) {
     if !enabled(s, s.item) {
         s.item = first(s);
     }
-    super::phrase::reveal(a, s);
 }
 
 /// Remembers what the pads of the playing container play, for its next selection.

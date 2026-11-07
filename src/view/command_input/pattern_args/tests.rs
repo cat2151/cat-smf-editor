@@ -35,7 +35,7 @@ fn container_midi_baseline_palette_is_atomic_keyboard_input_and_undoable() {
     let (mut a, c, id, _, _) = verification_song();
     let root = egui::ViewportId::ROOT;
     let before = bytes(&a);
-    command(&mut a, &c, root, "Container CC default outside patterns");
+    command(&mut a, &c, root, "pattern.midi-baseline");
     text(&mut a, &c, root, "Pattern 1");
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
     text(&mut a, &c, root, "2 64 0");
@@ -65,7 +65,7 @@ fn pattern_library_duplicate_opens_an_independent_copy_and_undoes() {
     let (mut a, c, first, _, _) = verification_song();
     let root = egui::ViewportId::ROOT;
     let before = bytes(&a);
-    command(&mut a, &c, root, "duplicate pattern");
+    command(&mut a, &c, root, "pattern.duplicate");
     text(&mut a, &c, root, "Pattern 1");
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
     assert_ne!(a.patterns.selected.unwrap(), first);
@@ -79,13 +79,13 @@ fn pattern_sound_picker_cancel_and_stale_identity_do_not_mutate_music() {
     let (mut a, c, _, _, _) = verification_song();
     let root = egui::ViewportId::ROOT;
     let before = bytes(&a);
-    command(&mut a, &c, root, "move pattern to container");
+    command(&mut a, &c, root, "pattern.move-container");
     text(&mut a, &c, root, "nihongo 日本語");
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
     assert_eq!(bytes(&a), before);
     key(&mut a, &c, root, Key::Escape, Modifiers::NONE);
     assert!(!crate::view::modal::is_open(&a));
-    command(&mut a, &c, root, "move pattern to container");
+    command(&mut a, &c, root, "pattern.move-container");
     a.song_id += 1;
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
     assert!(!crate::view::modal::is_open(&a));
@@ -176,7 +176,7 @@ fn structure_tempo_and_song_length_inputs_are_keyboard_owned_and_atomic() {
         .patterns[&id]
         .name
         .clone();
-    command(&mut a, &c, root, "Pattern measures / meter");
+    command(&mut a, &c, root, "pattern.structure");
     text(&mut a, &c, root, &name);
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
     key(&mut a, &c, root, Key::A, Modifiers::CTRL);
@@ -192,14 +192,7 @@ fn structure_tempo_and_song_length_inputs_are_keyboard_owned_and_atomic() {
         3360
     );
     let before = bytes(&a);
-    command(&mut a, &c, root, "Audition tempo");
-    key(&mut a, &c, root, Key::A, Modifiers::CTRL);
-    text(&mut a, &c, root, "90");
-    key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
-    assert_eq!(a.patterns.tempo.0, 90.0);
-    assert_eq!(bytes(&a), before);
-    let before = bytes(&a);
-    command(&mut a, &c, root, "Scene measures / meter");
+    command(&mut a, &c, root, "scene.structure");
     key(&mut a, &c, root, Key::A, Modifiers::CTRL);
     text(&mut a, &c, root, "4/4 4/4 4/4");
     key(&mut a, &c, root, Key::Enter, Modifiers::NONE);
@@ -216,8 +209,7 @@ fn pattern_song_without_patterns_starts_the_first_pattern_in_mml_input() {
         .unwrap();
     let c = egui::Context::default();
     palette::open(&mut a, &c);
-    palette::query(&mut a, &c, "pattern");
-    assert_eq!(palette::listed(&mut a)[0], "Pattern / Song");
+    palette::choose(&mut a, &c, "song.open");
     press(&mut a, &c, Key::Enter);
     assert!(a.patterns.confirming_creation());
     press(&mut a, &c, Key::Enter);
@@ -230,7 +222,7 @@ fn pattern_song_without_patterns_starts_the_first_pattern_in_mml_input() {
     press(&mut a, &c, Key::Escape);
     let before = bytes(&a);
     palette::open(&mut a, &c);
-    palette::query(&mut a, &c, "pattern");
+    palette::choose(&mut a, &c, "song.open");
     press(&mut a, &c, Key::Enter);
     frame(&mut a, &c, vec![]);
     assert!(!a.patterns.confirming_creation());

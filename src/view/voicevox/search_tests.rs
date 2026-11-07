@@ -52,21 +52,15 @@ fn voicevox_lists_the_lyric_and_singer_commands() {
     open(&mut app, &ctx);
     query(&mut app, &ctx, "voicevox");
     let listed = listed(&mut app);
-    assert_eq!(
-        listed
-            .iter()
-            .filter(|s| s.contains("現在のtrackの歌声を選ぶ"))
-            .count(),
-        1
-    );
+    assert_eq!(listed.iter().filter(|s| *s == "voicevox.singer").count(), 1);
     eprintln!("{listed:#?}");
-    for label in [
-        "Event list: VOICEVOX: 現在のtrackの歌声を選ぶ",
-        "Event list: VOICEVOX: 1小節の歌詞を差し替え",
-        "Edit: Lyrics",
-        "Settings: VOICEVOX engine",
+    for id in [
+        "voicevox.singer",
+        "lyrics.measure",
+        "edit.lyrics",
+        "voicevox.open",
     ] {
-        assert!(listed.iter().any(|l| l == label), "{label}");
+        assert!(listed.iter().any(|l| l == id), "{id}");
     }
 }
 
@@ -83,13 +77,14 @@ fn palette_offers_combined_input_only_for_singers_and_no_sequential_inputs() {
         query(&mut app, &ctx, "voicevox");
         let mut actual: Vec<_> = listed(&mut app)
             .into_iter()
-            .filter(|label| label.starts_with("Event list: VOICEVOX:"))
+            .filter(|id| {
+                ["voicevox.singer", "lyrics.measure", "mml.measure-lyrics"].contains(&id.as_str())
+            })
             .collect();
         actual.sort();
-        let mut expected = vec!["Event list: VOICEVOX: 1小節の歌詞を差し替え"];
-        expected.push("Event list: VOICEVOX: 現在のtrackの歌声を選ぶ");
+        let mut expected = vec!["lyrics.measure", "voicevox.singer"];
         if singer {
-            expected.push("Event list: VOICEVOX: 1小節のMMLと歌詞を同時に差し替え");
+            expected.push("mml.measure-lyrics");
         }
         expected.sort();
         assert_eq!(actual, expected, "singer={singer}");

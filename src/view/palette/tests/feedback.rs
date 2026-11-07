@@ -16,11 +16,16 @@ fn basic_english_finds_help_play_and_quit_without_bypassing_confirmation() {
         .map(|i| a.palette.commands[i].id.clone())
         .collect::<Vec<_>>()
     };
-    assert!(matching("HELP").contains(&"help".into()));
-    assert!(matching("play").contains(&"play-last".into()));
-    assert_eq!(matching("quit"), vec!["quit", "voicevox-kill-quit"]);
-    assert_eq!(matching("EXIT"), vec!["quit", "voicevox-kill-quit"]);
-    let help = a.palette.commands.iter().find(|c| c.id == "help").unwrap();
+    assert!(matching("HELP").contains(&"app.help".into()));
+    assert!(matching("play").contains(&"play.last".into()));
+    assert_eq!(matching("quit"), vec!["app.quit", "voicevox.kill-quit"]);
+    assert_eq!(matching("EXIT"), vec!["app.quit", "voicevox.kill-quit"]);
+    let help = a
+        .palette
+        .commands
+        .iter()
+        .find(|c| c.id == "app.help")
+        .unwrap();
     assert!(help.key_label().contains("F1"));
     query(&mut a, &c, "help");
     press(&mut a, &c, Key::Enter);
@@ -54,6 +59,7 @@ fn basic_english_finds_help_play_and_quit_without_bypassing_confirmation() {
 #[test]
 fn centered_opening_width_and_query_stay_fixed_while_results_shrink() {
     let mut a = app();
+    let _wording = worded(&mut a, WORDING);
     let c = egui::Context::default();
     open(&mut a, &c);
     frame(&mut a, &c, vec![]);

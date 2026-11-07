@@ -5,6 +5,7 @@ mod drums;
 pub(crate) use drums::reload_drums;
 
 pub(crate) struct Resume {
+    containers: Option<Vec<u64>>,
     tick: u64,
     end: u64,
     tracks: Vec<usize>,
@@ -28,6 +29,7 @@ pub(crate) fn capture(app: &App) -> Option<Resume> {
     };
     let map = active.tempos.get(active.clock_track)?;
     Some(Resume {
+        containers: active.containers.clone(),
         tick: map.tick_after(0, active.start_seconds + elapsed + 1e-9),
         end: map.tick_after(0, active.start_seconds + active.end + 1e-9),
         tracks: active.sources.iter().map(|s| s.0).collect(),
@@ -60,12 +62,7 @@ pub(crate) fn prepare(
         return None;
     }
     if let Mode::Pattern(id) = mode {
-        let loaded = app.loaded.as_ref()?;
-        let tempo = cat_smf_editor::score::audition_timing::TempoMap::constant(
-            loaded.music.division,
-            app.patterns.tempo.0,
-        )
-        .ok()?;
+        let tempo = crate::view::patterns::timing::pattern(app, id).ok()?;
         return crate::view::patterns::preview::remaining(
             app,
             id,
@@ -75,7 +72,11 @@ pub(crate) fn prepare(
     }
     if let Mode::Arrangement(scene) = mode {
         let music = &app.loaded.as_ref()?.music;
-        let map = cat_smf_editor::score::audition_timing::TempoMap::new(music, 0);
+        let map = if let Some(scene) = scene {
+            crate::view::patterns::timing::scene(app, scene).ok()?
+        } else {
+            cat_smf_editor::score::audition_timing::TempoMap::new(music, 0)
+        };
         return crate::play::arrangement::remaining(
             app,
             scene,
@@ -170,19 +171,12 @@ fn replace(app: &mut App, prepared: Option<Prepared>) {
 }
 
 pub(crate) fn resume(app: &mut App, saved: Resume) {
-    let mut prepared = prepare(
-        app,
-        saved.tick,
-        saved.end,
-        &saved.tracks,
-        saved.mode,
-        saved.clock,
-    )
-    .or_else(|| {
-        app.playback
-            .repeat
-            .and_then(|r| super::repeat::prepare(app, r))
-    });
+    let mut prepared =
+        prepare_saved(app, &saved, saved.tick, saved.end, saved.clock).or_else(|| {
+            app.playback
+                .repeat
+                .and_then(|r| super::repeat::prepare(app, r))
+        });
     if let Some(pitches) = saved.pitches
         && let Some(prepared) = &mut prepared
     {
@@ -202,6 +196,32 @@ pub(crate) fn resume(app: &mut App, saved: Resume) {
             .collect();
     }
     replace(app, prepared);
+}
+
+fn prepare_saved(
+    app: &App,
+    saved: &Resume,
+    start: u64,
+    end: u64,
+    clock: usize,
+) -> Option<Prepared> {
+    if let Some(containers) = &saved.containers {
+        let loaded = app.loaded.as_ref()?;
+        let (catalog, _) = loaded.arrangement.as_ref()?;
+        let tracks: Vec<_> = containers
+            .iter()
+            .filter_map(|id| catalog.tracks.get(id).copied())
+            .collect();
+        let tempo = cat_smf_editor::score::audition_timing::TempoMap::new(&loaded.music, 0);
+        return crate::play::arrangement::remaining_tracks(
+            app,
+            None,
+            tempo.seconds_at(start),
+            tempo.duration(start, end.saturating_sub(start)),
+            Some(&tracks),
+        );
+    }
+    prepare(app, start, end, &saved.tracks, saved.mode, clock)
 }
 
 fn end_at(app: &App, track: usize, tick: u64, mode: Mode, tracks: &[usize]) -> Option<u64> {
@@ -262,7 +282,7 @@ pub(crate) fn seek(app: &mut App, track: usize, tick: u64) {
     } else {
         end_at(app, track, tick, saved.mode, &saved.tracks)
     };
-    let prepared = end.and_then(|end| prepare(app, tick, end, &saved.tracks, saved.mode, track));
+    let prepared = end.and_then(|end| prepare_saved(app, &saved, tick, end, track));
     crate::cursor::split::go(app, track, tick);
     replace(app, prepared);
 }

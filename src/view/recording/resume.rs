@@ -62,6 +62,7 @@ pub(crate) fn restore(ctx: &egui::Context) {
 }
 
 pub(super) fn shut(a: &mut App, state: &mut State) {
+    state.follow = None;
     if let Some(s) = state.session.take() {
         a.audition.stop_live();
         // Settings and the loop length survive closing and restarts; the key is reread at every open.

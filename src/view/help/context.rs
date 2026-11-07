@@ -46,6 +46,10 @@ pub(crate) fn input(a: &mut App, ctx: &egui::Context) {
     if ctx.viewport_id() == super::viewport() {
         return;
     }
+    // In the palette F1 belongs to the selected command's explanation.
+    if a.palette.owns_viewport(ctx) {
+        return;
+    }
     // `?` is text while a text field has the focus.
     let typing = ctx
         .memory(|m| m.focused())

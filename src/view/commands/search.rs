@@ -42,134 +42,76 @@ impl SearchQuery {
 impl Command {
     /// Simple vocabulary belongs to the operation, independently of its visible name.
     pub fn matches_query(&self, query: &SearchQuery) -> bool {
+        self.matches_search(query, true)
+    }
+
+    pub(crate) fn matches_primary_query(&self, query: &SearchQuery) -> bool {
+        self.matches_search(query, false)
+    }
+
+    fn matches_search(&self, query: &SearchQuery, descriptions: bool) -> bool {
         let label = self.label();
         let label_lower = label.to_lowercase();
         let keys = self.key_label().to_lowercase();
-        let words = self.search_words();
-        let aliases = if ["voicevox", "ずんだもん"]
-            .iter()
-            .any(|word| label_lower.contains(word) || words.contains(word))
-        {
-            "voicevox ずんだもん"
-        } else {
-            ""
-        };
+        let description = if descriptions { self.description() } else { "" };
+        let description_lower = description.to_lowercase();
         query.terms.iter().all(|(term, migemo)| {
             label_lower.contains(term)
                 || keys.contains(term)
-                || words.contains(term)
-                || aliases.contains(term)
-                || migemo
-                    .as_ref()
-                    .is_some_and(|r| r.is_match(&label) || r.is_match(aliases))
+                || self.search.contains(term)
+                || description_lower.contains(term)
+                || migemo.as_ref().is_some_and(|r| {
+                    r.is_match(&label) || r.is_match(&self.search) || r.is_match(description)
+                })
         })
-    }
-
-    fn search_words(&self) -> &'static str {
-        match self.id.as_str() {
-            "help" => "help",
-            "quit" => "quit exit",
-            "voicevox-kill-quit" => "kill quit exit",
-            "open" => "open file",
-            "new" => "new file",
-            "add-track" => "add insert track",
-            "create-pattern" => "add create pattern",
-            "new-container" | "new-drum-container" => "add create container track コンテナ",
-            "delete-current-container-track" => {
-                "delete remove current container track コンテナ 削除"
-            }
-            "pattern-midi-baseline" => "midi baseline cc bend",
-            "set-pattern-preview-track" => "move pattern to container sound",
-            "open-song-matrix" => "edit scene order song matrix",
-            "arrangement-play-song" => "play scene order song",
-            "save" | "save-confirm" => "save",
-            "recent" => "recent files history",
-            "record-pattern" => "recording 録音",
-            "undo" | "edit-undo" => "undo",
-            "stop" | "play-stop" => "stop",
-            "play-close" => "close cancel",
-            id if id.starts_with("play-") => "play",
-            "settings" => "settings",
-            "mascot-playback" => "voicevox ずんだもん mascot playback",
-            "edit" => "edit",
-            "edit-lyrics" => "voicevox 歌詞",
-            "mml-open" => "mml insert",
-            "mml-measure" => "mml measure overwrite replace",
-            "lyrics-measure" => "measure replace",
-            "lyrics-confirm" => "voicevox ok confirm",
-            "lyrics-cancel" => "voicevox cancel",
-            "mixer" => "mixer",
-            "layers" => "layers",
-            "drums" => "drum sequencer ドラム",
-            "add-drum-track" | "add-kit-track" => "add drum kit track ドラム",
-            "browse-views" => "views view track ビュー 視点",
-            "effects" => "effects",
-            "effect-add" => "add effect effects insert",
-            "effect-replace" => "replace effect effects",
-            "effect-remove" => "remove delete effect effects",
-            "effect-bypass" => "bypass effect effects",
-            id if id.ends_with("-add") => "add insert",
-            "measure-mml-lyrics" => "voicevox mml lyrics measure replace simultaneous",
-            "patch" => "sound instrument",
-            "volume-down" => "volume down",
-            "volume-up" => "volume up",
-            id if id.ends_with("-cancel") => "cancel",
-            id if id.ends_with("-confirm") => "ok confirm",
-            id if id.ends_with("-close") => "close",
-            _ => "",
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::view::commands::Screen;
+    use crate::view::commands::{descriptions::tests::displayed, Screen};
+
+    fn matches(command: &Command, text: &str) -> bool {
+        let mut query = SearchQuery::default();
+        query.update(text);
+        command.matches_query(&query)
+    }
+
+    fn bundled_command(screen: Screen, id: &str) -> Command {
+        let command = Command::plain(screen, id, &[], |_, _| {});
+        displayed(vec![command]).remove(0)
+    }
 
     #[test]
     fn voicevox_and_zundamon_are_mutual_palette_aliases() {
-        for (screen, id, name) in [
-            (Screen::Main, "voicevox-singer", "VOICEVOX: 歌声を選ぶ"),
-            (Screen::Settings, "mascot-playback", "ずんだもん演奏連動"),
-            (Screen::Edit, "edit-lyrics", "Lyrics"),
-            (Screen::Voicevox, "voicevox-page", "公式ページ"),
-            (Screen::Singer, "singer-confirm", "確定"),
+        for (screen, id) in [
+            (Screen::Main, "voicevox.singer"),
+            (Screen::Settings, "mascot.playback"),
+            (Screen::Edit, "edit.lyrics"),
+            (Screen::Voicevox, "voicevox.page"),
+            (Screen::Singer, "singer.confirm"),
         ] {
-            let command = Command::plain(screen, id, name, &[], |_, _| {});
+            let command = bundled_command(screen, id);
             for text in ["voicevox", "VOICEVOX", "ずんだもん", "zundamon"] {
-                let mut query = SearchQuery::default();
-                query.update(text);
-                assert!(command.matches_query(&query), "{id}: {text}");
+                assert!(matches(&command, text), "{id}: {text}");
             }
-            let mut query = SearchQuery::default();
-            query.update(&format!("ずんだもん {name}"));
-            assert!(command.matches_query(&query), "{id}");
+            let both = format!("ずんだもん {}", command.name);
+            assert!(matches(&command, &both), "{id}");
         }
-        let command = Command::plain(Screen::Main, "save", "保存", &[], |_, _| {});
-        let mut query = SearchQuery::default();
-        query.update("ずんだもん");
-        assert!(!command.matches_query(&query));
+        assert!(!matches(
+            &bundled_command(Screen::Main, "file.save"),
+            "ずんだもん"
+        ));
     }
 
     #[test]
     fn kill_finds_killing_the_voicevox_engine() {
-        let command = Command::plain(
-            Screen::Global,
-            "voicevox-kill-quit",
-            "VOICEVOX engine を終了してアプリ終了",
-            &[],
-            |_, _| {},
-        );
-        for text in [
-            "kill",
-            "kill quit",
-            "kill exit",
-            "kill voicevox",
-            "shuuryou",
-        ] {
-            let mut query = SearchQuery::default();
-            query.update(text);
-            assert!(command.matches_query(&query), "{text}");
+        let command = bundled_command(Screen::Global, "voicevox.kill-quit");
+        for text in ["kill", "kill quit", "kill exit", "kill voicevox"] {
+            assert!(matches(&command, text), "{text}");
         }
+        let named = command.named("VOICEVOX engine を終了してアプリ終了");
+        assert!(matches(&named, "shuuryou"));
     }
 }

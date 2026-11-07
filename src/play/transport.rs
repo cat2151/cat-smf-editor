@@ -9,6 +9,8 @@ mod display_position;
 pub(crate) use display_position::{pattern_tick, tick_for as display_tick_for};
 
 pub struct Active {
+    /// A Song audition limited to stable container IDs; None performs the whole arrangement.
+    pub containers: Option<Vec<u64>>,
     pub automation: super::automation::Automation,
     pub mode: Mode,
     pub clock_track: usize,
@@ -80,7 +82,12 @@ pub fn prepare(app: &App, mode: Mode) -> Option<Prepared> {
     let end = parts.iter().map(|(_, _, s)| s.end).fold(0.0, f64::max);
     let start = start_tick(app, mode);
     let local_tempo = standalone
-        .then(|| TempoMap::constant(loaded.music.division, app.patterns.tempo.0))
+        .then(|| {
+            crate::view::patterns::timing::pattern(
+                app,
+                app.patterns.editing.as_ref().unwrap().pattern,
+            )
+        })
         .transpose()
         .ok()?;
     let tempos: Vec<_> = (0..loaded.music.tracks.len())
@@ -110,6 +117,7 @@ pub fn prepare(app: &App, mode: Mode) -> Option<Prepared> {
     Some(Prepared {
         parts,
         active: Active {
+            containers: None,
             automation,
             mode,
             clock_track: app.track,
@@ -229,6 +237,9 @@ pub fn advance(app: &mut App) {
             app.playback.pending = repeat::prepare(app, range);
         }
     }
+    if app.playback.active.is_none() && app.playback.pending.is_none() {
+        app.patterns.timing.playing = None;
+    }
 }
 
 pub fn tick(app: &App) -> Option<u64> {
@@ -326,6 +337,7 @@ pub fn stop_shortcut(app: &mut App, ctx: &egui::Context) {
 }
 
 pub fn stop(app: &mut App) {
+    app.patterns.timing.playing = None;
     app.patterns.preview = None;
     let preview = app.playback.parameter_preview.take().is_some();
     app.playback.pending = None;

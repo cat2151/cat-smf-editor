@@ -14,7 +14,13 @@ pub(super) fn sounds(s: &Session) -> Vec<(usize, Patch, live::Live)> {
 /// Opens the instruments of every container once, so that another container plays without
 /// cutting the phrases, and starts playing the selected one; errors keep the session preparing.
 pub(super) fn start(a: &mut App, s: &mut Session) -> bool {
-    s.settings.drums = s.sound().patch.drums.is_some();
+    s.settings.drums = s.sound().patch.drums.is_some() || s.sound().patch.kit.is_some();
+    if s.sound().patch.kit.is_none() && s.settings.mode == recording::Mode::Chromatic {
+        s.settings.mode = recording::Mode::Note;
+    }
+    if s.sound().patch.kit.is_some() && !recording::Mode::KIT.contains(&s.settings.mode) {
+        s.settings.mode = recording::Mode::Note;
+    }
     let recorder = match Recorder::new(s.division, s.settings) {
         Ok(r) => r,
         Err(error) => {
@@ -34,6 +40,7 @@ pub(super) fn start(a: &mut App, s: &mut Session) -> bool {
     });
     if s.click.is_some() {
         s.recorder = Some(recorder);
+        super::kit::sync(a, s);
     }
     s.recorder.is_some()
 }
@@ -181,6 +188,12 @@ fn octave(r: &mut Recorder, up: bool) {
 
 /// Sounds or stops a pad.
 fn sound(s: &mut Session, pad: Pad, pressed: bool, at: std::time::Duration) {
+    if pressed {
+        let stopped = s.recorder.as_mut().map(|r| r.release_replaced(pad, at));
+        if let Some(stopped) = stopped {
+            send(s, stopped, 0, at);
+        }
+    }
     let Some(r) = s.recorder.as_mut() else {
         return;
     };
@@ -361,7 +374,9 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
                     }
                 }
                 Key::ArrowUp | Key::ArrowDown if plain => {
-                    if let Some(r) = s.recorder.as_mut() {
+                    if s.sound().patch.kit.is_some() {
+                        super::kit::page(a, s, key == Key::ArrowUp);
+                    } else if let Some(r) = s.recorder.as_mut() {
                         octave(r, key == Key::ArrowUp);
                     }
                 }

@@ -212,9 +212,9 @@ fn acceptance_empty_drum_notes_i_and_palette_open_owned_pattern_grid() {
         if palette {
             let mut query = commands::SearchQuery::default();
             query.update("drum");
-            let cmd = commands::candidates(&a, &c)
+            let cmd = commands::descriptions::tests::displayed(commands::candidates(&a, &c))
                 .into_iter()
-                .find(|cmd| cmd.id == "drums" && cmd.matches_query(&query))
+                .find(|cmd| cmd.id == "drum.open" && cmd.matches_query(&query))
                 .expect("Drum sequencer in palette");
             assert!(commands::execute(&mut a, &c, &cmd));
         } else {

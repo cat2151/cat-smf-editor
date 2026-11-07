@@ -2,6 +2,10 @@
 use super::timeline_controls::{Click, Screen};
 
 pub(crate) fn click(screen: Screen, app: &mut crate::app::App, track: usize, tick: u64) {
+    if screen == Screen::TrackOverviewSong {
+        crate::view::track_overview::song_playback::seek(app, tick);
+        return;
+    }
     match screen.policy() {
         Click::SeekPlaying => crate::play::transport::timeline::seek(app, track, tick),
         Click::Song => crate::play::arrangement::start_from(app, None, tick),

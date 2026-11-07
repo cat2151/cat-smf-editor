@@ -211,7 +211,7 @@ fn take(a: &mut App, s: &mut Session) -> Result<(), String> {
     if let Some(b) = s.capture.as_mut() {
         b.back = None;
     }
-    super::reveal(a, s, id, s.settings().tempo)
+    super::reveal(a, s, id)
 }
 
 /// Clear persisted and pending captures; ordinary patterns and sounds stay in place.
@@ -349,10 +349,12 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
         }
         if class == egui::ViewportClass::Embedded {
             let position = position(a, s);
-            let bpm = a.patterns.tempo.0;
+            let tempo = super::super::patterns::timing::cursor_map(a);
             egui::Window::new(&title)
                 .id(egui::Id::new(PLACE))
-                .show(ctx, |ui| clicked = rows::list(ui, s, position, bpm));
+                .show(ctx, |ui| {
+                    clicked = rows::list(ui, s, position, tempo.as_ref())
+                });
             return;
         }
         if ctx.input(|i| i.viewport().close_requested()) {
@@ -371,9 +373,10 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
             ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
         } else {
             let position = position(a, s);
-            let bpm = a.patterns.tempo.0;
-            egui::CentralPanel::default()
-                .show(ctx, |ui| clicked = rows::list(ui, s, position, bpm));
+            let tempo = super::super::patterns::timing::cursor_map(a);
+            egui::CentralPanel::default().show(ctx, |ui| {
+                clicked = rows::list(ui, s, position, tempo.as_ref())
+            });
         }
         super::modal::end(a, ctx, input);
     });
@@ -404,7 +407,9 @@ pub(super) fn test_ui(a: &mut App, s: &mut Session, ctx: &egui::Context) {
     }
     let mut clicked = None;
     egui::CentralPanel::default().show(ctx, |ui| {
-        clicked = rows::list(ui, s, None, 120.0);
+        let tempo =
+            cat_smf_editor::score::audition_timing::TempoMap::constant(s.division, 120.0).unwrap();
+        clicked = rows::list(ui, s, None, Some(&tempo));
     });
     if let Some(rows::Click::Filter(id)) = clicked {
         filter::set(a, s, id);

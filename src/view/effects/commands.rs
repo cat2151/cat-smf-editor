@@ -25,41 +25,29 @@ pub(super) fn specs(state: &State, count: usize) -> Vec<Spec<Op>> {
     use Op::*;
     let p = Spec::plain;
     let mut r = vec![
-        p("help", "ヘルプ", &[Key::F1], Help),
-        p("effects-close", "閉じる", &[Key::Escape, Key::Enter], Close),
+        p("app.help", &[Key::F1], Help),
+        p("effect.close", &[Key::Escape, Key::Enter], Close),
     ];
     r.extend([
-        p("effect-add", "エフェクト追加", &[Key::A], Add),
-        p("effect-replace", "エフェクト差し替え", &[Key::X], Replace),
+        p("effect.add", &[Key::A], Add),
+        p("effect.replace", &[Key::X], Replace),
     ]);
     if count > 0 {
         r.extend([
-            p(
-                "effect-next",
-                "次のエフェクト",
-                &[Key::J, Key::ArrowDown],
-                Row(true),
-            ),
-            p(
-                "effect-prev",
-                "前のエフェクト",
-                &[Key::K, Key::ArrowUp],
-                Row(false),
-            ),
-            p("effect-bypass", "Bypass", &[Key::B], Bypass),
-            p("effect-remove", "エフェクト削除", &[Key::Delete], Remove),
+            p("effect.next", &[Key::J, Key::ArrowDown], Row(true)),
+            p("effect.prev", &[Key::K, Key::ArrowUp], Row(false)),
+            p("effect.bypass", &[Key::B], Bypass),
+            p("effect.remove", &[Key::Delete], Remove),
         ]);
-        for (id, name, keys, down, allowed) in [
+        for (id, keys, down, allowed) in [
             (
-                "effect-move-down",
-                "順番を下へ",
+                "effect.move-down",
                 [Key::J, Key::ArrowDown],
                 true,
                 state.selected + 1 < count,
             ),
             (
-                "effect-move-up",
-                "順番を上へ",
+                "effect.move-up",
                 [Key::K, Key::ArrowUp],
                 false,
                 state.selected > 0,
@@ -68,7 +56,6 @@ pub(super) fn specs(state: &State, count: usize) -> Vec<Spec<Op>> {
             if allowed {
                 r.push(Spec {
                     id,
-                    name,
                     keys: keys.iter().map(|k| (*k, Modifiers::SHIFT)).collect(),
                     action: Move(down),
                 });
@@ -136,25 +123,19 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     };
     for spec in specs(state, chain.len()) {
         let op = spec.action;
-        out.push(Command::new(
-            s,
-            spec.id,
-            spec.name,
-            &spec.keys,
-            move |a, _| {
-                if matches!(op, Op::Help) {
-                    crate::view::help::summon(a);
-                    return;
-                }
-                let Some(chain) = effects(a, target) else {
-                    return;
-                };
-                if let Some(action) = apply(&mut a.effect_editor, chain.len(), op)
-                    && let Err(e) = super::apply(a, target, action)
-                {
-                    a.player_selection.error = Some(e);
-                }
-            },
-        ));
+        out.push(Command::new(s, spec.id, &spec.keys, move |a, _| {
+            if matches!(op, Op::Help) {
+                crate::view::help::summon(a);
+                return;
+            }
+            let Some(chain) = effects(a, target) else {
+                return;
+            };
+            if let Some(action) = apply(&mut a.effect_editor, chain.len(), op)
+                && let Err(e) = super::apply(a, target, action)
+            {
+                a.player_selection.error = Some(e);
+            }
+        }));
     }
 }

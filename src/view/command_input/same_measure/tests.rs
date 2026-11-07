@@ -1,5 +1,5 @@
 use super::*;
-use crate::view::palette::tests::{frame, open, press, query};
+use crate::view::palette::tests::{choose, frame, open, press};
 use cat_smf_editor::model::{Event, Music, Track};
 
 fn fixture(notes: bool) -> App {
@@ -84,7 +84,7 @@ fn same_measure_palette_normalizes_target_and_undoes_once() {
     let before = bytes(&a);
     a.track_view.cursor_tick = Some(4100);
     open(&mut a, &c);
-    query(&mut a, &c, "insert same measure");
+    choose(&mut a, &c, "event.insert-same-measure");
     press(&mut a, &c, Key::Enter);
     type_number(&mut a, &c, "1");
     assert!(!crate::view::modal::is_open(&a));
@@ -116,7 +116,7 @@ fn same_measure_batch_palette_and_selection_menu_match_notes_and_raw() {
                 press(&mut a, &c, Key::G);
             } else {
                 open(&mut a, &c);
-                query(&mut a, &c, "generate same measures");
+                choose(&mut a, &c, "event.generate-same-measures");
                 press(&mut a, &c, Key::Enter);
             }
             type_number(&mut a, &c, "3");
@@ -137,7 +137,7 @@ fn same_measure_selection_excludes_note_duration_and_handles_empty_beats() {
         assert_eq!(crate::view::event_selection::measures(&a), Some((1, 1)));
         let c = egui::Context::default();
         open(&mut a, &c);
-        query(&mut a, &c, "generate same measures");
+        choose(&mut a, &c, "event.generate-same-measures");
         press(&mut a, &c, Key::Enter);
         type_number(&mut a, &c, "3");
         assert_eq!(references(&a), vec![(3840, 1)]);
@@ -160,7 +160,7 @@ fn same_measure_invalid_cancel_stale_and_collision_do_not_mutate_or_leak() {
         let before = bytes(&a);
         a.track_view.cursor_tick = Some(1920);
         open(&mut a, &c);
-        query(&mut a, &c, "insert same measure");
+        choose(&mut a, &c, "event.insert-same-measure");
         press(&mut a, &c, Key::Enter);
         type_number(&mut a, &c, value);
         assert!(crate::view::modal::is_open(&a));
@@ -182,7 +182,7 @@ fn same_measure_invalid_cancel_stale_and_collision_do_not_mutate_or_leak() {
     let before = bytes(&a);
     a.track_view.cursor_tick = Some(3840);
     open(&mut a, &c);
-    query(&mut a, &c, "insert same measure");
+    choose(&mut a, &c, "event.insert-same-measure");
     press(&mut a, &c, Key::Enter);
     a.song_id += 1;
     type_number(&mut a, &c, "1");

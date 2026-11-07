@@ -1,3 +1,4 @@
+use super::descriptions::tests::displayed;
 use super::*;
 use cat_smf_editor::model::{Music, Track};
 fn app() -> App {
@@ -29,7 +30,7 @@ fn closed_mixer_enumeration_is_pure_and_execution_uses_current_track() {
     let c = egui::Context::default();
     let gain = a.audition.gain(2);
     let defs = candidates(&a, &c);
-    let cmd = defs.iter().find(|c| c.id == "volume-down").unwrap();
+    let cmd = defs.iter().find(|c| c.id == "track.volume-down").unwrap();
     assert!(!a.playback.mixer_open);
     assert_eq!(a.audition.gain(2), gain);
     assert!(execute(&mut a, &c, cmd));
@@ -59,11 +60,11 @@ fn shared_key_and_palette_use_same_layer_target_and_undo_condition() {
     let mut a = app();
     a.track = 1;
     let c = egui::Context::default();
-    assert!(!candidates(&a, &c).iter().any(|c| c.id == "undo"));
+    assert!(!candidates(&a, &c).iter().any(|c| c.id == "app.undo"));
     crate::view::layers::open(&mut a);
     let cmd = candidates(&a, &c)
         .into_iter()
-        .find(|c| c.id == "layer-mute")
+        .find(|c| c.id == "layer.mute")
         .unwrap();
     assert!(execute(&mut a, &c, &cmd));
     assert!(
@@ -89,7 +90,7 @@ fn stale_candidate_never_substitutes_another_track_or_generation() {
     let c = egui::Context::default();
     let cmd = candidates(&a, &c)
         .into_iter()
-        .find(|c| c.id == "volume-down")
+        .find(|c| c.id == "track.volume-down")
         .unwrap();
     a.track = 1;
     assert!(!execute(&mut a, &c, &cmd));
@@ -139,13 +140,13 @@ fn owner_definitions_have_unique_bindings_and_dynamic_track_choices() {
     assert_eq!(
         definitions(&a, Screen::Tracks)
             .iter()
-            .filter(|c| c.id.starts_with("track-"))
+            .filter(|c| c.id.starts_with("track.entry-"))
             .count(),
         3
     );
     assert!(!definitions(&a, Screen::Effects)
         .iter()
-        .any(|c| c.id == "effect-bypass"));
+        .any(|c| c.id == "effect.bypass"));
 }
 fn in_window<R>(
     a: &mut App,
@@ -168,14 +169,17 @@ fn in_window<R>(
     let _ = c.run(input, |c| out = Some(f(a, c)));
     out.unwrap()
 }
-fn labels(a: &App, c: &egui::Context) -> Vec<String> {
-    candidates(a, c).iter().map(|c| c.label()).collect()
+fn offered(a: &App, c: &egui::Context) -> Vec<(Screen, String)> {
+    candidates(a, c)
+        .into_iter()
+        .map(|c| (c.screen, c.id))
+        .collect()
 }
-fn run_label(a: &mut App, c: &egui::Context, label: &str) -> bool {
+fn run_id(a: &mut App, c: &egui::Context, screen: Screen, id: &str) -> bool {
     let command = candidates(a, c)
         .into_iter()
-        .find(|x| x.label() == label)
-        .unwrap_or_else(|| panic!("{label}"));
+        .find(|x| x.screen == screen && x.id == id)
+        .unwrap_or_else(|| panic!("{id}"));
     execute(a, c, &command)
 }
 #[test]
@@ -183,15 +187,17 @@ fn global_commands_have_no_screen_label_and_are_offered_everywhere_but_app_dialo
     let mut a = app();
     let c = egui::Context::default();
     let globals = |a: &App| {
-        candidates(a, &c)
-            .iter()
+        displayed(candidates(a, &c))
+            .into_iter()
             .filter(|c| c.screen == Screen::Global)
-            .map(|c| c.label())
+            .map(|c| {
+                assert_eq!(c.label(), c.name);
+                c.id
+            })
             .collect::<Vec<_>>()
     };
     let all = globals(&a);
-    assert!(all.iter().any(|l| l == "アプリ終了"));
-    assert!(all.iter().all(|l| !l.contains(": ")));
+    assert!(all.iter().any(|id| id == "app.quit"));
     a.piano_roll.open = true;
     assert_eq!(owner(&a, &c), Screen::Timeline);
     assert_eq!(globals(&a), all);
@@ -200,7 +206,7 @@ fn global_commands_have_no_screen_label_and_are_offered_everywhere_but_app_dialo
     assert_eq!(owner(&a, &c), Screen::Edit);
     assert_eq!(globals(&a), all);
     // 他の画面から実行しても、通常の終了処理（保存確認）へ進み、その間は Global を出さない。
-    assert!(run_label(&mut a, &c, "アプリ終了"));
+    assert!(run_id(&mut a, &c, Screen::Global, "app.quit"));
     assert!(!a.config.navigation.close_approved);
     assert_eq!(owner(&a, &c), Screen::Confirm);
     assert!(globals(&a).is_empty());
@@ -212,12 +218,15 @@ fn app_quit_is_offered_in_pane_and_help_windows_and_closes_the_app() {
     crate::view::patterns::edit_tests::add_container(&mut a);
     let song = crate::view::patterns::workspace::Pane::Song.viewport();
     for viewport in [song, crate::view::help::viewport()] {
-        let listed = in_window(&mut a, &c, viewport, |a, c| labels(a, c));
-        assert!(listed.iter().any(|l| l == "アプリ終了"), "{viewport:?}");
+        let listed = in_window(&mut a, &c, viewport, |a, c| offered(a, c));
+        assert!(
+            listed.iter().any(|(_, id)| id == "app.quit"),
+            "{viewport:?}"
+        );
     }
     in_window(&mut a, &c, song, |a, c| {
         assert_eq!(owner(a, c), Screen::Song);
-        assert!(run_label(a, c, "アプリ終了"));
+        assert!(run_id(a, c, Screen::Global, "app.quit"));
     });
     // root から実行したときと同じ保存確認へ進む。
     assert!(!a.config.navigation.close_approved);
@@ -234,28 +243,28 @@ fn every_palette_offers_every_screen_once_and_moves_there_to_run() {
         let ids: Vec<_> = candidates(a, c).into_iter().map(|c| c.id).collect();
         let unique: std::collections::HashSet<_> = ids.iter().collect();
         assert_eq!(unique.len(), ids.len());
-        labels(a, c)
+        offered(a, c)
     });
-    for label in [
-        "Event list: トラック追加",
-        "Layers: 次のレイヤー",
-        "Pattern / Song: Stop",
-        "Add pattern",
+    let has = |screen, id: &str| listed.iter().any(|(s, i)| *s == screen && i == id);
+    for (screen, id) in [
+        (Screen::Main, "track.add"),
+        (Screen::Layers, "layer.next"),
+        (Screen::Song, "app.stop"),
+        (Screen::Global, "pattern.create"),
     ] {
-        assert!(listed.iter().any(|l| l == label), "{label}");
+        assert!(has(screen, id), "{id}");
     }
     // 同じ機能は今いる画面のものだけを出す。
-    assert!(!listed.iter().any(|l| l == "Event list: 停止"));
+    assert!(!has(Screen::Main, "app.stop"));
     // 開いてすぐ閉じるだけの、他の画面の「閉じる」は出さない。
-    assert!(!listed
-        .iter()
-        .any(|l| l == "Timeline: 閉じる" || l == "Layers: 閉じる"));
+    assert!(!has(Screen::Timeline, "timeline.close") && !has(Screen::Layers, "layer.close"));
     // pane窓からroot側の画面の機能を選ぶと、root窓へ移って実行し、そこに留まる。
     a.piano_roll.open = true;
-    assert!(in_window(&mut a, &c, song, |a, c| run_label(
+    assert!(in_window(&mut a, &c, song, |a, c| run_id(
         a,
         c,
-        "Event list: レイヤー"
+        Screen::Main,
+        "layer.open"
     )));
     assert!(!a.piano_roll.open);
     assert!(a.patterns.root_focus);
@@ -264,7 +273,7 @@ fn every_palette_offers_every_screen_once_and_moves_there_to_run() {
     a.layer_editor.open = false;
     a.piano_roll.open = true;
     assert_eq!(owner(&a, &c), Screen::Timeline);
-    assert!(run_label(&mut a, &c, "Settings: All tracks meta text"));
+    assert!(run_id(&mut a, &c, Screen::Settings, "meta.all"));
     assert!(a.piano_roll.open);
 }
 #[test]
@@ -278,10 +287,11 @@ fn input_windows_offer_only_themselves_and_are_not_left_from_a_pane() {
         .all(|x| matches!(x.screen, Screen::Mml | Screen::Global)));
     crate::view::patterns::edit_tests::add_container(&mut a);
     let song = crate::view::patterns::workspace::Pane::Song.viewport();
-    assert!(!in_window(&mut a, &c, song, |a, c| run_label(
+    assert!(!in_window(&mut a, &c, song, |a, c| run_id(
         a,
         c,
-        "Event list: レイヤー"
+        Screen::Main,
+        "layer.open"
     )));
     assert!(a.mml_input.open);
     assert!(!a.layer_editor.open);

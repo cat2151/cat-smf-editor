@@ -4,7 +4,7 @@ use cat_smf_editor::score::{audition_timing::TempoMap, pattern, scene::arrangeme
 use eframe::egui;
 use std::sync::Arc;
 
-/// The song, its edit, the view and the preview tempo.
+/// The song, its edit, the view and the conductor origin of the shown pattern.
 type Version = (u64, u64, bool, Option<u64>, u64);
 
 #[derive(Clone)]
@@ -59,7 +59,9 @@ fn stopped_timing(app: &App, ctx: &egui::Context) -> Option<Timing> {
         app.generation,
         app.note_mode,
         shown(app),
-        app.patterns.tempo.0.to_bits(),
+        shown(app)
+            .and_then(|id| crate::view::patterns::timing::pattern_tick(app, id).ok())
+            .unwrap_or(0),
     );
     let id = egui::Id::new("transport-timing");
     if let Some(cached) = ctx.data_mut(|d| d.get_temp::<Timing>(id))
@@ -67,8 +69,7 @@ fn stopped_timing(app: &App, ctx: &egui::Context) -> Option<Timing> {
     {
         return Some(cached);
     }
-    let preview = shown(app)
-        .and_then(|_| TempoMap::constant(loaded.music.division, app.patterns.tempo.0).ok());
+    let preview = shown(app).and_then(|id| crate::view::patterns::timing::pattern(app, id).ok());
     let tempos: Vec<_> = (0..loaded.music.tracks.len())
         .map(|track| {
             preview
@@ -299,10 +300,10 @@ mod tests {
     }
 
     #[test]
-    fn a_pattern_lasts_its_own_length_at_the_preview_tempo() {
+    fn a_pattern_duration_cache_follows_the_song_cursor_and_conductor() {
         let (mut a, c, first, _, _) = song();
         patterns::library::edit(&mut a, first).unwrap();
-        a.patterns.tempo.0 = 120.0;
+        a.patterns.workspace.song_cell.measure = 1;
         let length = a
             .loaded
             .as_ref()
@@ -316,7 +317,21 @@ mod tests {
             .unwrap();
         let seconds = length as f64 / 960.0;
         assert_eq!(stopped_timing(&a, &c).unwrap().total, seconds);
-        a.patterns.tempo.0 = 60.0;
+        a.edit_tracks(|m| {
+            cat_smf_editor::edit::insert(
+                &mut m.tracks[0],
+                cat_smf_editor::model::Event {
+                    tick: 1920,
+                    delta: 0,
+                    status: 0xff,
+                    meta_type: 0x51,
+                    data: vec![15, 66, 64],
+                },
+            );
+            Ok(())
+        })
+        .unwrap();
+        a.patterns.workspace.song_cell.measure = 2;
         let slower = stopped_timing(&a, &c).unwrap();
         assert_eq!(slower.total, seconds * 2.0);
         assert_eq!(

@@ -1,11 +1,21 @@
 use super::*;
 use crate::view::commands::Screen;
 use cat_smf_editor::model::{Event, Music, Track};
+mod descriptions;
 mod feedback;
 mod migemo;
 mod navigation;
 mod ranking;
 mod windows;
+pub(crate) const WORDING: &str = include_str!("tests/wording.toml");
+/// Makes every later opening read `text`. The directory must outlive those openings.
+pub(crate) fn worded(a: &mut App, text: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("command-palette.toml");
+    std::fs::write(&path, text).unwrap();
+    a.palette.descriptions = commands::descriptions::Catalog::at(path);
+    dir
+}
 pub(crate) fn app() -> App {
     crate::view::tests::app(Music {
         format: 1,
@@ -87,7 +97,33 @@ pub(crate) fn query(a: &mut App, c: &egui::Context, q: &str) {
     frame(a, c, vec![egui::Event::Text(q.into())]);
     assert_eq!(a.palette.query, q);
 }
-/// The labels the palette lists for its current query.
+/// The name `id` has in the open palette, whichever wording the definitions give it.
+pub(crate) fn name_of(a: &App, id: &str) -> String {
+    a.palette
+        .commands
+        .iter()
+        .find(|command| command.id == id)
+        .unwrap_or_else(|| panic!("the palette has no command {id}"))
+        .name
+        .clone()
+}
+/// Where `id` sits among the current results.
+pub(crate) fn row_of(a: &mut App, id: &str) -> usize {
+    listed(a)
+        .iter()
+        .position(|listed| listed == id)
+        .unwrap_or_else(|| panic!("the palette does not list {id}"))
+}
+/// Selects `id` by typing its name. Another command can share that name or
+/// contain it, so the selection walks to the row instead of assuming the first.
+pub(crate) fn choose(a: &mut App, c: &egui::Context, id: &str) {
+    let name = name_of(a, id);
+    query(a, c, &name);
+    for _ in 0..row_of(a, id) {
+        press(a, c, Key::ArrowDown);
+    }
+}
+/// The ids the palette lists for its current query, in order.
 pub(crate) fn listed(a: &mut App) -> Vec<String> {
     filter(
         &a.palette.commands,
@@ -96,8 +132,18 @@ pub(crate) fn listed(a: &mut App) -> Vec<String> {
         &a.palette.history,
     )
     .into_iter()
-    .map(|i| a.palette.commands[i].label())
+    .map(|i| a.palette.commands[i].id.clone())
     .collect()
+}
+/// What those rows display.
+pub(crate) fn labels(a: &mut App) -> Vec<String> {
+    let ids = listed(a);
+    ids.iter()
+        .map(|id| {
+            let command = a.palette.commands.iter().find(|c| c.id == *id).unwrap();
+            command.label()
+        })
+        .collect()
 }
 pub(crate) fn press(a: &mut App, c: &egui::Context, k: Key) {
     frame(a, c, vec![key(k, Modifiers::NONE)]);
@@ -124,14 +170,15 @@ fn strict_chord_filter_navigation_cancel_and_closed_mixer_target() {
     assert!(!a.playback.mixer_open);
     press(&mut a, &c, Key::ArrowDown);
     assert_eq!(a.palette.selected, 1);
-    query(&mut a, &c, "減音");
+    let name = name_of(&a, "track.volume-down");
+    query(&mut a, &c, &name);
     assert_eq!(a.palette.selected, 0);
     press(&mut a, &c, Key::Escape);
     assert!(!a.palette.is_open());
     assert!(!a.playback.mixer_open);
     assert_eq!(a.audition.gain(2), 1.0);
     open(&mut a, &c);
-    query(&mut a, &c, "減音");
+    choose(&mut a, &c, "track.volume-down");
     press(&mut a, &c, Key::Enter);
     assert!(!a.palette.is_open());
     assert!(a.playback.mixer_open);
@@ -196,7 +243,7 @@ fn mml_buffer_focus_selection_cancel_and_context_confirm_are_preserved() {
     let state = egui::text_edit::TextEditState::load(&c, focus).unwrap();
     let selection = state.cursor.char_range();
     open(&mut a, &c);
-    query(&mut a, &c, "取消");
+    choose(&mut a, &c, "mml.cancel");
     press(&mut a, &c, Key::Escape);
     assert!(a.mml_input.open);
     assert_eq!(a.mml_input.buffer, before);
@@ -218,7 +265,7 @@ fn mml_buffer_focus_selection_cancel_and_context_confirm_are_preserved() {
     frame(&mut a, &c, vec![]);
     assert_eq!(a.mml_input.buffer, format!("{before}f"));
     open(&mut a, &c);
-    query(&mut a, &c, "確定");
+    choose(&mut a, &c, "mml.confirm");
     press(&mut a, &c, Key::Enter);
     frame(&mut a, &c, vec![]);
     frame(&mut a, &c, vec![]);
@@ -231,7 +278,7 @@ fn ime_enter_does_not_execute_and_repeat_or_layout_repass_does_not_duplicate() {
     let mut a = app();
     let c = egui::Context::default();
     open(&mut a, &c);
-    query(&mut a, &c, "Notes / Raw");
+    choose(&mut a, &c, "view.mode");
     frame(
         &mut a,
         &c,
@@ -252,7 +299,8 @@ fn ime_enter_does_not_execute_and_repeat_or_layout_repass_does_not_duplicate() {
     );
     assert!(a.palette.is_open());
     // Return to an exact query after the IME has finished.
-    a.palette.query = "Notes / Raw".into();
+    a.palette.query = name_of(&a, "view.mode");
+    a.palette.selected = row_of(&mut a, "view.mode");
     let _ = c.run(
         egui::RawInput {
             events: vec![key(Key::Enter, Modifiers::NONE)],
@@ -298,7 +346,7 @@ fn application_viewport_palette_keeps_its_close_target() {
     super::super::analysis::toggle(&mut a);
     let c = egui::Context::default();
     let viewport = egui::ViewportId::from_hash_of("palette-test-child");
-    let mut run = |events| {
+    let run = |a: &mut App, events| {
         let mut raw = egui::RawInput {
             viewport_id: viewport,
             events,
@@ -306,14 +354,21 @@ fn application_viewport_palette_keeps_its_close_target() {
         };
         raw.viewports.insert(viewport, Default::default());
         let _ = c.run(raw, |c| {
-            let input = crate::view::modal::begin(&mut a, c);
-            commands::route(&mut a, c);
-            crate::view::modal::end(&mut a, c, input);
+            let input = crate::view::modal::begin(a, c);
+            commands::route(a, c);
+            crate::view::modal::end(a, c, input);
         });
     };
-    run(vec![key(Key::P, Modifiers::CTRL | Modifiers::SHIFT)]);
-    run(vec![egui::Event::Text("閉じる".into())]);
-    run(vec![key(Key::Enter, Modifiers::NONE)]);
+    run(
+        &mut a,
+        vec![key(Key::P, Modifiers::CTRL | Modifiers::SHIFT)],
+    );
+    let name = name_of(&a, "spectrum.close");
+    run(&mut a, vec![egui::Event::Text(name)]);
+    for _ in 0..row_of(&mut a, "spectrum.close") {
+        run(&mut a, vec![key(Key::ArrowDown, Modifiers::NONE)]);
+    }
+    run(&mut a, vec![key(Key::Enter, Modifiers::NONE)]);
     assert!(!a.palette.is_open());
     assert!(!a.analysis.is_open());
     assert!(a.loaded.is_some());

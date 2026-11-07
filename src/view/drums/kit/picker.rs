@@ -103,8 +103,8 @@ fn move_note(a: &mut App, delta: isize) -> Result<(), String> {
 }
 pub(super) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
     let editing = a.drum_editor.kit.picker.as_ref().unwrap().editing;
-    let mut add = |id, label, keys: &[Key], action: fn(&mut App) -> Result<(), String>| {
-        out.push(Command::plain(screen, id, label, keys, move |a, ctx| {
+    let mut add = |id, keys: &[Key], action: fn(&mut App) -> Result<(), String>| {
+        out.push(Command::plain(screen, id, keys, move |a, ctx| {
             if a.drum_editor.kit.composing
                 || ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Ime(_))))
             {
@@ -114,8 +114,8 @@ pub(super) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
             super::super::result(a, result);
         }));
     };
-    add("kit-picker-confirm", "Note確定", &[Key::Enter], accept);
-    add("kit-picker-cancel", "取消", &[Key::Escape], |a| {
+    add("kit-picker.confirm", &[Key::Enter], accept);
+    add("kit-picker.cancel", &[Key::Escape], |a| {
         let p = a.drum_editor.kit.picker.as_mut().unwrap();
         if p.editing {
             p.query.clear();
@@ -128,20 +128,14 @@ pub(super) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
     if editing {
         return;
     }
-    add(
-        "kit-picker-down",
-        "次のnote",
-        &[Key::ArrowDown, Key::J],
-        |a| move_note(a, 1),
-    );
-    add(
-        "kit-picker-up",
-        "前のnote",
-        &[Key::ArrowUp, Key::K],
-        |a| move_note(a, -1),
-    );
-    add("kit-picker-preview", "試聴", &[Key::Space], audition);
-    add("kit-picker-query", "Note検索", &[Key::Slash], |a| {
+    add("kit-picker.down", &[Key::ArrowDown, Key::J], |a| {
+        move_note(a, 1)
+    });
+    add("kit-picker.up", &[Key::ArrowUp, Key::K], |a| {
+        move_note(a, -1)
+    });
+    add("kit-picker.preview", &[Key::Space], audition);
+    add("kit-picker.query", &[Key::Slash], |a| {
         let p = a.drum_editor.kit.picker.as_mut().unwrap();
         p.editing = true;
         p.focus = true;

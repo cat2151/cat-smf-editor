@@ -1,5 +1,5 @@
 use super::*;
-use crate::view::palette::tests::{frame, open, press, query};
+use crate::view::palette::tests::{choose, frame, open, press};
 #[test]
 fn note_buffer_and_selection_survive_palette_and_context_actions_apply_once() {
     let mut a = crate::view::tests::app(super::tests::chord_song());
@@ -18,13 +18,13 @@ fn note_buffer_and_selection_survive_palette_and_context_actions_apply_once() {
     a.note_edit.as_mut().unwrap().text = "480".into();
     let focus = c.memory(|m| m.focused());
     open(&mut a, &c);
-    query(&mut a, &c, "取消");
+    choose(&mut a, &c, "note.cancel");
     press(&mut a, &c, egui::Key::Escape);
     assert_eq!(a.note_edit.as_ref().unwrap().text, "480");
     assert_eq!(c.memory(|m| m.focused()), focus);
     assert!(!a.undo.available());
     open(&mut a, &c);
-    query(&mut a, &c, "確定");
+    choose(&mut a, &c, "note.confirm");
     press(&mut a, &c, egui::Key::Enter);
     assert!(a.note_edit.is_none());
     assert!(a.undo.available());
@@ -42,7 +42,7 @@ fn note_buffer_and_selection_survive_palette_and_context_actions_apply_once() {
     );
     frame(&mut a, &c, vec![]);
     open(&mut a, &c);
-    query(&mut a, &c, "取消");
+    choose(&mut a, &c, "note.cancel");
     press(&mut a, &c, egui::Key::Enter);
     assert!(a.note_edit.is_none());
 }

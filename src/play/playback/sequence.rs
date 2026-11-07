@@ -75,7 +75,7 @@ pub(super) fn sequence_track(app: &App, track: usize, mode: Mode) -> Option<Sequ
         }
     }
     let tempo = if app.patterns.editing.as_ref().is_some_and(|c| c.standalone) {
-        TempoMap::constant(loaded.music.division, app.patterns.tempo.0).ok()?
+        crate::view::patterns::timing::pattern(app, app.patterns.editing.as_ref()?.pattern).ok()?
     } else {
         TempoMap::new(&loaded.music, track)
     };

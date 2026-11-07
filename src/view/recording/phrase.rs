@@ -185,7 +185,10 @@ pub(super) fn heard(s: &mut Session, pitches: &[u8], velocity: u8, at: Duration)
             if let Some(u) = under {
                 let next = layered(&u.notes, &phrase(notes, length));
                 let end = *origin + length - u.start;
-                sound.live.phrase.replace_from(end, next);
+                sound.live.phrase.replace_from(
+                    end,
+                    super::kit::swung(&sound.patch, s.division, tempo, &next),
+                );
             }
         }
     }
@@ -277,15 +280,16 @@ fn follow_capture(a: &mut App, s: &mut Session, i: usize) {
         silence(s, i);
         return;
     };
+    let audible = super::kit::swung(&s.sounds[i].patch, s.division, tempo, &notes);
     let phrase = &s.sounds[i].live.phrase;
     let start = match under {
         // From the lap that began at the capture's end, unless that has already started.
         Some(u) => {
-            phrase.replace_from(end - u.start, notes.clone());
+            phrase.replace_from(end - u.start, audible);
             u.start
         }
         None => {
-            phrase.play(s.clock + end, length, notes.clone());
+            phrase.play(s.clock + end, length, audible);
             end
         }
     };
@@ -335,17 +339,16 @@ fn pattern_notes(a: &App, id: u64, tempo: u32) -> Option<Vec<(Duration, u8, u8)>
 
 /// The event list and the Song window show the playing container's repeating Loop pattern.
 pub(super) fn reveal(a: &mut App, s: &mut Session) {
-    let Looper::Looping { pattern, tempo, .. } = s.sound().looper else {
+    let Looper::Looping { pattern, .. } = s.sound().looper else {
         return;
     };
-    if let Err(error) = show(a, pattern, tempo) {
+    if let Err(error) = show(a, pattern) {
         s.error = Some(error);
     }
 }
 
 /// The event list and the Song window show the Loop pattern, as a take is shown.
-fn show(a: &mut App, id: u64, tempo: u32) -> Result<(), String> {
-    a.patterns.tempo.0 = 60_000_000.0 / f64::from(tempo);
+fn show(a: &mut App, id: u64) -> Result<(), String> {
     super::super::patterns::library::edit(a, id)?;
     let song = a.patterns.workspace.selection_mut(Pane::Song);
     song.choice = Some(PatternOrScene::Pattern(id));
@@ -375,68 +378,8 @@ pub(super) fn replayed(s: &Session, at: Duration) -> Option<u8> {
         .map(|n| n.2)
 }
 
-/// Every repeating Loop pattern, as an ordinary pattern of the same body, each on its own lane
-/// after the end of the Song; the phrases stop and those measures of the Song repeat.
-pub(super) fn to_song(a: &mut App, s: &mut Session) -> Result<(), String> {
-    use cat_smf_editor::score::{
-        pattern::operations,
-        scene::{self, arrangement},
-    };
-    let loops: Vec<u64> = s
-        .sounds
-        .iter()
-        .filter_map(|x| match x.looper {
-            Looper::Looping { pattern, .. } => Some(pattern),
-            _ => None,
-        })
-        .collect();
-    if loops.is_empty() {
-        return Ok(());
-    }
-    let mut added = (0, 0, None);
-    a.edit_tracks(|music| {
-        let mut parts = vec![];
-        for &pattern in &loops {
-            parts.push(PatternOrScene::Pattern(operations::placeable(
-                music, pattern,
-            )?));
-        }
-        let c = scene::read(music)?;
-        let mut at = 1;
-        for p in &c.song {
-            at = at.max(p.measure + arrangement::length(&c, p.part)?);
-        }
-        let mut length = 0;
-        for (i, &part) in parts.iter().enumerate() {
-            let lane = match c.song_lanes.get(i) {
-                Some(&lane) => lane,
-                None => arrangement::add_lane(music, None)?,
-            };
-            arrangement::place(music, None, lane, at, Some(part))?;
-            length = length.max(arrangement::length(&scene::read(music)?, part)?);
-        }
-        added = (
-            arrangement::measure_tick(music, None, at)?,
-            arrangement::measure_tick(music, None, at + length)?,
-            Some((at, parts[0])),
-        );
-        Ok(())
-    })?;
-    for i in 0..s.sounds.len() {
-        silence(s, i);
-        s.sounds[i].looper = Looper::Off;
-    }
-    a.config.select_phrase_loop(false);
-    if let Some((measure, part)) = added.2 {
-        let song = a.patterns.workspace.selection_mut(Pane::Song);
-        song.row = 0;
-        song.measure = measure;
-        song.choice = Some(part);
-        song.reveal_choice = true;
-    }
-    crate::play::transport::repeat::start_song(a, (added.0, added.1));
-    Ok(())
-}
+mod song;
+pub(super) use song::to_song;
 
 mod sounds;
 pub(super) use sounds::{adopt, browse, display, follow_patch, retune};

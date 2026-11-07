@@ -16,6 +16,8 @@ pub enum Range {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mode {
     Note,
+    /// Consecutive semitones across all four rows of a kit keyboard.
+    Chromatic,
     /// Every row plays root position, each row one octave above the previous.
     Triad,
     Seventh,
@@ -37,10 +39,11 @@ impl Mode {
     ];
     /// What a drum container plays: one lane per row or per letter.
     pub const DRUMS: [Self; 2] = [Self::Note, Self::Letters];
+    pub const KIT: [Self; 2] = [Self::Note, Self::Chromatic];
     /// Notes each chord pad stacks; `None` plays single notes.
     pub fn chord_notes(self) -> Option<usize> {
         match self {
-            Self::Note | Self::Letters => None,
+            Self::Note | Self::Chromatic | Self::Letters => None,
             Self::Triad | Self::TriadInversions => Some(3),
             Self::Seventh | Self::SeventhInversions => Some(4),
         }
@@ -51,6 +54,7 @@ impl Mode {
     pub fn label(self) -> &'static str {
         match self {
             Self::Note => "Note",
+            Self::Chromatic => "Chromatic",
             Self::Triad => "Triad",
             Self::Seventh => "Seventh",
             Self::TriadInversions => "Triad inversions",

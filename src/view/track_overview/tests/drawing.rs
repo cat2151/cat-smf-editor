@@ -1,5 +1,6 @@
 //! Pane backgrounds, curves, notes and scrolling of the overview window.
 use super::*;
+use crate::view::track_overview::drawing::reveal_offset;
 
 #[test]
 fn panes_tell_notes_events_and_empty_tracks_apart() {
@@ -18,15 +19,15 @@ fn reveal_scrolls_only_as_far_as_the_cell_needs() {
     let shown = egui::vec2(100.0, 50.0);
     let cell = |x: f32, y: f32| egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(40.0, 20.0));
     assert_eq!(
-        window::reveal_offset(egui::vec2(0.0, 0.0), shown, cell(10.0, 10.0)),
+        reveal_offset(egui::vec2(0.0, 0.0), shown, cell(10.0, 10.0)),
         egui::vec2(0.0, 0.0)
     );
     assert_eq!(
-        window::reveal_offset(egui::vec2(0.0, 0.0), shown, cell(200.0, 100.0)),
+        reveal_offset(egui::vec2(0.0, 0.0), shown, cell(200.0, 100.0)),
         egui::vec2(140.0, 70.0)
     );
     assert_eq!(
-        window::reveal_offset(egui::vec2(300.0, 300.0), shown, cell(200.0, 100.0)),
+        reveal_offset(egui::vec2(300.0, 300.0), shown, cell(200.0, 100.0)),
         egui::vec2(200.0, 100.0)
     );
 }
@@ -197,9 +198,31 @@ fn pane_shapes_stay_within_the_visible_area() {
 }
 
 #[test]
-fn drum_notes_fade_after_their_first_thirty_second() {
+fn drum_notes_mark_only_the_attack() {
+    check_drum_attacks(false);
+    check_drum_attacks(true);
+}
+
+fn check_drum_attacks(kit: bool) {
     let mut app = fixture();
-    app.loaded.as_mut().unwrap().patches[1].drums = Some(Default::default());
+    let patch = &mut app.loaded.as_mut().unwrap().patches[1];
+    if kit {
+        patch.kit = Some(cat_smf_editor::drum_kit::Kit {
+            layer: 1,
+            rows: None,
+            muted: vec![],
+            swing: Default::default(),
+            notes: (60..64)
+                .map(|note| cat_smf_editor::drum_kit::Note {
+                    note,
+                    name: format!("Drum {note}"),
+                    velocity: 100,
+                })
+                .collect(),
+        });
+    } else {
+        patch.drums = Some(Default::default());
+    }
     let (mut app, ctx) = opened_from(app);
     let output = render(&mut app, &ctx, vec![]);
     let pane = pane(&ctx, 1);
@@ -226,8 +249,59 @@ fn drum_notes_fade_after_their_first_thirty_second() {
     assert_eq!((heads.len(), tails.len()), (4, 4));
     for (head, tail) in heads.iter().zip(&tails) {
         assert_eq!(head.right(), tail.left());
-        // A 32nd of the 960-tick note.
-        let ratio = head.width() / (head.width() + tail.width());
-        assert!((ratio - 0.0625).abs() < 0.01, "{ratio}");
+        assert!((head.width() - 2.0).abs() < 0.01);
+        assert!(tail.width() > head.width());
+    }
+    for (_, opacity) in notes.iter().filter(|n| n.1 != head) {
+        assert!((f32::from(*opacity) / f32::from(head) - 0.25).abs() < 0.02);
+    }
+}
+
+#[test]
+fn zoom_and_scroll_keep_drum_attacks_at_the_note_on() {
+    use crate::view::track_overview::{drawing::draw_pane, panes::Panes};
+    let app = fixture();
+    let mut layout = Panes::read(&app, 0).unwrap().layouts.remove(1);
+    let color = crate::view::track_color(1);
+    for scale in [0.1, 1.0] {
+        layout.scale = scale;
+        // Touching notes of one pitch must still have separate attack marks.
+        layout.notes = (0..3)
+            .map(|i| {
+                (
+                    i,
+                    egui::Rect::from_min_size(
+                        egui::pos2(i as f32 * 120.0 * scale, 10.0),
+                        egui::vec2(120.0 * scale, 3.0),
+                    ),
+                )
+            })
+            .collect();
+        for left in [0.0, 4.0] {
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, layout.size);
+            let clip = rect.with_min_x(left);
+            let ctx = egui::Context::default();
+            let output = ctx.run(Default::default(), |ctx| {
+                let painter = ctx
+                    .layer_painter(egui::LayerId::background())
+                    .with_clip_rect(clip);
+                draw_pane(&painter, rect, &layout, Kind::Notes, true, color);
+            });
+            let attacks: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Rect(r) if r.fill == color => Some(r.rect),
+                    _ => None,
+                })
+                .collect();
+            let expected: Vec<_> = layout
+                .notes
+                .iter()
+                .filter(|(_, r)| r.left() >= left)
+                .map(|(_, r)| r.with_max_x(r.left() + 2.0))
+                .collect();
+            assert_eq!(attacks, expected);
+        }
     }
 }

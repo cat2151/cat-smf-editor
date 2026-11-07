@@ -121,7 +121,7 @@ fn drums_input_blocks_background_commands_and_stale_palette_targets() {
     let ctx = egui::Context::default();
     let old = commands::definitions(&app, Screen::Drums)
         .into_iter()
-        .find(|c| c.id == "drum-activate")
+        .find(|c| c.id == "drum.activate")
         .unwrap();
     press(&mut app, &ctx, Key::ArrowUp);
     assert!(!commands::execute(&mut app, &ctx, &old));
@@ -135,7 +135,7 @@ fn drums_input_blocks_background_commands_and_stale_palette_targets() {
     assert!(!app.playback.open);
     assert!(commands::definitions(&app, Screen::DrumInput)
         .iter()
-        .all(|c| !matches!(c.id.as_str(), "drum-play" | "undo")));
+        .all(|c| !matches!(c.id.as_str(), "drum.play" | "app.undo")));
 }
 
 #[test]
@@ -149,10 +149,10 @@ fn nonempty_track_prompts_immediately_and_escape_preserves_the_song() {
     let defs = commands::definitions(&app, Screen::DrumCreate);
     assert!(defs
         .iter()
-        .any(|c| c.id == "drum-create" && c.keys.contains(&(Key::Enter, egui::Modifiers::NONE))));
+        .any(|c| c.id == "drum.create" && c.keys.contains(&(Key::Enter, egui::Modifiers::NONE))));
     assert!(!defs
         .iter()
-        .any(|c| matches!(c.id.as_str(), "drum-activate" | "drum-play" | "undo")));
+        .any(|c| matches!(c.id.as_str(), "drum.activate" | "drum.play" | "app.undo")));
     press(&mut app, &ctx, Key::J);
     press(&mut app, &ctx, Key::PageDown);
     assert_eq!(app.drum_editor.row, 0);

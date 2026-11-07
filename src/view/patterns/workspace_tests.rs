@@ -151,9 +151,15 @@ pub(crate) fn text(a: &mut App, c: &egui::Context, id: egui::ViewportId, s: &str
     frame(a, c, id, vec![]);
     frame(a, c, id, vec![egui::Event::Text(s.into())]);
 }
-pub(crate) fn command(a: &mut App, c: &egui::Context, id: egui::ViewportId, s: &str) {
+/// Runs the palette command `command` from viewport `id`.
+pub(crate) fn command(a: &mut App, c: &egui::Context, id: egui::ViewportId, command: &str) {
+    use crate::view::palette::tests::{name_of, row_of};
     key(a, c, id, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
-    text(a, c, id, s);
+    let name = name_of(a, command);
+    text(a, c, id, &name);
+    for _ in 0..row_of(a, command) {
+        key(a, c, id, Key::ArrowDown, Modifiers::NONE);
+    }
     key(a, c, id, Key::Enter, Modifiers::NONE);
 }
 fn click(a: &mut App, c: &egui::Context, id: egui::ViewportId, rect: egui::Id) {
@@ -223,7 +229,7 @@ fn body(a: &App, id: u64) -> Vec<u8> {
 }
 fn add(a: &mut App, c: &egui::Context, mml: &str) -> u64 {
     let root = egui::ViewportId::ROOT;
-    command(a, c, root, "add pattern");
+    command(a, c, root, "pattern.create");
     if a.patterns.confirming_creation() {
         key(a, c, root, Key::Enter, Modifiers::NONE);
     }

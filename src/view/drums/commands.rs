@@ -29,15 +29,9 @@ pub(super) fn undo_command(
     screen: Screen,
     execute: impl Fn(&mut App, &egui::Context) + 'static,
 ) -> Option<Command> {
-    app.undo.available().then(|| {
-        Command::new(
-            screen,
-            "undo",
-            "元に戻す",
-            &[(Key::Z, Modifiers::CTRL)],
-            execute,
-        )
-    })
+    app.undo
+        .available()
+        .then(|| Command::new(screen, "app.undo", &[(Key::Z, Modifiers::CTRL)], execute))
 }
 pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
     if super::kit::active(app) {
@@ -54,96 +48,45 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
     if screen != own {
         return;
     }
-    let mut add = |id, name, keys: &[Key], op| {
-        let command = Command::plain(screen, id, name, keys, move |a, _| apply(a, op));
+    let mut add = |id, keys: &[Key], op| {
+        let command = Command::plain(screen, id, keys, move |a, _| apply(a, op));
         out.push(if matches!(op, Op::Move(..) | Op::Page(..)) {
             command.repeating()
         } else {
             command
         });
     };
-    add("drum-cancel", "閉じる / 取消", &[Key::Escape], Op::Cancel);
+    add("drum.cancel", &[Key::Escape], Op::Cancel);
     if app.drum_editor.confirm_create {
-        add("drum-create", "Yes", &[Key::Enter], Op::Create);
+        add("drum.create", &[Key::Enter], Op::Create);
     } else if app.drum_editor.input.is_some() {
-        add("drum-confirm", "確定", &[Key::Enter], Op::Confirm);
+        add("drum.confirm", &[Key::Enter], Op::Confirm);
     } else {
-        add("help", "ヘルプ", &[Key::F1], Op::Help);
+        add("app.help", &[Key::F1], Op::Help);
         {
-            add(
-                "drum-row-next",
-                "次の行",
-                &[Key::J, Key::ArrowDown],
-                Op::Move(1, 0),
-            );
-            add(
-                "drum-row-prev",
-                "前の行",
-                &[Key::K, Key::ArrowUp],
-                Op::Move(-1, 0),
-            );
-            add(
-                "drum-step-next",
-                "次の項目",
-                &[Key::L, Key::ArrowRight],
-                Op::Move(0, 1),
-            );
-            add(
-                "drum-step-prev",
-                "前の項目",
-                &[Key::H, Key::ArrowLeft],
-                Op::Move(0, -1),
-            );
-            add(
-                "drum-page-next",
-                "次の小節",
-                &[Key::PageDown],
-                Op::Page(true),
-            );
-            add(
-                "drum-page-prev",
-                "前の小節",
-                &[Key::PageUp],
-                Op::Page(false),
-            );
-            add(
-                "drum-activate",
-                "音色 / Note / Velocity / Level / Swing / Step",
-                &[Key::Enter],
-                Op::Activate,
-            );
-            add("drum-toggle", "Step", &[Key::F, Key::Space], Op::Toggle);
-            add(
-                "drum-mute",
-                "Mute",
-                &[Key::M],
-                Op::Mute(app.drum_editor.row),
-            );
-            add("drum-scope", "Loop Solo", &[Key::S], Op::Scope);
-            add("drum-loop", "Loop", &[Key::R], Op::Loop);
-            add(
-                "drum-a-prev",
-                "A-B Repeat A −",
-                &[Key::OpenBracket],
-                Op::Boundary(false, -1),
-            );
-            add(
-                "drum-a-next",
-                "A-B Repeat A +",
-                &[Key::CloseBracket],
-                Op::Boundary(false, 1),
-            );
+            add("drum.row-next", &[Key::J, Key::ArrowDown], Op::Move(1, 0));
+            add("drum.row-prev", &[Key::K, Key::ArrowUp], Op::Move(-1, 0));
+            add("drum.step-next", &[Key::L, Key::ArrowRight], Op::Move(0, 1));
+            add("drum.step-prev", &[Key::H, Key::ArrowLeft], Op::Move(0, -1));
+            add("drum.page-next", &[Key::PageDown], Op::Page(true));
+            add("drum.page-prev", &[Key::PageUp], Op::Page(false));
+            add("drum.activate", &[Key::Enter], Op::Activate);
+            add("drum.toggle", &[Key::F, Key::Space], Op::Toggle);
+            add("drum.mute", &[Key::M], Op::Mute(app.drum_editor.row));
+            add("drum.scope", &[Key::S], Op::Scope);
+            add("drum.loop", &[Key::R], Op::Loop);
+            add("drum.a-prev", &[Key::OpenBracket], Op::Boundary(false, -1));
+            add("drum.a-next", &[Key::CloseBracket], Op::Boundary(false, 1));
         }
     }
     if screen == Screen::Drums {
-        for (id, name, key, delta) in [
-            ("drum-b-prev", "A-B Repeat B −", Key::OpenBracket, -1),
-            ("drum-b-next", "A-B Repeat B +", Key::CloseBracket, 1),
+        for (id, key, delta) in [
+            ("drum.b-prev", Key::OpenBracket, -1),
+            ("drum.b-next", Key::CloseBracket, 1),
         ] {
             out.push(Command::new(
                 screen,
                 id,
-                name,
                 &[(key, Modifiers::SHIFT)],
                 move |a, _| apply(a, Op::Boundary(true, delta)),
             ));
@@ -151,8 +94,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
     }
     out.push(Command::new(
         screen,
-        "stop",
-        "停止",
+        "app.stop",
         &[(Key::Space, Modifiers::SHIFT)],
         |a, _| apply(a, Op::Stop),
     ));

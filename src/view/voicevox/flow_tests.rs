@@ -2,15 +2,15 @@
 use crate::app::App;
 use crate::view::{
     edit_menu::lyric_tests::{settle, wav},
-    palette::tests::{frame, listed, open, press, query},
+    palette::tests::{choose, frame, listed, open, press, query},
 };
 use cat_smf_editor::model::{Music, Track};
 use cat_smf_editor::voicevox::{is_singer, score::from_track};
 use eframe::egui::{self, Key, Modifiers};
 use std::sync::Mutex;
 
-pub(super) const SINGER: &str = "Event list: VOICEVOX: 現在のtrackの歌声を選ぶ";
-pub(super) const LYRICS: &str = "Event list: VOICEVOX: 1小節の歌詞を差し替え";
+pub(super) const SINGER: &str = "voicevox.singer";
+pub(super) const LYRICS: &str = "lyrics.measure";
 pub(super) const DONGURI: [&str; 8] = ["ど", "ん", "ぐ", "り", "こ", "ろ", "こ", "ろ"];
 
 pub(super) fn key(app: &mut App, ctx: &egui::Context, key: Key, modifiers: Modifiers) {
@@ -56,18 +56,13 @@ pub(super) fn new_song(
     (app, ctx)
 }
 
-/// Runs the palette command listed as `label` among the `voicevox` results.
-pub(super) fn palette(app: &mut App, ctx: &egui::Context, label: &str) {
+/// Runs the palette command `id`.
+pub(super) fn palette(app: &mut App, ctx: &egui::Context, id: &str) {
     open(app, ctx);
-    query(app, ctx, "voicevox");
-    let listed = listed(app);
-    let at = listed.iter().position(|l| l == label).expect(label);
-    for _ in 0..at {
-        press(app, ctx, Key::ArrowDown);
-    }
+    choose(app, ctx, id);
     press(app, ctx, Key::Enter);
     assert!(!crate::view::modal::is_open(app));
-    if label == SINGER {
+    if id == SINGER {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
         while app.voicevox.catalog.voices.is_empty() {
             frame(app, ctx, vec![]);
@@ -165,10 +160,7 @@ fn from_a_new_song_the_palette_alone_makes_zundamon_sing_donguri_on_notes_added_
     let offered = listed(&mut app);
     assert!(offered.iter().any(|l| l == SINGER), "{offered:?}");
     assert!(offered.iter().any(|l| l == LYRICS), "{offered:?}");
-    assert!(
-        offered.iter().any(|l| l.contains("VOICEVOX engine")),
-        "{offered:?}"
-    );
+    assert!(offered.iter().any(|l| l == "voicevox.open"), "{offered:?}");
     press(&mut app, &ctx, Key::Escape);
 
     palette(&mut app, &ctx, SINGER);

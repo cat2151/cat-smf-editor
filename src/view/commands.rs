@@ -5,6 +5,7 @@ use eframe::egui::{self, Key, Modifiers};
 mod basic;
 mod execution;
 pub(crate) use execution::{invoke, submit, Execution, Operation, Request};
+pub(crate) mod descriptions;
 mod menus;
 mod mixer;
 mod navigation;
@@ -27,6 +28,10 @@ pub struct Command {
     pub name: String,
     pub keys: Vec<(Key, Modifiers)>,
     pub repeat: bool,
+    description: String,
+    search: String,
+    screen_name: String,
+    text_id: Option<&'static str>,
     target: Option<Target>,
     run: Box<Execute>,
 }
@@ -35,16 +40,19 @@ impl Command {
     pub fn new(
         screen: Screen,
         id: impl Into<String>,
-        name: impl Into<String>,
         keys: &[(Key, Modifiers)],
         run: impl Fn(&mut App, &egui::Context) + 'static,
     ) -> Self {
         Self {
             id: id.into(),
             screen,
-            name: name.into(),
+            name: String::new(),
             keys: keys.into(),
             repeat: false,
+            description: String::new(),
+            search: String::new(),
+            screen_name: String::new(),
+            text_id: None,
             target: None,
             run: Box::new(move |a, c| {
                 run(a, c);
@@ -55,20 +63,23 @@ impl Command {
     pub fn plain(
         screen: Screen,
         id: impl Into<String>,
-        name: impl Into<String>,
         keys: &[Key],
         run: impl Fn(&mut App, &egui::Context) + 'static,
     ) -> Self {
         Self::new(
             screen,
             id,
-            name,
             &keys
                 .iter()
                 .map(|k| (*k, Modifiers::NONE))
                 .collect::<Vec<_>>(),
             run,
         )
+    }
+    /// Only for names holding runtime data; every other name comes from the definitions.
+    pub fn named(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
     }
     pub fn repeating(mut self) -> Self {
         self.repeat = true;
@@ -93,7 +104,7 @@ impl Command {
         if self.screen == Screen::Global {
             return self.name.clone();
         }
-        format!("{}: {}", self.screen.label(), self.name)
+        format!("{}: {}", self.screen_name, self.name)
     }
 }
 
@@ -163,15 +174,13 @@ pub fn matches(actual: Modifiers, expected: Modifiers) -> bool {
 
 pub struct Spec<T> {
     pub id: &'static str,
-    pub name: &'static str,
     pub keys: Vec<(Key, Modifiers)>,
     pub action: T,
 }
 impl<T> Spec<T> {
-    pub fn plain(id: &'static str, name: &'static str, keys: &[Key], action: T) -> Self {
+    pub fn plain(id: &'static str, keys: &[Key], action: T) -> Self {
         Self {
             id,
-            name,
             keys: keys.iter().map(|k| (*k, Modifiers::NONE)).collect(),
             action,
         }
@@ -208,10 +217,10 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
         result.retain(|c| {
             matches!(
                 c.id.as_str(),
-                "first-pattern-edit"
-                    | "first-pattern-back"
-                    | "first-container-prev"
-                    | "first-container-next"
+                "first-pattern.edit"
+                    | "first-pattern.back"
+                    | "first-pattern.container-prev"
+                    | "first-pattern.container-next"
             )
         });
     }
@@ -253,7 +262,7 @@ pub fn candidates(app: &App, ctx: &egui::Context) -> Vec<Command> {
     }
     let mut seen = std::collections::HashSet::new();
     result.retain(|c| seen.insert(c.id.clone()));
-    result.retain(|c| c.id != "browse-views" || c.screen == current);
+    result.retain(|c| c.id != "view.browse" || c.screen == current);
     result
 }
 
@@ -372,7 +381,7 @@ pub(crate) fn run_direct(a: &mut App, c: &egui::Context, command: &Command) {
 pub(crate) fn help(app: &mut App, ctx: &egui::Context) -> bool {
     let Some(c) = definitions(app, owner(app, ctx))
         .into_iter()
-        .find(|c| c.id == "help")
+        .find(|c| c.id == "app.help")
     else {
         return false;
     };
@@ -388,7 +397,7 @@ pub(crate) fn route_stop(app: &mut App, ctx: &egui::Context) {
     let screen = owner(app, ctx);
     let Some(c) = definitions(app, screen)
         .into_iter()
-        .find(|c| c.id == "stop")
+        .find(|c| c.id == "app.stop")
     else {
         return;
     };
@@ -402,7 +411,7 @@ pub(crate) fn route_stop(app: &mut App, ctx: &egui::Context) {
 fn contextual_definitions(app: &App, ctx: &egui::Context, screen: Screen) -> Vec<Command> {
     let mut definitions = definitions(app, screen);
     if ctx.input(|i| i.pointer.any_down() || i.pointer.any_released()) {
-        definitions.retain(|c| c.id != "undo" && c.id != "edit-undo");
+        definitions.retain(|c| c.id != "app.undo" && c.id != "edit.undo");
     }
     definitions
 }

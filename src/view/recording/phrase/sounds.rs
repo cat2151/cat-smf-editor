@@ -16,9 +16,14 @@ fn follow_pattern(a: &App, s: &mut Session) {
             continue;
         };
         match pattern_notes(a, *pattern, *tempo) {
-            Some(now) if now == *notes => {}
+            Some(now) if now == *notes && sound.patch.kit.is_none() => {}
             Some(now) => {
-                sound.live.phrase.replace(now.clone());
+                sound.live.phrase.replace(super::super::kit::swung(
+                    &sound.patch,
+                    s.division,
+                    *tempo,
+                    &now,
+                ));
                 *notes = now;
             }
             None => restart(s, i),
@@ -39,9 +44,7 @@ pub(in crate::view::recording) fn adopt(a: &App, s: &mut Session) -> bool {
         .tracks
         .iter()
         .filter(|(id, t)| {
-            catalog.sources.contains(t)
-                && loaded.patches[**t].kit.is_none()
-                && !s.sounds.iter().any(|x| x.container == Some(**id))
+            catalog.sources.contains(t) && !s.sounds.iter().any(|x| x.container == Some(**id))
         })
         .map(|(&id, &track)| (track, id))
         .collect();
@@ -56,6 +59,8 @@ pub(in crate::view::recording) fn adopt(a: &App, s: &mut Session) -> bool {
             patch: loaded.patches[track].clone(),
             name: cat_smf_editor::score::pattern::container_name(&loaded.music, id, track),
             live: live::Live::default(),
+            kit_bank: 0,
+            kit_base: 36,
             looper: if a.config.phrase_loop {
                 Looper::Waiting
             } else {
@@ -82,7 +87,6 @@ pub(in crate::view::recording) fn follow_patch(a: &mut App, s: &mut Session) -> 
         return false;
     }
     s.generation = a.generation;
-    follow_pattern(a, s);
     let Some(loaded) = a.loaded.as_ref() else {
         return true;
     };
@@ -114,7 +118,10 @@ pub(in crate::view::recording) fn follow_patch(a: &mut App, s: &mut Session) -> 
             changed = true;
         }
     }
-    if adopt(a, s) || changed {
+    follow_pattern(a, s);
+    let added = adopt(a, s);
+    if added || changed {
+        super::super::kit::sync(a, s);
         retune(a, s);
     }
     false
@@ -156,7 +163,9 @@ pub(in crate::view::recording) fn browse(a: &mut App, ctx: &egui::Context, s: &S
         return;
     }
     a.select_track(sound.track);
-    if display(s).1 {
+    if sound.patch.kit.is_some() {
+        crate::player::kit_selection::open(a, false, false);
+    } else if display(s).1 {
         crate::view::layers::open(a);
         ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
     } else {

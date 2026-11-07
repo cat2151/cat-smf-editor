@@ -12,14 +12,16 @@ fn common_commands(app: &App) -> BTreeMap<String, (Vec<(Key, egui::Modifiers)>, 
         .filter_map(|command| {
             let id = match command.id.as_str() {
                 // The kit has a single instrument and a variable note list.
-                "effects" | "kit-note-picker" | "kit-add-rows" | "kit-query" | "kit-context" => {
-                    return None
-                }
-                "kit-field-next" => "drum-step-next".into(),
-                "kit-field-prev" => "drum-step-prev".into(),
-                id => id
-                    .strip_prefix("kit-")
-                    .map_or_else(|| id.to_owned(), |suffix| format!("drum-{suffix}")),
+                "effect.open" | "kit.note-picker" | "kit.add-rows" | "kit.query"
+                | "kit.context" => return None,
+                "kit.field-next" => "drum.step-next".into(),
+                "kit.field-prev" => "drum.step-prev".into(),
+                "kit.activate" => "drum.activate".into(),
+                "kit.mute" => "drum.mute".into(),
+                "kit.row-next" => "drum.row-next".into(),
+                "kit.row-prev" => "drum.row-prev".into(),
+                "kit.toggle" => "drum.toggle".into(),
+                id => id.to_owned(),
             };
             Some((id, (command.keys, command.repeat)))
         })
@@ -36,7 +38,7 @@ fn both_sequencers_offer_the_same_common_operations_and_bindings() {
     drums.undo = Default::default();
     kit.undo = Default::default();
     assert_eq!(common_commands(&drums), common_commands(&kit));
-    assert!(!common_commands(&drums).contains_key("undo"));
+    assert!(!common_commands(&drums).contains_key("app.undo"));
 }
 
 #[test]

@@ -29,9 +29,8 @@ enum Action {
 const PLAIN: Modifiers = Modifiers::NONE;
 const SHIFT: Modifiers = Modifiers::SHIFT;
 
-/// `(id, name, keys, button, action)` of each key, in the overlay's order.
+/// `(id, keys, button, action)` of each key, in the overlay's order.
 type Binding = (
-    &'static str,
     &'static str,
     &'static [(Key, Modifiers)],
     &'static str,
@@ -39,64 +38,55 @@ type Binding = (
 );
 const ACTIONS: [Binding; 9] = [
     (
-        "chord-next",
-        "次のchord",
+        "chord.next",
         &[(Key::J, PLAIN), (Key::ArrowDown, PLAIN)],
         "j: Next",
         Action::Step(true),
     ),
     (
-        "chord-prev",
-        "前のchord",
+        "chord.prev",
         &[(Key::K, PLAIN), (Key::ArrowUp, PLAIN)],
         "k: Previous",
         Action::Step(false),
     ),
     (
-        "chord-earlier",
-        "16分前へ",
+        "chord.earlier",
         &[(Key::H, PLAIN), (Key::ArrowLeft, PLAIN)],
         "h: Earlier 1/16",
         Action::Move(-1),
     ),
     (
-        "chord-later",
-        "16分後ろへ",
+        "chord.later",
         &[(Key::L, PLAIN), (Key::ArrowRight, PLAIN)],
         "l: Later 1/16",
         Action::Move(1),
     ),
     (
-        "chord-shorter",
-        "16分短く",
+        "chord.shorter",
         &[(Key::H, SHIFT), (Key::ArrowLeft, SHIFT)],
         "H: Shorter 1/16",
         Action::Length(-1),
     ),
     (
-        "chord-longer",
-        "16分長く",
+        "chord.longer",
         &[(Key::L, SHIFT), (Key::ArrowRight, SHIFT)],
         "L: Longer 1/16",
         Action::Length(1),
     ),
     (
-        "chord-quantize",
-        "16分quantize",
+        "chord.quantize",
         &[(Key::Q, PLAIN)],
         "q: Quantize 1/16",
         Action::Quantize,
     ),
     (
-        "chord-confirm",
-        "確定",
+        "chord.confirm",
         &[(Key::Enter, PLAIN)],
         "Enter: OK",
         Action::Confirm,
     ),
     (
-        "chord-cancel",
-        "取消",
+        "chord.cancel",
         &[(Key::Escape, PLAIN)],
         "Esc: Cancel",
         Action::Cancel,
@@ -302,26 +292,18 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
 
 pub(crate) fn collect(app: &App, s: Screen, out: &mut Vec<Command>) {
     if s == Screen::Timeline && can_begin(app) {
-        out.push(Command::plain(
-            s,
-            "chord-timing",
-            "Chord timing",
-            &[Key::C],
-            |a, _| begin(a),
-        ));
+        out.push(Command::plain(s, "chord.timing", &[Key::C], |a, _| {
+            begin(a)
+        }));
     }
     if s != Screen::ChordTiming {
         return;
     }
-    out.push(Command::plain(
-        s,
-        "help",
-        "ヘルプ",
-        &[Key::F1],
-        |a, _| crate::view::help::summon(a),
-    ));
-    for (id, name, keys, _, action) in ACTIONS {
-        let command = Command::new(s, id, name, keys, move |a, _| run(a, action));
+    out.push(Command::plain(s, "app.help", &[Key::F1], |a, _| {
+        crate::view::help::summon(a)
+    }));
+    for (id, keys, _, action) in ACTIONS {
+        let command = Command::new(s, id, keys, move |a, _| run(a, action));
         out.push(match action {
             Action::Move(_) | Action::Length(_) | Action::Step(_) => command.repeating(),
             _ => command,

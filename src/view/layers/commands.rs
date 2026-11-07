@@ -38,70 +38,35 @@ pub(super) fn specs(state: &State, patch: &Patch) -> Vec<Spec<Op>> {
     let p = Spec::plain;
     if state.editing.is_some() {
         return vec![
-            p("layer-confirm", "数値確定", &[Key::Enter], Confirm),
-            p("layer-cancel", "数値取消", &[Key::Escape], Cancel),
+            p("layer.confirm", &[Key::Enter], Confirm),
+            p("layer.cancel", &[Key::Escape], Cancel),
         ];
     }
     let mut result = vec![
-        p("help", "ヘルプ", &[Key::F1], Help),
-        p("layers-close", "閉じる", &[Key::Escape], Close),
+        p("app.help", &[Key::F1], Help),
+        p("layer.close", &[Key::Escape], Close),
     ];
     result.extend([
-        p(
-            "layer-next",
-            "次のレイヤー",
-            &[Key::J, Key::ArrowDown],
-            Row(true),
-        ),
-        p(
-            "layer-prev",
-            "前のレイヤー",
-            &[Key::K, Key::ArrowUp],
-            Row(false),
-        ),
-        p(
-            "field-prev",
-            "前の項目",
-            &[Key::H, Key::ArrowLeft],
-            Field(false),
-        ),
-        p(
-            "field-next",
-            "次の項目",
-            &[Key::L, Key::ArrowRight],
-            Field(true),
-        ),
-        p(
-            "layer-analysis",
-            "Spectrum / Lissajous",
-            &[Key::F],
-            Analysis,
-        ),
+        p("layer.next", &[Key::J, Key::ArrowDown], Row(true)),
+        p("layer.prev", &[Key::K, Key::ArrowUp], Row(false)),
+        p("layer.field-prev", &[Key::H, Key::ArrowLeft], Field(false)),
+        p("layer.field-next", &[Key::L, Key::ArrowRight], Field(true)),
+        p("layer.analysis", &[Key::F], Analysis),
     ]);
     if patch.layers.len() < 64 {
-        result.push(p("layer-add", "レイヤー複製", &[Key::A], Add));
+        result.push(p("layer.add", &[Key::A], Add));
     }
     if !patch.layers.is_empty() {
         result.extend([
-            p("layer-automation", "Automation…", &[Key::U], Automation),
-            p("layer-edit", "音色選択 / 数値入力", &[Key::Enter], Edit),
-            p("octave-up", "Octave +1", &[Key::O], Nudge(1, true)),
-            p("octave-down", "Octave −1", &[Key::I], Nudge(1, false)),
-            p(
-                "layer-volume-up",
-                "音量 +6 dB",
-                &[Key::CloseBracket],
-                Nudge(2, true),
-            ),
-            p(
-                "layer-volume-down",
-                "音量 −6 dB",
-                &[Key::OpenBracket],
-                Nudge(2, false),
-            ),
-            p("layer-mute", "Mute", &[Key::M], Mute),
-            p("layer-solo", "Solo", &[Key::S], Solo),
-            p("layer-remove", "レイヤー削除", &[Key::Delete], Remove),
+            p("layer.automation", &[Key::U], Automation),
+            p("layer.edit", &[Key::Enter], Edit),
+            p("layer.octave-up", &[Key::O], Nudge(1, true)),
+            p("layer.octave-down", &[Key::I], Nudge(1, false)),
+            p("layer.volume-up", &[Key::CloseBracket], Nudge(2, true)),
+            p("layer.volume-down", &[Key::OpenBracket], Nudge(2, false)),
+            p("layer.mute", &[Key::M], Mute),
+            p("layer.solo", &[Key::S], Solo),
+            p("layer.remove", &[Key::Delete], Remove),
         ]);
     }
     result
@@ -204,13 +169,9 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     };
     for spec in specs(state, patch) {
         let op = spec.action;
-        out.push(Command::new(
-            s,
-            spec.id,
-            spec.name,
-            &spec.keys,
-            move |a, _| execute(a, op),
-        ));
+        out.push(Command::new(s, spec.id, &spec.keys, move |a, _| {
+            execute(a, op)
+        }));
     }
 }
 

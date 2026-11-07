@@ -177,7 +177,7 @@ fn layer_palette_contains_targeted_automation_and_picker_owns_text() {
     let a = app();
     let ctx = egui::Context::default();
     let commands = commands::definitions(&a, Screen::Layers);
-    assert!(commands.iter().any(|c| c.id == "layer-automation"));
+    assert!(commands.iter().any(|c| c.id == "layer.automation"));
     assert!(!Screen::ParameterPicker.owns_keys());
     assert!(!Screen::ParameterInput.owns_keys());
     assert_eq!(commands::owner(&a, &ctx), Screen::Timeline);

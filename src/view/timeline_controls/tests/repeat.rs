@@ -115,6 +115,30 @@ fn markers(f: &Fixture) -> (f32, f32, (u64, u64)) {
                 .unwrap();
             (r.left(), r.right(), (480, 960))
         }
+        Screen::TrackOverviewSong => {
+            let mut xs: Vec<_> = f
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    Shape::Rect(r)
+                        if r.stroke.width == 1.0
+                            && r.rect.top() > row.bottom()
+                            && r.rect.height() > 40.0
+                            && r.rect.height() < 100.0
+                            && r.rect.width() > 200.0
+                            && row.x_range().contains(r.rect.left())
+                            && row.x_range().contains(r.rect.right()) =>
+                    {
+                        Some((r.rect.left(), r.rect.right()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            xs.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let &(left, right) = xs.first().expect("visible pattern boundary");
+            // The first pattern is partly scrolled out; the Scene's second body is measure 2.
+            (left, right, (1920, 3840))
+        }
         Screen::Song => {
             let cell = |measure| {
                 f.ctx.data(|d| {
