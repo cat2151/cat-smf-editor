@@ -138,7 +138,7 @@ fn warnings(ui: &mut egui::Ui, popup: egui::Id, warnings: &[String]) {
     if response.clicked() {
         ui.memory_mut(|m| m.toggle_popup(popup));
     }
-    let shown = egui::popup_below_widget(
+    let shown = crate::view::presentation::popup_below_widget(
         ui,
         popup,
         &response,

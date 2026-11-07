@@ -222,45 +222,57 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         a.patterns.recording = state;
         return;
     };
+    let visible = super::presentation::Native::Keyboard.visible(a, ctx, window::viewport());
+    let suspended_done = if !visible {
+        play::suspend(s);
+        play::advance(a, s)
+    } else {
+        false
+    };
     let builder = egui::ViewportBuilder::default()
         .with_title(window::TITLE)
         .with_position(s.position)
-        .with_inner_size(window::SIZE)
-        .with_visible(window::shown(ctx));
+        .with_inner_size(window::SIZE);
     let mut moved = None;
     let song = a.song_id;
     let window_span = crate::frame_trace::span("keyboard");
-    let done = ctx.show_viewport_immediate(window::viewport(), builder, |ctx, class| {
-        let _span = crate::frame_trace::span("keyboard/ui");
-        let native = class != egui::ViewportClass::Embedded;
-        if native {
-            moved = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min);
-            s.minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
-            if ctx.input(|i| i.viewport().close_requested()) {
-                if play::kept(a) {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+    let done = super::presentation::Native::Keyboard.show(
+        a,
+        ctx,
+        window::viewport(),
+        builder,
+        |a, ctx, class| {
+            let _span = crate::frame_trace::span("keyboard/ui");
+            let native = class != egui::ViewportClass::Embedded;
+            if native {
+                moved = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min);
+                s.minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    if play::kept(a) {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                    }
+                    return play::end(a, s, s.clock.elapsed());
                 }
-                return play::end(a, s, s.clock.elapsed());
             }
-        }
-        super::help::observe_recording(a, ctx);
-        // Embedded, this shares the root input whose modal already ran; a second one eats the palette's keys.
-        let input = native.then(|| modal::begin(a, ctx)).flatten();
-        let done = (s.first_read(ctx) && play::process(a, ctx, s)) || {
-            window::show(ctx, class, s);
-            match s.clicked.take() {
-                Some(window::Button::Browse) => {
-                    phrase::browse(a, ctx, s);
-                    false
+            super::help::observe_recording(a, ctx);
+            // Embedded, this shares the root input whose modal already ran; a second one eats the palette's keys.
+            let input = native.then(|| modal::begin(a, ctx)).flatten();
+            let done = (s.first_read(ctx) && play::process(a, ctx, s)) || {
+                window::show(ctx, class, s);
+                match s.clicked.take() {
+                    Some(window::Button::Browse) => {
+                        phrase::browse(a, ctx, s);
+                        false
+                    }
+                    b => b.is_some_and(|b| play::button(a, s, b)),
                 }
-                b => b.is_some_and(|b| play::button(a, s, b)),
+            };
+            if native {
+                modal::end(a, ctx, input);
             }
-        };
-        if native {
-            modal::end(a, ctx, input);
-        }
-        done
-    });
+            done
+        },
+    );
     drop(window_span);
     if let Some(at) = moved {
         companions::remember(a, companions::KEYBOARD, at);
@@ -270,6 +282,7 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
     } else if ctx.input_for(s.origin, |i| i.focused) {
         s.focused = false;
     }
+    let done = suspended_done || done.unwrap_or(false);
     if !done {
         if let Err(error) = capture::flush(a, s, false) {
             s.error = Some(error);

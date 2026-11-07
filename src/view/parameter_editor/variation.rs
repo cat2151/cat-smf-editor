@@ -96,37 +96,39 @@ pub(super) fn overlay(app: &mut App, ctx: &egui::Context, maximum: f64) {
     let mut confirm = false;
     let mut cancel = false;
     let mut open = true;
-    egui::Window::new("Macro variation")
-        .id(egui::Id::new("macro-variation-point"))
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .open(&mut open)
-        .show(ctx, |ui| {
-            let input = app.parameter_editor.input.as_mut().unwrap();
-            egui::ScrollArea::vertical()
-                .max_height(320.0)
-                .show(ui, |ui| {
-                    for i in 0..=maximum as usize {
-                        let response = ui.selectable_label(
-                            input.value == i as f64,
-                            format!("Variation {}", i + 1),
-                        );
-                        if response.clicked() {
-                            input.value = i as f64;
-                            confirm = true;
-                        }
-                        if input.reveal && input.value == i as f64 {
-                            response.scroll_to_me(Some(egui::Align::Center));
-                        }
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::ParameterInput,
+        egui::Id::new("macro-variation-point"),
+        "Macro variation",
+    )
+    .collapsible(false)
+    .resizable(false)
+    .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    .open(&mut open)
+    .show(ctx, |ui| {
+        let input = app.parameter_editor.input.as_mut().unwrap();
+        egui::ScrollArea::vertical()
+            .max_height(320.0)
+            .show(ui, |ui| {
+                for i in 0..=maximum as usize {
+                    let response = ui
+                        .selectable_label(input.value == i as f64, format!("Variation {}", i + 1));
+                    if response.clicked() {
+                        input.value = i as f64;
+                        confirm = true;
                     }
-                });
-            input.reveal = false;
-            ui.horizontal(|ui| {
-                confirm |= ui.button("Apply  Enter").clicked();
-                cancel |= ui.button("Cancel  Esc").clicked();
+                    if input.reveal && input.value == i as f64 {
+                        response.scroll_to_me(Some(egui::Align::Center));
+                    }
+                }
             });
+        input.reveal = false;
+        ui.horizontal(|ui| {
+            confirm |= ui.button("Apply  Enter").clicked();
+            cancel |= ui.button("Cancel  Esc").clicked();
         });
+    });
     if !open || cancel {
         app.parameter_editor.input = None;
         app.parameter_editor.draft = None;

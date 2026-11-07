@@ -328,9 +328,10 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
             .map(|at| (at, s.companions.settings_size()));
         companions::place(a, ctx, keyboard, other, SIZE)
     });
+    let visible = super::super::presentation::Native::Keyboard.visible(a, ctx, viewport());
     let b = s.capture.as_mut().unwrap();
     b.place = Some(at);
-    if std::mem::take(&mut b.focus) {
+    if visible && std::mem::take(&mut b.focus) {
         ctx.send_viewport_cmd_to(viewport(), egui::ViewportCommand::Focus);
     }
     let title = title(a, s);
@@ -339,47 +340,53 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
         .with_title(&title)
         .with_position(at)
         .with_inner_size(SIZE)
-        .with_visible(window::shown(ctx));
+        .with_active(false);
     let mut clicked = None;
     let _window_span = crate::frame_trace::span("capture");
-    ctx.show_viewport_immediate(viewport(), builder, |ctx, class| {
-        let _span = crate::frame_trace::span("capture/ui");
-        if auditioning(a, s) {
-            ctx.request_repaint();
-        }
-        if class == egui::ViewportClass::Embedded {
-            let position = position(a, s);
-            let tempo = super::super::patterns::timing::cursor_map(a);
-            egui::Window::new(&title)
-                .id(egui::Id::new(PLACE))
-                .show(ctx, |ui| {
+    super::super::presentation::Native::Keyboard.show(
+        a,
+        ctx,
+        viewport(),
+        builder,
+        |a, ctx, class| {
+            let _span = crate::frame_trace::span("capture/ui");
+            if auditioning(a, s) {
+                ctx.request_repaint();
+            }
+            if class == egui::ViewportClass::Embedded {
+                let position = position(a, s);
+                let tempo = super::super::patterns::timing::cursor_map(a);
+                egui::Window::new(&title)
+                    .id(egui::Id::new(PLACE))
+                    .show(ctx, |ui| {
+                        clicked = rows::list(ui, s, position, tempo.as_ref())
+                    });
+                return;
+            }
+            if ctx.input(|i| i.viewport().close_requested()) {
+                close(a, s);
+                return;
+            }
+            if let Some(at) = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min) {
+                companions::remember(a, PLACE, at);
+            }
+            super::super::help::observe_recording(a, ctx);
+            let input = super::modal::begin(a, ctx);
+            if s.first_read(ctx) && !filter::owns_keys(ctx) {
+                keys(a, s, &ctx.input(|i| i.events.clone()));
+            }
+            if s.capture.is_none() {
+                ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
+            } else {
+                let position = position(a, s);
+                let tempo = super::super::patterns::timing::cursor_map(a);
+                egui::CentralPanel::default().show(ctx, |ui| {
                     clicked = rows::list(ui, s, position, tempo.as_ref())
                 });
-            return;
-        }
-        if ctx.input(|i| i.viewport().close_requested()) {
-            close(a, s);
-            return;
-        }
-        if let Some(at) = ctx.input(|i| i.viewport().outer_rect).map(|r| r.min) {
-            companions::remember(a, PLACE, at);
-        }
-        super::super::help::observe_recording(a, ctx);
-        let input = super::modal::begin(a, ctx);
-        if s.first_read(ctx) && !filter::owns_keys(ctx) {
-            keys(a, s, &ctx.input(|i| i.events.clone()));
-        }
-        if s.capture.is_none() {
-            ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
-        } else {
-            let position = position(a, s);
-            let tempo = super::super::patterns::timing::cursor_map(a);
-            egui::CentralPanel::default().show(ctx, |ui| {
-                clicked = rows::list(ui, s, position, tempo.as_ref())
-            });
-        }
-        super::modal::end(a, ctx, input);
-    });
+            }
+            super::modal::end(a, ctx, input);
+        },
+    );
     match clicked {
         Some(rows::Click::Filter(container)) => filter::set(a, s, container),
         Some(rows::Click::Take(i)) => {

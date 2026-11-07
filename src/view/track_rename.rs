@@ -76,7 +76,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         !ime && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
     let mut cancel =
         !ime && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-    egui::Modal::new(egui::Id::new("track-rename")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("track-rename")).show(ctx, |ui| {
         ui.heading(format!("Track {} · Rename", editing.track + 1));
         let mut output = egui::TextEdit::singleline(&mut editing.text)
             .desired_width(320.0)

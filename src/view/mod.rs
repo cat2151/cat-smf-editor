@@ -24,6 +24,7 @@ pub(crate) mod palette;
 pub(crate) mod patterns;
 pub(crate) mod piano_roll;
 mod pitch_keyboard;
+pub(crate) mod presentation;
 mod row;
 pub(crate) use row::beat_color;
 pub(crate) mod files;
@@ -114,6 +115,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     crate::play::mascot::update(app);
     app.frame_started(ctx);
     let style_input = edit_style::suspend_background(app, ctx);
+    presentation::prepare(app, ctx);
     let event_list_drawn = {
         let _span = crate::frame_trace::span("contents");
         show_contents(app, ctx)
@@ -145,6 +147,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     voicevox::progress::show(app, ctx);
     help::observe(app, ctx);
     help::show(app, ctx);
+    presentation::finish(app, ctx);
 }
 
 fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
@@ -187,6 +190,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
         if !mml_owns_input && !selection_owns_input {
             crate::play::transport::stop_shortcut(app, ctx);
             undo::shortcuts(app, ctx);
+            presentation::refresh(app, ctx);
             crate::view::layers::show(app, ctx);
             {
                 let _span = crate::frame_trace::span("contents/drums");
@@ -217,6 +221,9 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
     app.audition.pump();
     if app.loaded.is_some() {
         egui::TopBottomPanel::top("transport").show(ctx, |ui| {
+            if !presentation::background_enabled(app) {
+                ui.disable();
+            }
             crate::play::transport::status(app, ui);
         });
 
@@ -232,6 +239,9 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
             .resizable(true)
             .default_width(260.0)
             .show(ctx, |ui| {
+                if !presentation::background_enabled(app) {
+                    ui.disable();
+                }
                 ui.horizontal(|ui| {
                     ui.strong("Tracks");
                     if let Some(loaded) = &app.loaded {
@@ -253,7 +263,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
                                 d.insert_temp(egui::Id::new(("actual-track", index)), response.rect)
                             });
                             if can_rename {
-                                response.context_menu(|ui| {
+                                crate::view::presentation::context_menu(&response, |ui| {
                                     if ui.button("Rename…").clicked() {
                                         rename_track = Some(index);
                                         ui.close_menu();
@@ -289,6 +299,9 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
     let mut replace_effect = None;
     let mut map_click = None;
     egui::CentralPanel::default().show(ctx, |ui| {
+        if !presentation::background_enabled(app) {
+            ui.disable();
+        }
         if !invalid_smf && let Some(error) = &app.load_error {
             ui.colored_label(Color32::LIGHT_RED, error);
         }
@@ -319,6 +332,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
     if confirming {
         return app.loaded.is_some();
     }
+    presentation::refresh(app, ctx);
     crate::player::selection::show(app, ctx);
     crate::play::mixer::show(app, ctx);
     crate::view::event_selection::show(app, ctx);
@@ -338,7 +352,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
     crate::view::trill_edit::show(app, ctx);
     #[cfg(windows)]
     if crate::player::resident_link::loading(app) {
-        egui::Modal::new(egui::Id::new("browser-loading")).show(ctx, |ui| {
+        crate::view::presentation::modal(ctx, egui::Id::new("browser-loading")).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.spinner();
                 ui.label("now loading...");

@@ -297,8 +297,8 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
     true
 }
 
-/// `true` closes the window.
-pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool {
+/// Advance audio and capture independently of window visibility or queued input.
+pub(super) fn advance(a: &mut App, s: &mut Session) -> bool {
     super::choices::poll_kit(a, s);
     follow_click(s);
     super::phrase::follow(a, s);
@@ -311,6 +311,31 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
         s.error = Some(error);
     }
     super::sweep::follow(s, at);
+    false
+}
+
+pub(super) fn suspend(s: &mut Session) {
+    let pads: Vec<_> = s
+        .recorder
+        .as_ref()
+        .map_or(vec![], |r| r.held_pads().collect());
+    let at = s.clock.elapsed();
+    for pad in pads {
+        sound(s, pad, false, at);
+    }
+    s.mouse = [None; 2];
+}
+
+/// `true` closes the window.
+pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool {
+    if advance(a, s) {
+        return true;
+    }
+    if super::super::presentation::popup_owns_input(ctx) {
+        suspend(s);
+        return false;
+    }
+    let at = s.clock.elapsed();
     let focused = ctx.input(|i| {
         i.focused
             && !i

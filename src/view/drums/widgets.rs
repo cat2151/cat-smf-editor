@@ -7,20 +7,21 @@ const SOLO_HOVER: &str = "Loopでこのtrackだけを鳴らす  S";
 
 pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) {
     if app.drum_editor.confirm_create {
-        let response = egui::Modal::new(egui::Id::new("drum-create")).show(ctx, |ui| {
-            ui.label("Create a new drum track?");
-            ui.horizontal(|ui| {
-                if ui.button("Yes · Enter").clicked() {
-                    *action = Some(Op::Create);
-                }
-                if ui.button("No · Esc").clicked() {
-                    *action = Some(Op::Cancel);
+        let response =
+            crate::view::presentation::modal(ctx, egui::Id::new("drum-create")).show(ctx, |ui| {
+                ui.label("Create a new drum track?");
+                ui.horizontal(|ui| {
+                    if ui.button("Yes · Enter").clicked() {
+                        *action = Some(Op::Create);
+                    }
+                    if ui.button("No · Esc").clicked() {
+                        *action = Some(Op::Cancel);
+                    }
+                });
+                if let Some(error) = &app.drum_editor.error {
+                    ui.colored_label(Color32::LIGHT_RED, error);
                 }
             });
-            if let Some(error) = &app.drum_editor.error {
-                ui.colored_label(Color32::LIGHT_RED, error);
-            }
-        });
         if response.should_close() && action.is_none() {
             *action = Some(Op::Cancel);
         }

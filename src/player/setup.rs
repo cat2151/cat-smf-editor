@@ -165,15 +165,18 @@ fn show_setup(app: &mut App, ctx: &egui::Context) -> bool {
     if let Some(error) = setup.error.clone() {
         let mut retry = false;
         let mut close = false;
-        let modal = egui::Modal::new(egui::Id::new("dependency-error")).show(ctx, |ui| {
-            ui.heading("Setup");
-            ui.colored_label(egui::Color32::LIGHT_RED, error);
-            ui.hyperlink_to("Download cat-plugin-player", super::selection::DOWNLOAD);
-            ui.horizontal(|ui| {
-                retry = ui.button("Retry").clicked();
-                close = ui.button("Later").clicked();
-            });
-        });
+        let modal = crate::view::presentation::modal(ctx, egui::Id::new("dependency-error")).show(
+            ctx,
+            |ui| {
+                ui.heading("Setup");
+                ui.colored_label(egui::Color32::LIGHT_RED, error);
+                ui.hyperlink_to("Download cat-plugin-player", super::selection::DOWNLOAD);
+                ui.horizontal(|ui| {
+                    retry = ui.button("Retry").clicked();
+                    close = ui.button("Later").clicked();
+                });
+            },
+        );
         if retry {
             setup.begin(setup.explicit.clone(), ctx);
         }
@@ -183,14 +186,17 @@ fn show_setup(app: &mut App, ctx: &egui::Context) -> bool {
         return true;
     }
     if setup.download.is_some() || setup.scan.is_some() {
-        egui::Modal::new(egui::Id::new("dependency-progress")).show(ctx, |ui| {
-            ui.heading(if setup.download.is_some() {
-                "cat-plugin-player"
-            } else {
-                "Audio plugins"
-            });
-            ui.spinner();
-        });
+        crate::view::presentation::modal(ctx, egui::Id::new("dependency-progress")).show(
+            ctx,
+            |ui| {
+                ui.heading(if setup.download.is_some() {
+                    "cat-plugin-player"
+                } else {
+                    "Audio plugins"
+                });
+                ui.spinner();
+            },
+        );
         ctx.request_repaint_after(Duration::from_millis(50));
         return true;
     }

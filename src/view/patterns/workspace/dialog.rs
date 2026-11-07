@@ -181,7 +181,7 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
         .filter(|(_, name)| d.search.matches_text(name))
         .collect::<Vec<_>>();
     let mut ready = true;
-    egui::Modal::new(egui::Id::new("arrangement-input")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("arrangement-input")).show(ctx, |ui| {
         ui.set_width(400.0);
         ui.heading(match d.purpose {
             Purpose::Create => "Create scene",

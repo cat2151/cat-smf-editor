@@ -52,11 +52,15 @@ impl Kind {
             Self::Melody => "Step sequencer",
         };
         let width = (ctx.screen_rect().width() - 32.0).max(1.0);
-        let builder = egui::Window::new(format!("{name} · {track_title}"))
-            .id(self.id())
-            .open(open)
-            .collapsible(false)
-            .max_width(width);
+        let builder = crate::view::presentation::window(
+            ctx,
+            crate::view::commands::Screen::Drums,
+            self.id(),
+            format!("{name} · {track_title}"),
+        )
+        .open(open)
+        .collapsible(false)
+        .max_width(width);
         // Deliberate layout differences: four fixed rows versus scrollable kit and pitch rows.
         let mut builder = match self {
             Self::Drums => builder

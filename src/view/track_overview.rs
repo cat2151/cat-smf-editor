@@ -302,7 +302,8 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         let (track, tick) = a.track_overview.cell;
         jump(a, track, tick);
     });
-    add("play.open", &[Key::P], false, |a, _| {
+    add("play.open", &[Key::P], false, |a, ctx| {
+        a.playback.viewport = ctx.viewport_id();
         if !song::enabled(a) {
             focus_cell(a);
         }

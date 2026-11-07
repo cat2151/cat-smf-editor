@@ -18,7 +18,7 @@ mod boundary;
 mod keybind_tests;
 #[cfg(test)]
 mod tests;
-pub(crate) use ownership::{owner, root_idle, Screen};
+pub(crate) use ownership::{owner, root_idle, root_owner, Screen};
 
 type Execute = dyn Fn(&mut App, &egui::Context) -> bool;
 
@@ -303,6 +303,9 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(guard, token));
     // Before dispatch: Esc for an open popup must not also cancel a selection under it.
     super::track_pane::close_warnings_on_escape(app, ctx);
+    if super::presentation::popup_owns_input(ctx) {
+        return;
+    }
     let mut screen = owner(app, ctx);
     if screen == Screen::Lyrics {
         crate::view::voicevox::lyrics::keep_ime_enter(app, ctx);

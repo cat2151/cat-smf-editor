@@ -84,37 +84,37 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             .with_inner_size([width, height]);
     }
     let mut close = false;
-    let visible = companion_visible(app, ctx);
-    builder = builder.with_visible(visible);
     let window_span = crate::frame_trace::span("analysis");
-    ctx.show_viewport_immediate(viewport(app.analysis.placement), builder, |ctx, _class| {
-        let _span = crate::frame_trace::span("analysis/ui");
-        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(visible));
-        if !visible {
-            return;
-        }
-        let palette_input = crate::view::modal::begin(app, ctx);
-        crate::view::commands::route(app, ctx);
-        let (requested, outer, inner) = ctx.input(|i| {
-            let viewport = i.viewport();
-            (
-                viewport.close_requested(),
-                viewport.outer_rect,
-                viewport.inner_rect,
-            )
-        });
-        close = requested;
-        if let (Some(outer), Some(inner)) = (outer, inner) {
-            app.analysis.seen = Some([outer.min.x, outer.min.y, inner.width(), inner.height()]);
-        }
-        egui::CentralPanel::default().show(ctx, |ui| {
-            body(ui, spectrum.as_deref(), lissajous.as_deref());
-        });
-        crate::view::modal::end(app, ctx, palette_input);
-        // The child viewport is painted by the root update, which must keep running.
-        ctx.request_repaint_after_for(Duration::from_millis(50), egui::ViewportId::ROOT);
-        ctx.request_repaint_after(Duration::from_millis(50));
-    });
+    super::presentation::Native::Analysis.show(
+        app,
+        ctx,
+        viewport(app.analysis.placement),
+        builder,
+        |app, ctx, _class| {
+            let _span = crate::frame_trace::span("analysis/ui");
+            let palette_input = crate::view::modal::begin(app, ctx);
+            crate::view::commands::route(app, ctx);
+            let (requested, outer, inner) = ctx.input(|i| {
+                let viewport = i.viewport();
+                (
+                    viewport.close_requested(),
+                    viewport.outer_rect,
+                    viewport.inner_rect,
+                )
+            });
+            close = requested;
+            if let (Some(outer), Some(inner)) = (outer, inner) {
+                app.analysis.seen = Some([outer.min.x, outer.min.y, inner.width(), inner.height()]);
+            }
+            egui::CentralPanel::default().show(ctx, |ui| {
+                body(ui, spectrum.as_deref(), lissajous.as_deref());
+            });
+            crate::view::modal::end(app, ctx, palette_input);
+            // The child viewport is painted by the root update, which must keep running.
+            ctx.request_repaint_after_for(Duration::from_millis(50), egui::ViewportId::ROOT);
+            ctx.request_repaint_after(Duration::from_millis(50));
+        },
+    );
     drop(window_span);
     let state = &mut app.analysis;
     // The editor is the foreground window while it has focus.
@@ -131,19 +131,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 
 /// Native owned windows sit above every egui layer. Use the same input owner as
 /// command routing, so every modal (including future ones) gets an unobscured root.
+#[cfg(test)]
 pub(crate) fn companion_visible(app: &App, ctx: &egui::Context) -> bool {
-    use crate::view::commands::{owner, Screen};
-    !(app.palette.owns_root() || app.command_input.owns_root())
-        && !app.patterns.workspace.input_open()
-        && matches!(
-            owner(app, ctx),
-            Screen::Main
-                | Screen::Timeline
-                | Screen::Mixer
-                | Screen::Play
-                | Screen::Drums
-                | Screen::DrumInput
-        )
+    super::presentation::companions_visible(app, ctx)
 }
 
 pub(crate) fn viewport(placement: u64) -> egui::ViewportId {

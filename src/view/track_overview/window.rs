@@ -250,7 +250,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                         {
                             state.menu = Some((slot, at(pos)));
                         }
-                        response.context_menu(|ui| {
+                        crate::view::presentation::context_menu(&response, |ui| {
                             let Some((track, tick)) = state.menu else {
                                 ui.close_menu();
                                 return;
@@ -262,11 +262,18 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
                                     "t — track play"
                                 })
                                 .clicked()
+                                || ui.input_mut(|i| {
+                                    i.consume_key(egui::Modifiers::NONE, egui::Key::T)
+                                })
                             {
                                 action = Some(Action::TrackPlay(track, tick));
                                 ui.close_menu();
                             }
-                            if ui.button("g — jump").clicked() {
+                            if ui.button("g — jump").clicked()
+                                || ui.input_mut(|i| {
+                                    i.consume_key(egui::Modifiers::NONE, egui::Key::G)
+                                })
+                            {
                                 action = Some(Action::Jump(track, tick));
                                 ui.close_menu();
                             }

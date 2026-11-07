@@ -5,12 +5,19 @@ pub(super) fn window(ctx: &egui::Context, maximized: bool, title: String) -> egu
     if crate::view::command_input::preview_active(ctx) {
         return crate::view::command_input::preview_window(ctx, title);
     }
-    let window = egui::Window::new(title)
-        .id(egui::Id::new("parameter-curve"))
-        .collapsible(false);
+    let window = crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::Timeline,
+        egui::Id::new(if maximized {
+            "parameter-curve-maximized"
+        } else {
+            "parameter-curve"
+        }),
+        title,
+    )
+    .collapsible(false);
     if maximized {
         window
-            .id(egui::Id::new("parameter-curve-maximized"))
             .title_bar(false)
             .frame(egui::Frame::NONE.fill(ctx.style().visuals.window_fill()))
             .fixed_rect(ctx.screen_rect())

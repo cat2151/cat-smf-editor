@@ -6,7 +6,7 @@ mod feedback;
 mod migemo;
 mod navigation;
 mod ranking;
-mod windows;
+pub(crate) mod windows;
 pub(crate) const WORDING: &str = include_str!("tests/wording.toml");
 /// Makes every later opening read `text`. The directory must outlive those openings.
 pub(crate) fn worded(a: &mut App, text: &str) -> tempfile::TempDir {

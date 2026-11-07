@@ -152,7 +152,7 @@ pub(super) fn collect(s: Screen, out: &mut Vec<Command>) {
 }
 pub(super) fn show(a: &mut App, ctx: &egui::Context) {
     let mut action = None;
-    egui::Modal::new(egui::Id::new("first-pattern")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("first-pattern")).show(ctx, |ui| {
         if let Some(p) = &mut a.patterns.first {
             if p.initial {
                 ui.heading("楽器を選んでください");

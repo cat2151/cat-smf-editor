@@ -6,7 +6,7 @@ use crate::view::patterns::workspace_tests::{button, context, focus, key, verifi
 use cat_smf_editor::edit::tracks::new_song;
 use eframe::egui::{self, Key, Modifiers};
 
-const ALL: [Screen; 46] = [
+pub(crate) const ALL: [Screen; 46] = [
     Screen::Global,
     Screen::Main,
     Screen::EditStyle,
@@ -78,7 +78,7 @@ fn note(a: &App) -> usize {
 }
 
 /// `screen` の状態の app と、その画面を出している窓。画面を足すと、この match が教える。
-fn fixture(screen: Screen) -> Option<(App, egui::Context, Vec<egui::ViewportId>)> {
+pub(crate) fn fixture(screen: Screen) -> Option<(App, egui::Context, Vec<egui::ViewportId>)> {
     use crate::view::*;
     Some(match screen {
         Screen::Global => return None,
@@ -237,30 +237,37 @@ fn every_screen_opens_the_palette_in_its_own_window() {
     }
 }
 
-/// 窓を足したら、その窓を `fixture` で開いて試すこと。
+/// New native windows must use the presentation gateway and get a palette fixture.
 #[test]
 fn every_window_is_tried() {
-    fn count(dir: &std::path::Path) -> usize {
-        std::fs::read_dir(dir)
-            .unwrap()
-            .map(|e| e.unwrap().path())
-            .map(|p| {
-                if p.is_dir() {
-                    count(&p)
-                } else if p.extension().is_some_and(|x| x == "rs")
-                    && !p.to_string_lossy().contains("test")
-                {
-                    std::fs::read_to_string(&p)
-                        .unwrap()
-                        .matches(".show_viewport_immediate(")
-                        .count()
-                } else {
-                    0
-                }
-            })
-            .sum()
+    fn sources(dir: &std::path::Path, out: &mut Vec<(std::path::PathBuf, String)>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                sources(&path, out);
+            } else if path.extension().is_some_and(|x| x == "rs")
+                && !path.to_string_lossy().contains("test")
+            {
+                out.push((path.clone(), std::fs::read_to_string(path).unwrap()));
+            }
+        }
     }
-    // analysis・help・pane(Scene と Song)・keyboard・Capture・設定・Piano
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    assert_eq!(count(&src), 7);
+    let mut files = vec![];
+    sources(&src, &mut files);
+    let native = regex::Regex::new(r"presentation::Native::\w+\.show\(").unwrap();
+    let mut registered = 0;
+    for (path, source) in files {
+        if path.ends_with("presentation.rs") {
+            continue;
+        }
+        assert!(
+            !source.contains(".show_viewport_immediate("),
+            "native gateway bypass: {}",
+            path.display()
+        );
+        registered += native.find_iter(&source).count();
+    }
+    // Analysis, help, Scene/Song, keyboard, Capture, settings, piano.
+    assert_eq!(registered, 7, "add a fixture for each new native window");
 }

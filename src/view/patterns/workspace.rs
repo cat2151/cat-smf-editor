@@ -286,14 +286,15 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
         if !mode::song_window(a) {
             break;
         }
-        let visible = if let Some(d) = &a.patterns.workspace.dialog {
+        let requested = if let Some(d) = &a.patterns.workspace.dialog {
             d.viewport == p.viewport()
         } else {
             (p == Pane::Song || a.patterns.workspace.scene_window)
                 && !(a.palette.owns_root() || a.command_input.owns_root())
                 && !a.patterns.confirming_creation()
-                && crate::view::analysis::companion_visible(a, ctx)
         };
+        let visible =
+            requested && crate::view::presentation::Native::Workspace.visible(a, ctx, p.viewport());
         if !visible {
             match p {
                 Pane::Song => a.patterns.workspace.timeline.suspend(),
@@ -312,14 +313,16 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
             Pane::Scene => ("scene", "scene/ui"),
         };
         let window_span = crate::frame_trace::span(window);
-        ctx.show_viewport_immediate(
+        crate::view::presentation::Native::Workspace.show(
+            a,
+            ctx,
             p.viewport(),
             super::windows::builder(opened)
                 .with_title(p.title())
                 .with_active(false)
                 .with_min_inner_size([500.0, 360.0])
-                .with_visible(visible),
-            |ctx, class| {
+                .with_visible(requested),
+            |a, ctx, class| {
                 let _span = crate::frame_trace::span(ui);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(visible));
                 if !visible {

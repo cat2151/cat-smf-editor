@@ -5,7 +5,7 @@ use eframe::egui;
 pub(super) fn show(ctx: &egui::Context, state: &mut State, app: &crate::app::App) -> Action {
     let mut action = state.command.take().unwrap_or(Action::None);
     let name = crate::view::patterns::presentation::name(app, app.track);
-    let modal = egui::Modal::new(egui::Id::new("mml-editor"))
+    let modal = crate::view::presentation::modal(ctx, egui::Id::new("mml-editor"))
         .frame(crate::view::patterns::presentation::modal_frame(
             app, ctx, app.track,
         ))

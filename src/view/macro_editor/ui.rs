@@ -14,10 +14,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let window = if preview {
         crate::view::command_input::preview_window(ctx, s.title.clone())
     } else {
-        egui::Window::new(&s.title)
-            .id(egui::Id::new("macro-editor"))
-            .collapsible(false)
-            .resizable(false)
+        crate::view::presentation::window(
+            ctx,
+            crate::view::commands::Screen::MacroEditor,
+            egui::Id::new("macro-editor"),
+            &s.title,
+        )
+        .collapsible(false)
+        .resizable(false)
     };
     window.open(&mut open).show(ctx, |ui| {
         egui::Grid::new("macro-rows")

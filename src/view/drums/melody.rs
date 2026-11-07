@@ -6,6 +6,8 @@ use cat_smf_editor::score::{
     step_notes::{self, Cell, Length, Note},
 };
 pub(crate) mod commands;
+mod controls;
+mod gesture;
 mod widgets;
 
 const VELOCITY: u8 = 100;
@@ -25,6 +27,7 @@ pub(crate) struct State {
     pending: Option<f32>,
     /// Where a drag on the zoom bar started, from the bar's top.
     drag: Option<f32>,
+    gesture: Option<gesture::Gesture>,
 }
 
 /// An ordinary (neither Drum nor Drum kit) container's pattern is being edited.

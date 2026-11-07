@@ -157,7 +157,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, state: &mut State, fresh:
             super::clear(ctx);
         }
     }
-    egui::Modal::new(egui::Id::new("insert-event"))
+    crate::view::presentation::modal(ctx, egui::Id::new("insert-event"))
         .area(
             egui::Modal::default_area(egui::Id::new("insert-event"))
                 .anchor(egui::Align2::CENTER_TOP, [0.0, 8.0]),

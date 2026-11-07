@@ -267,24 +267,29 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut clicked = None;
-    egui::Window::new("Chord timing")
-        .collapsible(false)
-        .resizable(false)
-        .order(egui::Order::Foreground)
-        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
-        .show(ctx, |ui| {
-            egui::Grid::new("chord-timing").show(ui, |ui| {
-                for (i, &(.., label, action)) in ACTIONS.iter().enumerate() {
-                    if ui.button(label).clicked() {
-                        clicked = Some(action);
-                    }
-                    // j k, h l, H L, q, Enter Esc.
-                    if matches!(i, 1 | 3 | 5 | 6) {
-                        ui.end_row();
-                    }
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::ChordTiming,
+        egui::Id::new("Chord timing"),
+        "Chord timing",
+    )
+    .collapsible(false)
+    .resizable(false)
+    .order(egui::Order::Foreground)
+    .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
+    .show(ctx, |ui| {
+        egui::Grid::new("chord-timing").show(ui, |ui| {
+            for (i, &(.., label, action)) in ACTIONS.iter().enumerate() {
+                if ui.button(label).clicked() {
+                    clicked = Some(action);
                 }
-            });
+                // j k, h l, H L, q, Enter Esc.
+                if matches!(i, 1 | 3 | 5 | 6) {
+                    ui.end_row();
+                }
+            }
         });
+    });
     if let Some(action) = clicked {
         run(app, action);
     }

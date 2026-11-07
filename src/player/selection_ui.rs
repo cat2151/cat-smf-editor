@@ -13,15 +13,20 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut setup = false;
-    egui::Window::new("Player selection")
-        .open(&mut app.player_selection.open)
-        .show(ctx, |ui| {
-            if let Some(error) = &app.player_selection.error {
-                ui.colored_label(egui::Color32::LIGHT_RED, error);
-            }
-            ui.hyperlink_to("Download cat-plugin-player", DOWNLOAD);
-            setup = ui.button("Setup").clicked();
-        });
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::Browser,
+        egui::Id::new("Player selection"),
+        "Player selection",
+    )
+    .open(&mut app.player_selection.open)
+    .show(ctx, |ui| {
+        if let Some(error) = &app.player_selection.error {
+            ui.colored_label(egui::Color32::LIGHT_RED, error);
+        }
+        ui.hyperlink_to("Download cat-plugin-player", DOWNLOAD);
+        setup = ui.button("Setup").clicked();
+    });
     if setup {
         app.player_selection.open = false;
         app.player_selection

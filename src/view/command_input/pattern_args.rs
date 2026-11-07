@@ -296,7 +296,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut State, fresh: bool)
         super::clear(ctx);
     }
     let mut clicked = None;
-    egui::Modal::new(egui::Id::new("pattern-argument")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("pattern-argument")).show(ctx, |ui| {
         ui.set_width(380.0);
         ui.heading(s.action.label());
         ui.label(if s.midi {

@@ -121,6 +121,10 @@ pub(crate) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
 }
 
 pub(super) fn apply(a: &mut App, action: Action) {
+    if a.drum_editor.melody.gesture.take().is_some() && matches!(action, Action::Common(Op::Cancel))
+    {
+        return;
+    }
     let result = match action {
         Action::Move(rows, steps) => {
             move_cursor(a, rows, steps);

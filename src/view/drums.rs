@@ -23,6 +23,8 @@ mod kit_native_tests;
 mod layout_tests;
 pub(crate) mod melody;
 #[cfg(test)]
+mod melody_gesture_tests;
+#[cfg(test)]
 mod melody_open_tests;
 #[cfg(test)]
 mod melody_rows_tests;

@@ -12,7 +12,7 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) -> bool {
     };
     let mut create = false;
     let mut quit = false;
-    egui::Modal::new(egui::Id::new("missing-last-mid")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("missing-last-mid")).show(ctx, |ui| {
         ui.set_max_width(480.0);
         ui.strong(path.display().to_string());
         ui.label("前回開いていたファイルが見つかりません");

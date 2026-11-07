@@ -82,43 +82,44 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let mut apply = false;
     let mut cancel = false;
     let mut changed = false;
-    let response = egui::Modal::new(egui::Id::new("trill-edit")).show(ctx, |ui| {
-        ui.heading("Trill");
-        egui::Grid::new("trill-timing").show(ui, |ui| {
-            ui.label("First pitch");
-            ui.horizontal(|ui| {
-                changed |= ui
-                    .selectable_value(&mut editing.upper, true, "Upper")
-                    .changed();
-                changed |= ui
-                    .selectable_value(&mut editing.upper, false, "Lower")
-                    .changed();
-            });
-            ui.end_row();
-            for (label, seconds) in [
-                ("First note", &mut editing.first),
-                ("Interval", &mut editing.interval),
-            ] {
-                ui.label(label);
-                changed |= ui
-                    .add(
-                        egui::DragValue::new(seconds)
-                            .speed(0.001)
-                            .max_decimals(9)
-                            .suffix(" s"),
-                    )
-                    .changed();
+    let response =
+        crate::view::presentation::modal(ctx, egui::Id::new("trill-edit")).show(ctx, |ui| {
+            ui.heading("Trill");
+            egui::Grid::new("trill-timing").show(ui, |ui| {
+                ui.label("First pitch");
+                ui.horizontal(|ui| {
+                    changed |= ui
+                        .selectable_value(&mut editing.upper, true, "Upper")
+                        .changed();
+                    changed |= ui
+                        .selectable_value(&mut editing.upper, false, "Lower")
+                        .changed();
+                });
                 ui.end_row();
+                for (label, seconds) in [
+                    ("First note", &mut editing.first),
+                    ("Interval", &mut editing.interval),
+                ] {
+                    ui.label(label);
+                    changed |= ui
+                        .add(
+                            egui::DragValue::new(seconds)
+                                .speed(0.001)
+                                .max_decimals(9)
+                                .suffix(" s"),
+                        )
+                        .changed();
+                    ui.end_row();
+                }
+            });
+            if let Some(error) = &editing.error {
+                ui.colored_label(egui::Color32::LIGHT_RED, error);
             }
+            ui.horizontal(|ui| {
+                apply = ui.button("Apply").clicked();
+                cancel = ui.button("Cancel").clicked();
+            });
         });
-        if let Some(error) = &editing.error {
-            ui.colored_label(egui::Color32::LIGHT_RED, error);
-        }
-        ui.horizontal(|ui| {
-            apply = ui.button("Apply").clicked();
-            cancel = ui.button("Cancel").clicked();
-        });
-    });
     cancel |= response.should_close() && !crate::view::modal::suspended(ctx);
     if cancel {
         if !editing.previewed {

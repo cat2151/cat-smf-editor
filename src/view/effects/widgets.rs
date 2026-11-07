@@ -65,7 +65,7 @@ pub(super) fn show(
     if crate::view::command_input::preview_active(ctx) {
         crate::view::command_input::preview_window(ctx, "Preview").show(ctx, contents);
     } else {
-        egui::Modal::new(egui::Id::new("effect-chain")).show(ctx, contents);
+        crate::view::presentation::modal(ctx, egui::Id::new("effect-chain")).show(ctx, contents);
     };
     actions
 }

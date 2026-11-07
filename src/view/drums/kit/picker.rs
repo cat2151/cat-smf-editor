@@ -156,87 +156,91 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
     let mut preview = false;
     let mut confirm = false;
     let mut cancel = false;
-    egui::Window::new("Note")
-        .id(egui::Id::new("kit-note-picker"))
-        .open(&mut open)
-        .collapsible(false)
-        .default_size([420.0, 420.0])
-        .show(ctx, |ui| {
-            if p.editing {
-                let response = ui.text_edit_singleline(&mut p.query);
-                if std::mem::take(&mut p.focus) {
-                    response.request_focus();
-                }
-            } else if ui
-                .button(format!("/  {}", p.query))
-                .on_hover_text("Note検索 · /")
-                .clicked()
-            {
-                p.editing = true;
-                p.focus = true;
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::DrumInput,
+        egui::Id::new("kit-note-picker"),
+        "Note",
+    )
+    .open(&mut open)
+    .collapsible(false)
+    .default_size([420.0, 420.0])
+    .show(ctx, |ui| {
+        if p.editing {
+            let response = ui.text_edit_singleline(&mut p.query);
+            if std::mem::take(&mut p.focus) {
+                response.request_focus();
             }
-            let reveal = std::mem::take(&mut p.reveal);
-            let area = egui::ScrollArea::vertical()
-                .animated(false)
-                .max_height(320.0);
-            let mut selected_rect = None;
-            let scroll = area.show(ui, |ui| {
-                for note in &notes {
-                    let selected = p.selected == Some(note.note);
-                    let r = ui
-                        .add_sized(
-                            [ui.available_width(), 28.0],
-                            egui::Button::new(format!("{}  {}", note.note, note.name))
-                                .truncate()
-                                .selected(selected),
-                        )
-                        .on_hover_text(&note.name);
-                    if selected {
-                        selected_rect = Some(r.rect);
-                    }
-                    #[cfg(test)]
-                    ctx.data_mut(|d| {
-                        d.insert_temp(egui::Id::new(("kit-picker-note", note.note)), r.rect)
-                    });
-                    if r.clicked() {
-                        p.selected = Some(note.note);
-                        preview = true;
-                    }
-                    if r.double_clicked() {
-                        confirm = true;
-                    }
+        } else if ui
+            .button(format!("/  {}", p.query))
+            .on_hover_text("Note検索 · /")
+            .clicked()
+        {
+            p.editing = true;
+            p.focus = true;
+        }
+        let reveal = std::mem::take(&mut p.reveal);
+        let area = egui::ScrollArea::vertical()
+            .animated(false)
+            .max_height(320.0);
+        let mut selected_rect = None;
+        let scroll = area.show(ui, |ui| {
+            for note in &notes {
+                let selected = p.selected == Some(note.note);
+                let r = ui
+                    .add_sized(
+                        [ui.available_width(), 28.0],
+                        egui::Button::new(format!("{}  {}", note.note, note.name))
+                            .truncate()
+                            .selected(selected),
+                    )
+                    .on_hover_text(&note.name);
+                if selected {
+                    selected_rect = Some(r.rect);
                 }
-            });
-            if reveal && let Some(r) = selected_rect {
-                // Use the actual viewport rather than the padded clipping rect.
-                let desired = (scroll.state.offset.y + r.center().y - scroll.inner_rect.center().y)
-                    .clamp(
-                        0.0,
-                        (scroll.content_size.y - scroll.inner_rect.height()).max(0.0),
-                    );
-                if (desired - scroll.state.offset.y).abs() > 1.0 {
-                    let mut state = scroll.state;
-                    state.offset.y = desired;
-                    state.store(ctx, scroll.id);
-                    p.reveal = true;
-                    ctx.request_repaint();
+                #[cfg(test)]
+                ctx.data_mut(|d| {
+                    d.insert_temp(egui::Id::new(("kit-picker-note", note.note)), r.rect)
+                });
+                if r.clicked() {
+                    p.selected = Some(note.note);
+                    preview = true;
                 }
-            }
-            #[cfg(test)]
-            ctx.data_mut(|d| d.insert_temp(egui::Id::new("kit-picker-clip"), scroll.inner_rect));
-            ui.horizontal(|ui| {
-                preview |= ui
-                    .add_enabled(p.selected.is_some(), egui::Button::new("Space · 試聴"))
-                    .clicked();
-                confirm |= ui
-                    .add_enabled(p.selected.is_some(), egui::Button::new("Enter · OK"))
-                    .clicked();
-                cancel |= ui.button("Esc · Cancel").clicked();
-            });
-            if let Some(error) = &error {
-                ui.colored_label(egui::Color32::LIGHT_RED, error);
+                if r.double_clicked() {
+                    confirm = true;
+                }
             }
         });
+        if reveal && let Some(r) = selected_rect {
+            // Use the actual viewport rather than the padded clipping rect.
+            let desired = (scroll.state.offset.y + r.center().y - scroll.inner_rect.center().y)
+                .clamp(
+                    0.0,
+                    (scroll.content_size.y - scroll.inner_rect.height()).max(0.0),
+                );
+            if (desired - scroll.state.offset.y).abs() > 1.0 {
+                let mut state = scroll.state;
+                state.offset.y = desired;
+                state.store(ctx, scroll.id);
+                p.reveal = true;
+                ctx.request_repaint();
+            }
+        }
+        #[cfg(test)]
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("kit-picker-clip"), scroll.inner_rect));
+        ui.horizontal(|ui| {
+            preview |= ui
+                .add_enabled(p.selected.is_some(), egui::Button::new("Space · 試聴"))
+                .clicked();
+            confirm |= ui
+                .add_enabled(p.selected.is_some(), egui::Button::new("Enter · OK"))
+                .clicked();
+            cancel |= ui.button("Esc · Cancel").clicked();
+        });
+        if let Some(error) = &error {
+            ui.colored_label(egui::Color32::LIGHT_RED, error);
+        }
+    });
     let result = if !open || cancel {
         close(a);
         Ok(())

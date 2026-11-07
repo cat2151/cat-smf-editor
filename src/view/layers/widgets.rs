@@ -59,7 +59,7 @@ pub(super) fn show(
                                 response.scroll_to_me(Some(egui::Align::Center));
                                 state.reveal = false;
                             }
-                            response.context_menu(|ui| {
+                            crate::view::presentation::context_menu(&response, |ui| {
                                 if ui.button("Automation…").clicked() {
                                     state.selected = Some(id);
                                     state.automation = Some(id);
@@ -178,7 +178,8 @@ pub(super) fn show(
     if crate::view::command_input::preview_active(ctx) {
         crate::view::command_input::preview_window(ctx, "Preview").show(ctx, contents);
     } else {
-        egui::Modal::new(egui::Id::new("instrument-layers")).show(ctx, contents);
+        crate::view::presentation::modal(ctx, egui::Id::new("instrument-layers"))
+            .show(ctx, contents);
     };
     if cancel {
         state.editing = None;

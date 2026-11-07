@@ -1,12 +1,11 @@
 use super::super::commands::Op;
 use super::commands::{apply, Action};
 use super::*;
-use crate::view::timeline_zoom;
 use egui::{Color32, Rect, Stroke};
 
 const LABEL: f32 = 44.0;
-const HEADER: f32 = 24.0;
-const CELL: egui::Vec2 = egui::vec2(22.0, 18.0);
+pub(super) const HEADER: f32 = 24.0;
+pub(super) const CELL: egui::Vec2 = egui::vec2(22.0, 18.0);
 const GAP: f32 = 3.0;
 /// A note whose start or end is off the step grid (MML or recorded input).
 const OFF_GRID: Color32 = Color32::from_rgb(230, 150, 60);
@@ -16,15 +15,33 @@ const HEAD: Stroke = Stroke {
 };
 /// How far an empty cell outside its step's harmony darkens.
 const OUTSIDE: f32 = 0.6;
-/// The smallest zoom; the largest lets one row fill the view.
-const MIN_ZOOM: f32 = 0.5;
 
 /// Left edge of `step`'s cell, from the grid's left; a gap opens every four steps.
-fn x(step: usize) -> f32 {
+pub(super) fn x(step: usize) -> f32 {
     LABEL + step as f32 * CELL.x + (step / 4 + 1) as f32 * GAP
 }
 
 pub(super) fn show(a: &mut App, ctx: &egui::Context) {
+    if a.drum_editor
+        .melody
+        .gesture
+        .as_ref()
+        .is_some_and(|g| !g.valid(a))
+    {
+        a.drum_editor.melody.gesture = None;
+    }
+    let base = a.loaded.as_ref().map(|l| l.visible().clone());
+    let track = a.track;
+    let limit = crate::view::patterns::mode::editing(a, track)
+        .and_then(|context| a.loaded.as_ref()?.edit_range(context).ok())
+        .map_or(0, |(_, end)| end);
+    let original = notes(a);
+    let preview = a
+        .drum_editor
+        .melody
+        .gesture
+        .as_ref()
+        .and_then(|g| g.music().ok());
     let measure = playback::measure(a);
     let Layout {
         rows,
@@ -32,7 +49,9 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
         tonic,
     } = layout(a);
     let shown_set = a.config.melody_rows(a.patterns.container);
-    let notes = notes(a);
+    let notes = preview
+        .as_ref()
+        .map_or_else(|| original.clone(), |m| step_notes::notes(&m.tracks[track]));
     let lanes: Vec<Vec<Cell>> = measure.as_ref().map_or_else(
         |_| Vec::new(),
         |m| rows.iter().map(|&p| cells(a, &notes, m, p)).collect(),
@@ -53,6 +72,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
     let row_h = CELL.y * zoom;
     let mut surface = super::super::surface::Surface::new(a, ctx, sounding).playing_line();
     let mut action = None;
+    let mut finished = None;
     let mut open = true;
     super::super::window::Kind::Melody.show(a, ctx, &mut open, |a, ui| {
         let state = &mut a.drum_editor;
@@ -82,7 +102,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
             {
                 action = Some(Action::Common(Op::Scope));
             }
-            if let Some(set) = row_sets(ui, shown_set) {
+            if let Some(set) = super::controls::row_sets(ui, shown_set) {
                 action = Some(Action::Rows(Some(set)));
             }
         });
@@ -95,8 +115,9 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
                     if let Some(y) = applied {
                         state.melody.scroll = y;
                     }
-                    zoomed = zoom_bar(ui, &mut state.melody, zoom);
+                    zoomed = super::controls::zoom_bar(ui, &mut state.melody, zoom);
                     let mut area = egui::ScrollArea::both()
+                        .drag_to_scroll(false)
                         .animated(false)
                         .auto_shrink([false, false])
                         .max_height(ui.available_height());
@@ -105,8 +126,30 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
                     }
                     let scroll = area.show(ui, |ui| {
                         let size = egui::vec2(x(steps), HEADER + rows.len() as f32 * row_h);
-                        let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+                        let (rect, response) =
+                            ui.allocate_exact_size(size, egui::Sense::click_and_drag());
                         let clip = ui.clip_rect();
+                        if let Some(base) = &base {
+                            finished = gesture::Grid {
+                                rect,
+                                clip,
+                                row_h,
+                                rows: &rows,
+                                measure: m,
+                                notes: &original,
+                                base,
+                                track,
+                                limit,
+                            }
+                            .interact(ui, &response, &mut state.melody);
+                            if let Some(gesture) =
+                                state.melody.gesture.as_ref().or(finished.as_ref())
+                            {
+                                let (pitch, step) = gesture.cursor();
+                                state.melody.pitch = Some(pitch);
+                                state.field = step + 2;
+                            }
+                        }
                         let cell = |row: usize, step: usize| {
                             let top = rect.top() + HEADER + row as f32 * row_h;
                             Rect::from_min_max(
@@ -271,7 +314,12 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
         a.config.remember_melody_zoom(container, zoom);
     }
     if !open {
+        a.drum_editor.melody.gesture = None;
+        finished = None;
         action = Some(Action::Common(Op::Cancel));
+    }
+    if let Some(gesture) = finished {
+        gesture.commit(a);
     }
     if let Some(action) = action {
         apply(a, action);
@@ -279,106 +327,4 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
     if a.drum_editor.kit.preview.is_some() {
         ctx.request_repaint_after(std::time::Duration::from_millis(35));
     }
-}
-
-/// The vertical zoom bar left of the grid, drawn like the timelines' bars; returns the new
-/// zoom. A click zooms in and a right click out around the clicked height, the wheel around
-/// the pointer, and a drag makes the dragged span fill the view. The header row keeps its height.
-fn zoom_bar(ui: &mut egui::Ui, melody: &mut State, from: f32) -> Option<f32> {
-    let (zone, response) = ui.allocate_exact_size(
-        egui::vec2(timeline_zoom::BAR, ui.available_height()),
-        egui::Sense::click_and_drag(),
-    );
-    #[cfg(test)]
-    ui.ctx()
-        .data_mut(|d| d.insert_temp(egui::Id::new("melody-zoom-bar"), zone));
-    let hovered = response.hovered();
-    ui.painter().rect_filled(
-        zone.shrink(2.0),
-        2.0,
-        if hovered {
-            timeline_zoom::ACTIVE
-        } else {
-            Color32::from_gray(75)
-        },
-    );
-    ui.painter().text(
-        zone.center(),
-        egui::Align2::CENTER_CENTER,
-        "zoom",
-        egui::FontId::monospace(9.0),
-        if hovered {
-            Color32::BLACK
-        } else {
-            Color32::from_gray(220)
-        },
-    );
-    let local = |p: egui::Pos2| (p.y - zone.top()).clamp(0.0, zone.height());
-    let pointer = response.interact_pointer_pos().map(local);
-    if response.drag_started_by(egui::PointerButton::Primary) {
-        melody.drag = ui.input(|i| i.pointer.press_origin()).map(local);
-    }
-    let mut fit = None;
-    if let (Some(start), Some(end)) = (melody.drag, pointer) {
-        let span = egui::Rect::from_x_y_ranges(
-            zone.x_range(),
-            zone.top() + start.min(end)..=zone.top() + start.max(end),
-        );
-        ui.painter()
-            .rect_filled(span, 0.0, timeline_zoom::ACTIVE.gamma_multiply(0.5));
-        if response.drag_stopped() && (start - end).abs() > 2.0 {
-            fit = Some((start, end));
-        }
-    }
-    if response.drag_stopped() {
-        melody.drag = None;
-    }
-    let wheel = if hovered {
-        ui.input_mut(|i| std::mem::take(&mut i.smooth_scroll_delta).y)
-    } else {
-        0.0
-    };
-    // (factor, the height in the view to zoom around, where that content lands)
-    let (factor, anchor, target) = match (fit, pointer) {
-        (Some((start, end)), _) => {
-            let middle = zone.height() / 2.0;
-            (
-                zone.height() / (start - end).abs(),
-                (start + end) / 2.0,
-                middle,
-            )
-        }
-        (None, Some(y)) if response.clicked() => (timeline_zoom::CLICK, y, y),
-        (None, Some(y)) if response.secondary_clicked() => (1.0 / timeline_zoom::CLICK, y, y),
-        _ if wheel != 0.0 => {
-            let y = response.hover_pos().map_or(zone.height() / 2.0, local);
-            (timeline_zoom::wheel(wheel), y, y)
-        }
-        _ => return None,
-    };
-    let to = (from * factor).clamp(MIN_ZOOM, (zone.height() / CELL.y).max(MIN_ZOOM));
-    let below_header = melody.pending.unwrap_or(melody.scroll) + anchor - HEADER;
-    melody.pending = Some((below_header * to / from + HEADER - target).max(0.0));
-    Some(to)
-}
-
-/// One label per row set, the shown one selected; a click picks that set.
-fn row_sets(ui: &mut egui::Ui, shown: harmony::Set) -> Option<harmony::Set> {
-    let mut picked = None;
-    for set in harmony::Set::ALL {
-        let name = match set {
-            harmony::Set::Chromatic => "Chromatic",
-            harmony::Set::Scale => "Scale",
-            harmony::Set::Penta => "Penta",
-            harmony::Set::Chord => "Chord",
-        };
-        if ui
-            .selectable_label(set == shown, name)
-            .on_hover_text("/")
-            .clicked()
-        {
-            picked = Some(set);
-        }
-    }
-    picked
 }

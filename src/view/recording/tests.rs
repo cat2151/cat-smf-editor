@@ -14,6 +14,7 @@ mod phrase_loop;
 mod play;
 mod preparing;
 mod quantize;
+mod suspension;
 mod transport;
 
 /// A key whose physical position matches its US letter, as on the measured Japanese keyboard.

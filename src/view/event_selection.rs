@@ -85,39 +85,44 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
-    egui::Window::new("Selection")
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            if ui.button("g: Generate same measures").clicked() {
-                crate::view::commands::invoke(
-                    app,
-                    ctx,
-                    crate::view::commands::Operation::SameMeasure {
-                        batch: true,
-                        number: None,
-                    },
-                );
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::SelectionMenu,
+        egui::Id::new("Selection"),
+        "Selection",
+    )
+    .collapsible(false)
+    .resizable(false)
+    .open(&mut open)
+    .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    .show(ctx, |ui| {
+        if ui.button("g: Generate same measures").clicked() {
+            crate::view::commands::invoke(
+                app,
+                ctx,
+                crate::view::commands::Operation::SameMeasure {
+                    batch: true,
+                    number: None,
+                },
+            );
+        }
+        let mut choices = vec![
+            (actions::Action::Repeat, "a: A-B repeat"),
+            (actions::Action::DeleteEvents, "d: Delete events"),
+            (actions::Action::Quantize, "q: Quantize 1/16"),
+        ];
+        if whole(app) {
+            choices.extend([
+                (actions::Action::Init, "i: Init track"),
+                (actions::Action::DeleteTrack, "t: Delete track"),
+            ]);
+        }
+        for (action, label) in choices {
+            if ui.button(label).clicked() {
+                actions::apply(app, action);
             }
-            let mut choices = vec![
-                (actions::Action::Repeat, "a: A-B repeat"),
-                (actions::Action::DeleteEvents, "d: Delete events"),
-                (actions::Action::Quantize, "q: Quantize 1/16"),
-            ];
-            if whole(app) {
-                choices.extend([
-                    (actions::Action::Init, "i: Init track"),
-                    (actions::Action::DeleteTrack, "t: Delete track"),
-                ]);
-            }
-            for (action, label) in choices {
-                if ui.button(label).clicked() {
-                    actions::apply(app, action);
-                }
-            }
-        });
+        }
+    });
     if !open {
         app.event_selection.menu = false;
     }

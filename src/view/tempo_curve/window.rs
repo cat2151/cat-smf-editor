@@ -5,10 +5,19 @@ pub(super) fn window(ctx: &egui::Context, maximized: bool) -> egui::Window<'stat
     if crate::view::command_input::preview_active(ctx) {
         return crate::view::command_input::preview_window(ctx, "Tempo curve");
     }
-    let window = egui::Window::new("Tempo curve").collapsible(false);
+    let window = crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::Timeline,
+        egui::Id::new(if maximized {
+            "tempo-curve-maximized"
+        } else {
+            "Tempo curve"
+        }),
+        "Tempo curve",
+    )
+    .collapsible(false);
     if maximized {
         window
-            .id(egui::Id::new("tempo-curve-maximized"))
             .title_bar(false)
             .frame(egui::Frame::NONE.fill(ctx.style().visuals.window_fill()))
             .fixed_rect(ctx.screen_rect())

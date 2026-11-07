@@ -217,7 +217,7 @@ fn draw(app: &mut App, ctx: &egui::Context) {
     let frame = egui::Frame::popup(&ctx.style());
     let margin = frame.total_margin();
     let max_width = (screen.width() - margin.left - margin.right).max(1.0);
-    egui::Modal::new(egui::Id::new("recent-files"))
+    crate::view::presentation::modal(ctx, egui::Id::new("recent-files"))
         .frame(frame)
         .show(ctx, |ui| {
             ui.set_max_width(max_width);

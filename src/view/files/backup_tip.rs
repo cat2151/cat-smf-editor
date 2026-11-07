@@ -36,7 +36,7 @@ pub(crate) fn notice_dialog(app: &mut App, ctx: &egui::Context) -> bool {
         return true;
     }
     let mut close = false;
-    egui::Modal::new(egui::Id::new("backup-notice")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("backup-notice")).show(ctx, |ui| {
         ui.set_min_width(370.0);
         if let Some(loaded) = &app.loaded {
             ui.strong(&loaded.name);

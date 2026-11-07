@@ -7,7 +7,7 @@ pub(super) fn picker_ui(app: &mut App, ctx: &egui::Context) {
     let p = state.picker.as_mut().unwrap();
     let mut indices = filtered(p);
     p.selected = p.selected.min(indices.len().saturating_sub(1));
-    egui::Modal::new(egui::Id::new("parameter-picker")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("parameter-picker")).show(ctx, |ui| {
         ui.set_width(560.0f32.min((ctx.screen_rect().width() - 40.0).max(200.0)));
         ui.horizontal(|ui| {
             ui.heading(format!("{} / Automation", p.title));

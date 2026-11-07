@@ -98,7 +98,10 @@ fn enter(a: &mut App, ctx: &egui::Context, screen: Screen) {
             a.track_view.track_list = screen == Screen::Tracks;
         }
         Screen::Split => a.track_view.split_open = true,
-        Screen::Play => a.playback.open = true,
+        Screen::Play => {
+            a.playback.open = true;
+            a.playback.viewport = egui::ViewportId::ROOT;
+        }
         Screen::Mixer => {
             crate::play::mixer::open(a);
             a.playback.mixer_master = false;

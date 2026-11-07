@@ -98,7 +98,7 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         })
         .clone();
     let _window_span = crate::frame_trace::span("help");
-    ctx.show_viewport_immediate(viewport(), builder, |ctx, class| {
+    crate::view::presentation::Native::Help.show(a, ctx, viewport(), builder, |a, ctx, class| {
         let _span = crate::frame_trace::span("help/ui");
         if class == egui::ViewportClass::Embedded {
             return; // This UI requires a native backend; never replace the editor with help.

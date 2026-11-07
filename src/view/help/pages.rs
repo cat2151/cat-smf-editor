@@ -133,6 +133,9 @@ pub(super) fn melody(ui: &mut egui::Ui) {
                     ("/", "行の絞り込み"),
                     ("f / Space", "Note"),
                     ("Shift+L / H", "伸ばす / 縮める"),
+                    ("空白: 左ドラッグ", "Note入力"),
+                    ("Note右端: 左ドラッグ", "長さ"),
+                    ("Wheel / Scrollbar", "スクロール"),
                     ("PageUp / PageDown", "小節"),
                     ("[ / ]", "A小節"),
                     ("Shift+[ / ]", "B小節"),
@@ -140,7 +143,7 @@ pub(super) fn melody(ui: &mut egui::Ui) {
                     ("S", "Loop Solo"),
                     ("Shift+Space", "停止"),
                     ("Ctrl+Z", "元に戻す"),
-                    ("Esc", "閉じる"),
+                    ("Esc", "取消 / 閉じる"),
                 ],
             )],
         )

@@ -217,28 +217,33 @@ fn show_split(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
-    egui::Window::new("Two columns")
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            if ui.button("w: Off").clicked() {
-                split_off(app);
-            }
-            if ui.button("l: Right").clicked() {
-                focus(app, 1);
-            }
-            if ui.button("h: Left").clicked() {
-                focus(app, 0);
-            }
-            if ui.button("j: Next track").clicked() {
-                step_column(app, true);
-            }
-            if ui.button("k: Previous track").clicked() {
-                step_column(app, false);
-            }
-        });
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::Split,
+        egui::Id::new("Two columns"),
+        "Two columns",
+    )
+    .collapsible(false)
+    .resizable(false)
+    .open(&mut open)
+    .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    .show(ctx, |ui| {
+        if ui.button("w: Off").clicked() {
+            split_off(app);
+        }
+        if ui.button("l: Right").clicked() {
+            focus(app, 1);
+        }
+        if ui.button("h: Left").clicked() {
+            focus(app, 0);
+        }
+        if ui.button("j: Next track").clicked() {
+            step_column(app, true);
+        }
+        if ui.button("k: Previous track").clicked() {
+            step_column(app, false);
+        }
+    });
     if !open {
         app.track_view.split_open = false;
     }
@@ -252,11 +257,24 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let mut open = true;
     let mut target = None;
     let mut step = None;
-    egui::Window::new(if app.track_view.track_list {
-        "Go track list"
-    } else {
-        "Go"
-    })
+    crate::view::presentation::window(
+        ctx,
+        if app.track_view.track_list {
+            crate::view::commands::Screen::Tracks
+        } else {
+            crate::view::commands::Screen::Go
+        },
+        egui::Id::new(if app.track_view.track_list {
+            "Go track list"
+        } else {
+            "Go"
+        }),
+        if app.track_view.track_list {
+            "Go track list"
+        } else {
+            "Go"
+        },
+    )
     .collapsible(false)
     .resizable(false)
     .open(&mut open)

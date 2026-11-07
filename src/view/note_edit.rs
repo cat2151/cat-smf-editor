@@ -218,31 +218,35 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
     let mut close = false;
     let name = super::patterns::presentation::name(app, editing.track);
-    egui::Area::new(egui::Id::new("note-edit"))
-        .fixed_pos(editing.rect.min)
-        .order(egui::Order::Foreground)
-        .show(ctx, |ui| {
-            super::patterns::presentation::frame(app, editing.track).show(ui, |ui| {
-                if let Some(name) = &name {
-                    super::patterns::presentation::label(ui, name);
-                }
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut editing.text)
-                        .font(egui::TextStyle::Monospace)
-                        .desired_width(editing.rect.width()),
-                );
-                if editing.focus {
-                    response.request_focus();
-                    editing.focus = false;
-                }
-                if response.lost_focus() && !crate::view::modal::is_open(app) {
-                    close = true;
-                }
-                if let Some(error) = &editing.error {
-                    ui.colored_label(egui::Color32::LIGHT_RED, error);
-                }
-            });
+    crate::view::presentation::area(
+        ctx,
+        crate::view::commands::Screen::Note,
+        egui::Id::new("note-edit"),
+    )
+    .fixed_pos(editing.rect.min)
+    .order(egui::Order::Foreground)
+    .show(ctx, |ui| {
+        super::patterns::presentation::frame(app, editing.track).show(ui, |ui| {
+            if let Some(name) = &name {
+                super::patterns::presentation::label(ui, name);
+            }
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut editing.text)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(editing.rect.width()),
+            );
+            if editing.focus {
+                response.request_focus();
+                editing.focus = false;
+            }
+            if response.lost_focus() && !crate::view::modal::is_open(app) {
+                close = true;
+            }
+            if let Some(error) = &editing.error {
+                ui.colored_label(egui::Color32::LIGHT_RED, error);
+            }
         });
+    });
     if !close {
         app.note_edit = Some(editing);
     }

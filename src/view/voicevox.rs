@@ -211,36 +211,41 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
-    egui::Window::new("VOICEVOX engine")
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            if let Some(path) = &app.config.voicevox_engine {
-                let text = path.display().to_string();
-                if engine::executable(Some(path)).is_some() {
-                    ui.label(text);
-                } else {
-                    ui.colored_label(Color32::LIGHT_RED, text);
-                }
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::Voicevox,
+        egui::Id::new("VOICEVOX engine"),
+        "VOICEVOX engine",
+    )
+    .collapsible(false)
+    .resizable(false)
+    .open(&mut open)
+    .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    .show(ctx, |ui| {
+        if let Some(path) = &app.config.voicevox_engine {
+            let text = path.display().to_string();
+            if engine::executable(Some(path)).is_some() {
+                ui.label(text);
+            } else {
+                ui.colored_label(Color32::LIGHT_RED, text);
             }
-            if ui.button("r: run.exe").clicked() {
-                app.voicevox.pick_requested = true;
+        }
+        if ui.button("r: run.exe").clicked() {
+            app.voicevox.pick_requested = true;
+        }
+        ui.horizontal(|ui| {
+            if ui
+                .button("o: 公式ページ")
+                .on_hover_text(OFFICIAL_PAGE)
+                .clicked()
+            {
+                open_page(app, ctx);
             }
-            ui.horizontal(|ui| {
-                if ui
-                    .button("o: 公式ページ")
-                    .on_hover_text(OFFICIAL_PAGE)
-                    .clicked()
-                {
-                    open_page(app, ctx);
-                }
-                if app.voicevox.page_opened_at.is_some() {
-                    ui.spinner();
-                }
-            });
+            if app.voicevox.page_opened_at.is_some() {
+                ui.spinner();
+            }
         });
+    });
     if !open {
         close(app);
     }

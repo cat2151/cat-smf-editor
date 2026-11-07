@@ -136,9 +136,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let window = if preview {
         crate::view::command_input::preview_window(ctx, "Mixer (m)")
     } else {
-        egui::Window::new("Mixer (m)")
-            .frame(frame)
-            .default_width(760.0)
+        crate::view::presentation::window(
+            ctx,
+            crate::view::commands::Screen::Mixer,
+            egui::Id::new("Mixer (m)"),
+            "Mixer (m)",
+        )
+        .frame(frame)
+        .default_width(760.0)
     };
     let window = window.open(&mut open)
         .show(ctx, |ui| {

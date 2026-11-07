@@ -38,6 +38,9 @@ impl State {
     pub(crate) fn origin(&self) -> Option<(egui::ViewportId, commands::Screen)> {
         self.origin.as_ref().map(|o| (o.viewport, o.screen()))
     }
+    pub(crate) fn viewport(&self) -> Option<egui::ViewportId> {
+        self.origin.as_ref().map(|o| o.viewport)
+    }
     pub(crate) fn owns_root(&self) -> bool {
         self.origin
             .as_ref()
@@ -250,53 +253,55 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
         egui::Align2::LEFT_TOP,
         egui::vec2(left - ctx.screen_rect().left(), 8.0),
     );
-    egui::Modal::new(id).area(area).show(ctx, |ui| {
-        ui.set_width(width);
-        // Keep room to grow again after clearing a filter, without reserving it.
-        ui.set_max_height((ctx.screen_rect().bottom() - ui.min_rect().top() - 24.0).max(1.0));
-        ctx.memory_mut(|m| m.request_focus(egui::Id::new("command-palette-query")));
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut palette.query)
-                .id(egui::Id::new("command-palette-query"))
-                .desired_width(f32::INFINITY),
-        );
-        response.request_focus();
-        if response.changed() {
-            palette.selected = 0;
-            palette.description_open = false;
-            palette.reveal = true;
-            filtered = filter(
-                &palette.commands,
-                &palette.query,
-                &mut palette.search,
-                &palette.history,
+    crate::view::presentation::modal(ctx, id)
+        .area(area)
+        .show(ctx, |ui| {
+            ui.set_width(width);
+            // Keep room to grow again after clearing a filter, without reserving it.
+            ui.set_max_height((ctx.screen_rect().bottom() - ui.min_rect().top() - 24.0).max(1.0));
+            ctx.memory_mut(|m| m.request_focus(egui::Id::new("command-palette-query")));
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut palette.query)
+                    .id(egui::Id::new("command-palette-query"))
+                    .desired_width(f32::INFINITY),
             );
-        }
-        super::list_navigation::position(ui, palette.selected, filtered.len());
-        egui::ScrollArea::vertical()
-            .id_salt("palette-results")
-            .max_height((ctx.screen_rect().bottom() - ui.cursor().top() - 24.0).max(1.0))
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
-                for (row, &index) in filtered.iter().enumerate() {
-                    let command = &palette.commands[index];
-                    let response = row::show(ui, command, row == palette.selected);
-                    if row == palette.selected && palette.reveal {
-                        response.scroll_to_me(Some(egui::Align::Center));
+            response.request_focus();
+            if response.changed() {
+                palette.selected = 0;
+                palette.description_open = false;
+                palette.reveal = true;
+                filtered = filter(
+                    &palette.commands,
+                    &palette.query,
+                    &mut palette.search,
+                    &palette.history,
+                );
+            }
+            super::list_navigation::position(ui, palette.selected, filtered.len());
+            egui::ScrollArea::vertical()
+                .id_salt("palette-results")
+                .max_height((ctx.screen_rect().bottom() - ui.cursor().top() - 24.0).max(1.0))
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for (row, &index) in filtered.iter().enumerate() {
+                        let command = &palette.commands[index];
+                        let response = row::show(ui, command, row == palette.selected);
+                        if row == palette.selected && palette.reveal {
+                            response.scroll_to_me(Some(egui::Align::Center));
+                        }
+                        if response.clicked() {
+                            palette.description_open = false;
+                            palette.selected = row;
+                        }
+                        tooltip::show(
+                            &response,
+                            command,
+                            palette.description_open && row == palette.selected,
+                            !palette.description_open,
+                        );
                     }
-                    if response.clicked() {
-                        palette.description_open = false;
-                        palette.selected = row;
-                    }
-                    tooltip::show(
-                        &response,
-                        command,
-                        palette.description_open && row == palette.selected,
-                        !palette.description_open,
-                    );
-                }
-            });
-    });
+                });
+        });
     palette.reveal = false;
     a.palette = palette;
     clear(ctx);

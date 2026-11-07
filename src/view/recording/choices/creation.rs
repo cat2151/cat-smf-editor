@@ -46,23 +46,26 @@ pub(in crate::view::recording) fn show(ctx: &egui::Context, s: &mut Session) {
     if s.new_sound.is_none() {
         return;
     }
-    egui::Modal::new(egui::Id::new("keyboard-new-container")).show(ctx, |ui| {
-        for (i, label) in LABELS.iter().enumerate() {
-            if ui
-                .selectable_label(s.new_sound == Some(i), *label)
-                .clicked()
-            {
-                s.new_sound = Some(i);
-                confirm(s);
+    crate::view::presentation::modal(ctx, egui::Id::new("keyboard-new-container")).show(
+        ctx,
+        |ui| {
+            for (i, label) in LABELS.iter().enumerate() {
+                if ui
+                    .selectable_label(s.new_sound == Some(i), *label)
+                    .clicked()
+                {
+                    s.new_sound = Some(i);
+                    confirm(s);
+                }
             }
-        }
-        ui.horizontal(|ui| {
-            if ui.button("Enter: Create").clicked() {
-                confirm(s);
-            }
-            if ui.button("Esc: Cancel").clicked() {
-                s.new_sound = None;
-            }
-        });
-    });
+            ui.horizontal(|ui| {
+                if ui.button("Enter: Create").clicked() {
+                    confirm(s);
+                }
+                if ui.button("Esc: Cancel").clicked() {
+                    s.new_sound = None;
+                }
+            });
+        },
+    );
 }

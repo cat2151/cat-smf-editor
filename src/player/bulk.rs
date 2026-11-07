@@ -120,17 +120,20 @@ pub(crate) fn show_note_error(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut close = false;
-    egui::Modal::new(egui::Id::new("no-notes-program-error")).show(ctx, |ui| {
-        ui.heading("音色を指定できません");
-        ui.colored_label(
-            egui::Color32::LIGHT_RED,
-            app.player_selection
-                .error
-                .as_deref()
-                .unwrap_or("このtrackにはノートがありません。"),
-        );
-        close |= ui.button("閉じる [Enter / Esc]").clicked();
-    });
+    crate::view::presentation::modal(ctx, egui::Id::new("no-notes-program-error")).show(
+        ctx,
+        |ui| {
+            ui.heading("音色を指定できません");
+            ui.colored_label(
+                egui::Color32::LIGHT_RED,
+                app.player_selection
+                    .error
+                    .as_deref()
+                    .unwrap_or("このtrackにはノートがありません。"),
+            );
+            close |= ui.button("閉じる [Enter / Esc]").clicked();
+        },
+    );
     if close {
         app.player_selection.no_notes_error = false;
         app.player_selection.open = false;

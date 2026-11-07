@@ -120,7 +120,7 @@ pub fn root_idle(a: &App) -> bool {
 }
 
 /// The screen owning the root window, whichever window has focus.
-fn root_owner(a: &App) -> Screen {
+pub(crate) fn root_owner(a: &App) -> Screen {
     if a.patterns.workspace.input_open() {
         return Screen::ArrangementInput;
     }
@@ -184,6 +184,9 @@ fn root_owner(a: &App) -> Screen {
     if a.player_selection.open {
         return Screen::Browser;
     }
+    if super::super::event_selection::valid(a) {
+        return a.event_selection.command_screen();
+    }
     if a.layer_editor.open {
         return a.layer_editor.command_screen();
     }
@@ -227,9 +230,6 @@ fn root_owner(a: &App) -> Screen {
     }
     if a.playback.mixer_focused() {
         return Screen::Mixer;
-    }
-    if super::super::event_selection::valid(a) {
-        return a.event_selection.command_screen();
     }
     if super::super::piano_roll::chord_timing::active(a) {
         return Screen::ChordTiming;

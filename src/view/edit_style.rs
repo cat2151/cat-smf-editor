@@ -108,7 +108,7 @@ pub fn show(app: &mut App, ctx: &egui::Context, input: Option<egui::InputState>)
     super::commands::route(app, ctx);
     if let Some(selected) = app.edit_style {
         let mut choice = None;
-        egui::Modal::new(egui::Id::new("edit-style")).show(ctx, |ui| {
+        crate::view::presentation::modal(ctx, egui::Id::new("edit-style")).show(ctx, |ui| {
             ui.set_min_width(300.0);
             ui.heading("editスタイルを選んでください");
             for (style, label) in [

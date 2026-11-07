@@ -204,7 +204,12 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     } else if editing.repeat_seen && !crate::play::transport::timeline::running(app) {
         editing.repeat_active = false;
     }
-    let mut area = egui::Area::new(egui::Id::new("voicevox-lyrics")).order(egui::Order::Foreground);
+    let mut area = crate::view::presentation::area(
+        ctx,
+        crate::view::commands::Screen::Lyrics,
+        egui::Id::new("voicevox-lyrics"),
+    )
+    .order(egui::Order::Foreground);
     area = match editing.rect {
         Some(rect) => area.fixed_pos(rect.min),
         None => area.anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO),

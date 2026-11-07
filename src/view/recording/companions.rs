@@ -96,34 +96,40 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
         let size = s.companions.settings_size();
         let builder = builder(ctx, SETTINGS_TITLE, at, size);
         let _window_span = crate::frame_trace::span("settings");
-        ctx.show_viewport_immediate(settings_viewport(), builder, |ctx, class| {
-            let _span = crate::frame_trace::span("settings/ui");
-            if class != egui::ViewportClass::Embedded {
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    s.settings_open = false;
+        super::super::presentation::Native::Keyboard.show(
+            a,
+            ctx,
+            settings_viewport(),
+            builder,
+            |a, ctx, class| {
+                let _span = crate::frame_trace::span("settings/ui");
+                if class != egui::ViewportClass::Embedded {
+                    if ctx.input(|i| i.viewport().close_requested()) {
+                        s.settings_open = false;
+                        return;
+                    }
+                    if raise {
+                        super::super::help::lift(ctx);
+                    }
+                    if let Some(at) = moved(ctx) {
+                        remember(a, SETTINGS, at);
+                    }
+                    super::super::help::observe_recording(a, ctx);
+                    let input = super::modal::begin(a, ctx);
+                    if s.first_read(ctx) {
+                        settings_keys(a, s, &ctx.input(|i| i.events.clone()));
+                    }
+                    frame(ctx, class, SETTINGS_TITLE, |ui| {
+                        s.companions.settings_size = Some(settings(ui, s));
+                    });
+                    super::modal::end(a, ctx, input);
                     return;
                 }
-                if raise {
-                    super::super::help::lift(ctx);
-                }
-                if let Some(at) = moved(ctx) {
-                    remember(a, SETTINGS, at);
-                }
-                super::super::help::observe_recording(a, ctx);
-                let input = super::modal::begin(a, ctx);
-                if s.first_read(ctx) {
-                    settings_keys(a, s, &ctx.input(|i| i.events.clone()));
-                }
                 frame(ctx, class, SETTINGS_TITLE, |ui| {
-                    s.companions.settings_size = Some(settings(ui, s));
+                    settings(ui, s);
                 });
-                super::modal::end(a, ctx, input);
-                return;
-            }
-            frame(ctx, class, SETTINGS_TITLE, |ui| {
-                settings(ui, s);
-            });
-        });
+            },
+        );
     }
     if s.piano_open {
         let other = s
@@ -138,34 +144,40 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
         s.companions.piano = Some(at);
         let builder = builder(ctx, PIANO_TITLE, at, piano::SIZE);
         let _window_span = crate::frame_trace::span("piano");
-        ctx.show_viewport_immediate(piano_viewport(), builder, |ctx, class| {
-            let _span = crate::frame_trace::span("piano/ui");
-            if class != egui::ViewportClass::Embedded
-                && ctx.input(|i| i.viewport().close_requested())
-            {
-                s.piano_open = false;
-                return;
-            }
-            if class != egui::ViewportClass::Embedded {
-                super::super::help::observe_recording(a, ctx);
-                if raise {
-                    super::super::help::lift(ctx);
+        super::super::presentation::Native::Keyboard.show(
+            a,
+            ctx,
+            piano_viewport(),
+            builder,
+            |a, ctx, class| {
+                let _span = crate::frame_trace::span("piano/ui");
+                if class != egui::ViewportClass::Embedded
+                    && ctx.input(|i| i.viewport().close_requested())
+                {
+                    s.piano_open = false;
+                    return;
                 }
-                if let Some(at) = moved(ctx) {
-                    remember(a, PIANO, at);
+                if class != egui::ViewportClass::Embedded {
+                    super::super::help::observe_recording(a, ctx);
+                    if raise {
+                        super::super::help::lift(ctx);
+                    }
+                    if let Some(at) = moved(ctx) {
+                        remember(a, PIANO, at);
+                    }
+                    let input = super::modal::begin(a, ctx);
+                    frame(ctx, class, PIANO_TITLE, |ui| piano::show(ui, s));
+                    super::modal::end(a, ctx, input);
+                    return;
                 }
-                let input = super::modal::begin(a, ctx);
                 frame(ctx, class, PIANO_TITLE, |ui| piano::show(ui, s));
-                super::modal::end(a, ctx, input);
-                return;
-            }
-            frame(ctx, class, PIANO_TITLE, |ui| piano::show(ui, s));
-        });
+            },
+        );
     }
 }
 
 fn builder(
-    ctx: &egui::Context,
+    _ctx: &egui::Context,
     title: &str,
     at: egui::Pos2,
     size: egui::Vec2,
@@ -175,7 +187,6 @@ fn builder(
         .with_active(false)
         .with_position(at)
         .with_inner_size(size)
-        .with_visible(window::shown(ctx))
 }
 
 fn frame(

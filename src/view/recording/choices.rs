@@ -13,7 +13,7 @@ fn choose<T: Copy + PartialEq>(
     tip: &str,
 ) -> Option<T> {
     let mut chosen = None;
-    ui.menu_button(text, |ui| {
+    crate::view::presentation::menu_button(ui, text, |ui| {
         for &v in all {
             if ui.selectable_label(v == current, label(v)).clicked() {
                 chosen = Some(v);
@@ -35,7 +35,7 @@ pub(super) fn container(ui: &mut egui::Ui, s: &mut Session) {
     }
     let tip = format!("Container  ← / → / {}", setup::Item::Sound.keys());
     let mut clicked = None;
-    ui.menu_button(name.as_str(), |ui| {
+    crate::view::presentation::menu_button(ui, name.as_str(), |ui| {
         for (i, sound) in s.sounds.iter().enumerate() {
             if ui.selectable_label(i == s.selected, &sound.name).clicked() {
                 clicked = (i != s.selected).then_some(Button::Sound(i));

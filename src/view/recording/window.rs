@@ -243,7 +243,7 @@ fn transport(ui: &mut egui::Ui, s: &mut Session) {
 
 /// The companion windows, with the keys that also toggle them.
 fn menu(ui: &mut egui::Ui, s: &mut Session) {
-    ui.menu_button("☰", |ui| {
+    crate::view::presentation::menu_button(ui, "☰", |ui| {
         // Wide enough for the keys; the popup shifts left inside the window.
         ui.set_min_width(150.0);
         for (label, key, open) in [
@@ -366,12 +366,6 @@ pub(super) fn place(screen: egui::Rect, covers: &[egui::Rect], size: egui::Vec2)
                 .then(far(p).total_cmp(&far(q)))
         })
         .unwrap()
-}
-
-/// The keyboard windows are owned by the editor, so they sit above its modal and are hidden
-/// while one is open. `ctx` is the editor's.
-pub(super) fn shown(ctx: &egui::Context) -> bool {
-    ctx.memory(|m| m.top_modal_layer()).is_none()
 }
 
 pub(super) fn show(ctx: &egui::Context, class: egui::ViewportClass, s: &mut Session) {

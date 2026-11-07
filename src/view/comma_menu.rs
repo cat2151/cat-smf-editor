@@ -36,7 +36,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     // A modal, so the keyboard windows above the editor step aside (`recording::window::shown`).
-    let modal = egui::Modal::new(egui::Id::new("settings")).show(ctx, |ui| {
+    let modal = crate::view::presentation::modal(ctx, egui::Id::new("settings")).show(ctx, |ui| {
             ui.heading("Settings");
             if app.comma_menu.program {
                 let current = app.config.program_target;

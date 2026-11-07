@@ -243,7 +243,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         .and_then(|l| l.music.tracks.get(p.track))
         .and_then(Voice::read);
     preview::inventory(app);
-    egui::Modal::new(egui::Id::new("voicevox-singer")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("voicevox-singer")).show(ctx, |ui| {
         ui.set_width(400.0);
         ui.heading("VOICEVOX 歌声");
         let p = app.voicevox.singer.as_mut().unwrap();

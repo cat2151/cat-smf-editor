@@ -27,6 +27,7 @@ pub enum Mode {
 pub struct Playback {
     pub parameter_preview: Option<crate::view::parameter_editor::preview::Preview>,
     pub open: bool,
+    pub viewport: egui::ViewportId,
     pub last: Mode,
     pub pending: Option<crate::play::transport::Prepared>,
     pub active: Option<crate::play::transport::Active>,
@@ -51,6 +52,7 @@ impl Default for Playback {
         Self {
             parameter_preview: None,
             open: false,
+            viewport: egui::ViewportId::ROOT,
             last: Mode::default(),
             pending: None,
             active: None,
@@ -234,7 +236,7 @@ pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
-    if !app.playback.open {
+    if !app.playback.open || ctx.viewport_id() != app.playback.viewport {
         return;
     }
     if crate::view::track_overview::is_song(app) {
@@ -245,78 +247,83 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let mut chosen = None;
     let mut stopped = false;
     let empty_track = current_track_is_empty(app);
-    egui::Window::new("Play")
-        .open(&mut open)
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            ui.label("Start → earlier · End ↓ later");
-            egui::Grid::new("play-scope")
-                .spacing(egui::vec2(8.0, 8.0))
-                .show(ui, |ui| {
-                    ui.label("End ↓ / Start →");
-                    for heading in [
-                        "Current position / note",
-                        "Beat / measure start",
-                        "Song start",
-                    ] {
-                        ui.strong(heading);
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::Play,
+        egui::Id::new("Play"),
+        "Play",
+    )
+    .open(&mut open)
+    .collapsible(false)
+    .resizable(false)
+    .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    .show(ctx, |ui| {
+        ui.label("Start → earlier · End ↓ later");
+        egui::Grid::new("play-scope")
+            .spacing(egui::vec2(8.0, 8.0))
+            .show(ui, |ui| {
+                ui.label("End ↓ / Start →");
+                for heading in [
+                    "Current position / note",
+                    "Beat / measure start",
+                    "Song start",
+                ] {
+                    ui.strong(heading);
+                }
+                ui.end_row();
+                type Actions = &'static [(Mode, &'static str)];
+                let rows: [(&str, [Actions; 3]); 4] = [
+                    (
+                        "Note end",
+                        [
+                            &[
+                                (Mode::Event, "e — Single note"),
+                                (Mode::Notes, "n — Same-tick notes"),
+                            ],
+                            &[],
+                            &[],
+                        ],
+                    ),
+                    (
+                        "Beat end",
+                        [&[], &[(Mode::BeatOnly, "i — Current beat")], &[]],
+                    ),
+                    (
+                        "Measure end",
+                        [&[], &[(Mode::Measure, "m — Current measure")], &[]],
+                    ),
+                    (
+                        "Track / song end",
+                        [
+                            &[(Mode::Position, "p — Current MBT to end")],
+                            &[
+                                (Mode::Beat, "b — Beat start to end"),
+                                (Mode::MeasureStart, "s — Measure start to end"),
+                                (
+                                    Mode::AllTracksFromMeasure,
+                                    "c — All tracks from current measure to end",
+                                ),
+                            ],
+                            &[
+                                (Mode::Track, "t — Entire current track"),
+                                (Mode::AllTracks, "a — All tracks from start"),
+                            ],
+                        ],
+                    ),
+                ];
+                for (heading, cells) in rows {
+                    ui.strong(heading);
+                    for actions in cells {
+                        scope_cell(ui, actions, empty_track, &mut chosen);
                     }
                     ui.end_row();
-                    type Actions = &'static [(Mode, &'static str)];
-                    let rows: [(&str, [Actions; 3]); 4] = [
-                        (
-                            "Note end",
-                            [
-                                &[
-                                    (Mode::Event, "e — Single note"),
-                                    (Mode::Notes, "n — Same-tick notes"),
-                                ],
-                                &[],
-                                &[],
-                            ],
-                        ),
-                        (
-                            "Beat end",
-                            [&[], &[(Mode::BeatOnly, "i — Current beat")], &[]],
-                        ),
-                        (
-                            "Measure end",
-                            [&[], &[(Mode::Measure, "m — Current measure")], &[]],
-                        ),
-                        (
-                            "Track / song end",
-                            [
-                                &[(Mode::Position, "p — Current MBT to end")],
-                                &[
-                                    (Mode::Beat, "b — Beat start to end"),
-                                    (Mode::MeasureStart, "s — Measure start to end"),
-                                    (
-                                        Mode::AllTracksFromMeasure,
-                                        "c — All tracks from current measure to end",
-                                    ),
-                                ],
-                                &[
-                                    (Mode::Track, "t — Entire current track"),
-                                    (Mode::AllTracks, "a — All tracks from start"),
-                                ],
-                            ],
-                        ),
-                    ];
-                    for (heading, cells) in rows {
-                        ui.strong(heading);
-                        for actions in cells {
-                            scope_cell(ui, actions, empty_track, &mut chosen);
-                        }
-                        ui.end_row();
-                    }
-                });
-            if ui.button("d — Stop").clicked() {
-                stopped = true;
-            }
-            ui.label("Esc — Close · Space — Repeat last method");
-        });
+                }
+            });
+        if ui.button("d — Stop").clicked() {
+            stopped = true;
+        }
+        ui.label("Esc — Close · Space — Repeat last method");
+    });
     app.playback.open = open;
     if stopped {
         crate::play::transport::stop(app);

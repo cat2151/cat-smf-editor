@@ -185,7 +185,7 @@ pub fn confirmation(app: &mut App, ctx: &egui::Context) {
     let mut save = false;
     let mut discard = false;
     let mut resume = false;
-    egui::Modal::new(egui::Id::new("file-confirmation")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("file-confirmation")).show(ctx, |ui| {
         ui.set_min_width(370.0);
         if let Some(loaded) = &app.loaded {
             ui.strong(&loaded.name);

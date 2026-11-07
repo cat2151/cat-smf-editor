@@ -114,22 +114,27 @@ pub(crate) fn menu(a: &mut App, ctx: &egui::Context) {
     let mut action = None;
     let mut stopped = false;
     let mut open = true;
-    egui::Window::new("Play")
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            if ui.button("Enter — Song").clicked() {
-                action = Some(false);
-            }
-            if ui.button("T — Container").clicked() {
-                action = Some(true);
-            }
-            if ui.button("D — Stop").clicked() {
-                stopped = true;
-            }
-        });
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::Play,
+        egui::Id::new("Play"),
+        "Play",
+    )
+    .collapsible(false)
+    .resizable(false)
+    .open(&mut open)
+    .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    .show(ctx, |ui| {
+        if ui.button("Enter — Song").clicked() {
+            action = Some(false);
+        }
+        if ui.button("T — Container").clicked() {
+            action = Some(true);
+        }
+        if ui.button("D — Stop").clicked() {
+            stopped = true;
+        }
+    });
     if stopped {
         transport::stop(a);
     }

@@ -112,7 +112,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, state: &mut State, fresh:
     if !fresh {
         super::clear(ctx);
     }
-    egui::Modal::new(egui::Id::new("same-measure-input")).show(ctx, |ui| {
+    crate::view::presentation::modal(ctx, egui::Id::new("same-measure-input")).show(ctx, |ui| {
         ui.heading(if state.range.is_some() {
             "Generate same measures"
         } else {

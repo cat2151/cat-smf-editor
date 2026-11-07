@@ -285,6 +285,26 @@ fn right_click_menu_offers_track_play_and_jump() {
     assert_eq!(app.track_view.cursor_tick, Some(3840));
 }
 
+#[test]
+fn native_context_menu_owns_escape_and_its_displayed_action_keys() {
+    let (mut app, ctx) = opened();
+    // The shipping Windows backend registers native presentation hosts.
+    ctx.set_embed_viewports(false);
+    let rect = pane(&ctx, 1);
+    let at = egui::pos2(rect.left() + 800.0, rect.center().y);
+    click(&mut app, &ctx, at, egui::PointerButton::Secondary);
+    press(&mut app, &ctx, &[egui::Key::Escape]);
+    assert!(app.track_overview.open);
+    click(&mut app, &ctx, at, egui::PointerButton::Secondary);
+    press(&mut app, &ctx, &[egui::Key::T]);
+    assert_eq!(playing_tracks(&app), vec![1]);
+    click(&mut app, &ctx, at, egui::PointerButton::Secondary);
+    press(&mut app, &ctx, &[egui::Key::G]);
+    assert!(!app.track_overview.open);
+    assert_eq!(app.track, 1);
+    assert_eq!(app.track_view.cursor_tick, Some(3840));
+}
+
 mod drawing;
 mod pattern_edit;
 pub(crate) mod song;

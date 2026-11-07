@@ -246,7 +246,10 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 });
             }
             if s != Screen::Mixer {
-                add("play.open", &[Key::P], |a, _| a.playback.open = true);
+                add("play.open", &[Key::P], |a, ctx| {
+                    a.playback.open = true;
+                    a.playback.viewport = ctx.viewport_id();
+                });
                 add("play.last", &[Key::Space], |a, _| {
                     playback::start(a, a.playback.last)
                 });

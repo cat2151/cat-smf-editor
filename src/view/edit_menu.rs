@@ -78,25 +78,30 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
-    egui::Window::new("e")
-        .collapsible(false)
-        .resizable(false)
-        .open(&mut open)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(ctx, |ui| {
-            if ui
-                .add_enabled(app.undo.available(), egui::Button::new("u: Undo"))
-                .clicked()
-            {
-                app.edit_menu.open = false;
-                super::undo::apply(app);
+    crate::view::presentation::window(
+        ctx,
+        crate::view::commands::Screen::Edit,
+        egui::Id::new("e"),
+        "e",
+    )
+    .collapsible(false)
+    .resizable(false)
+    .open(&mut open)
+    .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+    .show(ctx, |ui| {
+        if ui
+            .add_enabled(app.undo.available(), egui::Button::new("u: Undo"))
+            .clicked()
+        {
+            app.edit_menu.open = false;
+            super::undo::apply(app);
+        }
+        for (_, field, label) in CHOICES {
+            if ui.button(label).clicked() {
+                choose(app, field);
             }
-            for (_, field, label) in CHOICES {
-                if ui.button(label).clicked() {
-                    choose(app, field);
-                }
-            }
-        });
+        }
+    });
     if !open {
         app.edit_menu.open = false;
     }
