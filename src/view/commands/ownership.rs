@@ -7,6 +7,8 @@ pub enum Screen {
     /// どの画面にも属さず、どの画面のパレットからも実行できる。
     Global,
     Main,
+    /// The score pane beside the event list.
+    Score,
     EditStyle,
     TrackRename,
     Settings,
@@ -81,7 +83,9 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     if a.player_selection.kit_open {
         return Screen::Waiting;
     }
-    if ctx.viewport_id() == super::super::help::viewport() {
+    use crate::view::dock::{focus, locate, Host, ViewKind};
+    let view = locate::view_at(a, ctx);
+    if view == Some(ViewKind::Help) {
         return Screen::Help;
     }
     if a.patterns.workspace.input_open() {
@@ -90,20 +94,24 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     if crate::view::patterns::workspace::focused_query(ctx).is_some() {
         return Screen::ArrangementInput;
     }
-    if crate::view::recording::owns(ctx.viewport_id()) {
+    if view == Some(ViewKind::Keyboard) {
         return Screen::Recording;
     }
-    if ctx.viewport_id() != egui::ViewportId::ROOT {
-        if let Some(p) = crate::view::patterns::workspace::pane(ctx) {
-            return if a.playback.open {
-                Screen::Play
-            } else {
-                p.screen()
-            };
+    match locate::host_at(a, ctx) {
+        Some(Host::Root) => root_owner(a),
+        Some(Host::Dock(_)) => {
+            let root = root_owner(a);
+            match view {
+                Some(view) if root.allows_companions() => focus::screen(view),
+                _ => root,
+            }
         }
-        return Screen::Analysis;
+        None => match view {
+            Some(ViewKind::Song | ViewKind::Scene) if a.playback.open => Screen::Play,
+            Some(view @ (ViewKind::Song | ViewKind::Scene)) => focus::screen(view),
+            _ => Screen::Analysis,
+        },
     }
-    root_owner(a)
 }
 
 /// No input or menu of the root window holds a row of what it shows.
@@ -111,6 +119,7 @@ pub fn root_idle(a: &App) -> bool {
     matches!(
         root_owner(a),
         Screen::Main
+            | Screen::Score
             | Screen::Drums
             | Screen::Timeline
             | Screen::Mixer
@@ -191,13 +200,19 @@ pub(crate) fn root_owner(a: &App) -> Screen {
         return a.layer_editor.command_screen();
     }
     if crate::view::drums::is_open(a) {
-        return if a.drum_editor.confirm_create {
-            Screen::DrumCreate
-        } else if a.drum_editor.input.is_some() || a.drum_editor.kit.has_input() {
-            Screen::DrumInput
-        } else {
-            Screen::Drums
-        };
+        if a.drum_editor.confirm_create {
+            return Screen::DrumCreate;
+        }
+        if a.drum_editor.input.is_some() || a.drum_editor.kit.has_input() {
+            return Screen::DrumInput;
+        }
+        // A grid placed in a pane stays open beside the pane holding the keys.
+        use crate::view::dock::{focus, ViewKind};
+        if !focus::placed(a, ViewKind::StepSequencer)
+            || focus::focused(a) == ViewKind::StepSequencer
+        {
+            return Screen::Drums;
+        }
     }
     if a.effect_editor.is_open() {
         return a.effect_editor.command_screen();
@@ -237,7 +252,7 @@ pub(crate) fn root_owner(a: &App) -> Screen {
     if a.piano_roll.open || a.tempo_curve.open || a.parameter_editor.open {
         return Screen::Timeline;
     }
-    Screen::Main
+    crate::view::dock::focus::screen(crate::view::dock::focus::focused(a))
 }
 
 impl Screen {
@@ -303,6 +318,7 @@ impl Screen {
             Self::Split => "split.close",
             Self::Play => "play.close",
             Self::Mixer => "mixer.unfocus",
+            Self::Score => "pane.unfocus",
             Self::Layers => "layer.close",
             Self::Effects => "effect.close",
             Self::Recent => "recent.close",

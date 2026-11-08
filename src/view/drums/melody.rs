@@ -265,13 +265,21 @@ fn preview(a: &mut App, pitch: u8) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn show(a: &mut App, ctx: &egui::Context) {
+/// A pane leaves the keys to the window holding it, which routed them before its panes.
+pub(super) fn show(a: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>) {
     sync(a);
     kit::expire_preview(a);
-    crate::view::commands::route(a, ctx);
+    if pane.is_none() {
+        crate::view::commands::route(a, ctx);
+    }
     if !super::is_open(a) {
         return;
     }
     sync(a);
-    widgets::show(a, ctx);
+    widgets::show(a, ctx, pane);
+}
+
+/// A gesture cannot see its release while its pane is hidden.
+pub(super) fn suspend(a: &mut App) {
+    a.drum_editor.melody.gesture = None;
 }

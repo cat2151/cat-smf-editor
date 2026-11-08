@@ -13,8 +13,9 @@ const BLACK: egui::Vec2 = egui::vec2(11.0, 62.0);
 /// Width of the box beyond each end, lit by notes outside the 88 keys.
 const EDGE: f32 = 22.0;
 const WHITE_KEYS: f32 = 52.0;
-pub(super) const SIZE: egui::Vec2 =
-    egui::vec2(EDGE * 2.0 + WHITE.x * WHITE_KEYS + 16.0, WHITE.y + 16.0);
+/// The keys at their own size.
+const KEYS: egui::Vec2 = egui::vec2(EDGE * 2.0 + WHITE.x * WHITE_KEYS, WHITE.y);
+pub(super) const SIZE: egui::Vec2 = egui::vec2(KEYS.x + 16.0, KEYS.y + 16.0);
 
 const SOUNDING: egui::Color32 = egui::Color32::from_rgb(0xf9, 0x26, 0x72);
 const PLAYABLE_WHITE: egui::Color32 = egui::Color32::from_rgb(0xb4, 0xec, 0xf7);
@@ -89,20 +90,33 @@ fn edge(
     };
     p.rect_filled(rect.shrink(1.0), 2.0, color);
     let c = rect.center();
+    let k = rect.height() / WHITE.y;
     let (tip, back) = if left { (-5.0, 4.0) } else { (5.0, -4.0) };
     p.add(egui::Shape::convex_polygon(
         vec![
-            c + egui::vec2(tip, 0.0),
-            c + egui::vec2(back, -6.0),
-            c + egui::vec2(back, 6.0),
+            c + egui::vec2(tip, 0.0) * k,
+            c + egui::vec2(back, -6.0) * k,
+            c + egui::vec2(back, 6.0) * k,
         ],
         egui::Color32::from_gray(220),
         egui::Stroke::NONE,
     ));
 }
 
-/// A pressed or dragged key sounds and records like a pad.
+/// The keys at their own size, as the piano's window shows them.
 pub(super) fn show(ui: &mut egui::Ui, s: &mut Session) {
+    draw(ui, s, 1.0);
+}
+
+/// The keys as large as the pane holds them.
+pub(super) fn pane(ui: &mut egui::Ui, s: &mut Session) {
+    let room = ui.available_size();
+    draw(ui, s, (room.x / KEYS.x).min(room.y / KEYS.y).max(0.0));
+}
+
+/// A pressed or dragged key sounds and records like a pad. `k` scales the keys.
+fn draw(ui: &mut egui::Ui, s: &mut Session, k: f32) {
+    let (white, black_key, edge_width) = (WHITE * k, BLACK * k, EDGE * k);
     let t = s.settings();
     let (mut playable, mut labels) = playable(t);
     if s.sound().patch.kit.is_some() {
@@ -121,11 +135,11 @@ pub(super) fn show(ui: &mut egui::Ui, s: &mut Session) {
             *on = r.sounding(p as u8);
         }
     }
-    let width = EDGE * 2.0 + WHITE.x * WHITE_KEYS;
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, WHITE.y), egui::Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(KEYS * k, egui::Sense::hover());
     let p = ui.painter();
-    let side =
-        |x: f32| egui::Rect::from_min_size(egui::pos2(x, rect.top()), egui::vec2(EDGE, WHITE.y));
+    let side = |x: f32| {
+        egui::Rect::from_min_size(egui::pos2(x, rect.top()), egui::vec2(edge_width, white.y))
+    };
     edge(
         p,
         side(rect.left()),
@@ -136,7 +150,7 @@ pub(super) fn show(ui: &mut egui::Ui, s: &mut Session) {
     );
     edge(
         p,
-        side(rect.right() - EDGE),
+        side(rect.right() - edge_width),
         usize::from(HIGH) + 1..128,
         &sounding,
         &playable,
@@ -147,11 +161,11 @@ pub(super) fn show(ui: &mut egui::Ui, s: &mut Session) {
             at,
             egui::Align2::CENTER_BOTTOM,
             text,
-            egui::FontId::monospace(11.0),
+            egui::FontId::monospace(11.0 * k),
             color,
         );
     };
-    let mut x = rect.left() + EDGE;
+    let mut x = rect.left() + edge_width;
     let mut blacks = vec![];
     let mut whites = vec![];
     let interact = |pitch: u8, key: egui::Rect| {
@@ -161,16 +175,16 @@ pub(super) fn show(ui: &mut egui::Ui, s: &mut Session) {
     for pitch in LOW..=HIGH {
         let i = usize::from(pitch);
         if black(pitch) {
-            blacks.push((pitch, x - BLACK.x / 2.0));
+            blacks.push((pitch, x - black_key.x / 2.0));
             continue;
         }
-        let key = egui::Rect::from_min_size(egui::pos2(x, rect.top()), WHITE);
+        let key = egui::Rect::from_min_size(egui::pos2(x, rect.top()), white);
         whites.push(interact(pitch, key));
         p.rect_filled(key.shrink(0.5), 1.0, fill(sounding[i], playable[i], false));
         if let Some(label) = labels[i] {
             caption(
                 p,
-                key.center_bottom() - egui::vec2(0.0, 16.0),
+                key.center_bottom() - egui::vec2(0.0, 16.0 * k),
                 label,
                 egui::Color32::BLACK,
             );
@@ -178,23 +192,23 @@ pub(super) fn show(ui: &mut egui::Ui, s: &mut Session) {
         if pitch % 12 == 0 {
             caption(
                 p,
-                key.center_bottom() - egui::vec2(0.0, 2.0),
+                key.center_bottom() - egui::vec2(0.0, 2.0 * k),
                 &note_name(pitch),
                 egui::Color32::from_gray(110),
             );
         }
-        x += WHITE.x;
+        x += white.x;
     }
     let mut keys = vec![];
     for (pitch, left) in blacks {
         let i = usize::from(pitch);
-        let key = egui::Rect::from_min_size(egui::pos2(left, rect.top()), BLACK);
+        let key = egui::Rect::from_min_size(egui::pos2(left, rect.top()), black_key);
         keys.push(interact(pitch, key));
         p.rect_filled(key, 1.0, fill(sounding[i], playable[i], true));
         if let Some(label) = labels[i] {
             caption(
                 p,
-                key.center_bottom() - egui::vec2(0.0, 3.0),
+                key.center_bottom() - egui::vec2(0.0, 3.0 * k),
                 label,
                 egui::Color32::WHITE,
             );
@@ -207,7 +221,6 @@ pub(super) fn show(ui: &mut egui::Ui, s: &mut Session) {
     play::point(s, window::Pointer::Piano, target);
     // Pads read their keys in the keyboard window, so releasing a key hands it the focus back.
     if held && target.is_none() && !ui.input(|i| i.pointer.primary_down()) {
-        ui.ctx()
-            .send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
+        crate::view::presentation::send_to(ui.ctx(), s.home, egui::ViewportCommand::Focus);
     }
 }

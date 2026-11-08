@@ -1,5 +1,8 @@
 use super::*;
 use std::time::Duration;
+mod demo;
+mod docked_song;
+mod keyboard_pane;
 mod windows;
 
 /// Press and release a recording pad at its physical position.

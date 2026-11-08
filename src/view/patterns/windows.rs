@@ -56,8 +56,13 @@ pub fn reset(a: &mut App, ctx: &egui::Context) {
     ]) {
         let [x, y, width, height] = defaults(title);
         a.config.pattern_windows.remove(title);
-        ctx.send_viewport_cmd_to(id, ViewportCommand::OuterPosition(egui::pos2(x, y)));
-        ctx.send_viewport_cmd_to(id, ViewportCommand::InnerSize(egui::vec2(width, height)));
+        let send = crate::view::presentation::send_to;
+        send(ctx, id, ViewportCommand::OuterPosition(egui::pos2(x, y)));
+        send(
+            ctx,
+            id,
+            ViewportCommand::InnerSize(egui::vec2(width, height)),
+        );
         ctx.data_mut(|d| d.insert_temp(reset_guard(title), true));
     }
     a.config.persist();

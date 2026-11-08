@@ -269,7 +269,7 @@ fn shell_restores_content_style_and_modal_ownership_for_both_kinds() {
         let ctx = egui::Context::default();
         let original = ctx.style();
         let _ = ctx.run(Default::default(), |ctx| {
-            kind.show(&mut app, ctx, &mut true, |_, ui| {
+            kind.show(&mut app, ctx, None, &mut true, |_, ui| {
                 assert_eq!(ui.style(), &original);
             });
             assert_eq!(ctx.style(), original);

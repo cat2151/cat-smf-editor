@@ -47,7 +47,10 @@ impl App {
             && !self.file_open_requested
             && !self.config.navigation.close_approved
             && self.load_error.is_none()
-            && view::commands::owner(self, ctx) == view::commands::Screen::Main;
+            && matches!(
+                view::commands::owner(self, ctx),
+                view::commands::Screen::Main | view::commands::Screen::Score
+            );
         #[cfg(windows)]
         let idle = idle && !crate::player::resident_link::loading(self);
         idle

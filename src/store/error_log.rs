@@ -52,6 +52,7 @@ impl crate::app::App {
     pub fn log_errors(&mut self) {
         for (category, error) in [
             ("settings", self.settings_error.as_deref()),
+            ("layout", self.layout.error.as_deref()),
             ("session", self.config.error.as_deref()),
             ("load", self.load_error.as_deref()),
             ("player", self.player_selection.error.as_deref()),

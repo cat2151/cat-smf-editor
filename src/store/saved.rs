@@ -226,7 +226,12 @@ impl crate::app::App {
 
     pub fn close(&mut self, ctx: &eframe::egui::Context) {
         use eframe::egui::ViewportCommand;
+        // Every window has drawn, so an Alt+F4 that another window stepped aside for quits here.
+        let alt_f4 = crate::view::alt_f4::take();
         if !ctx.input(|i| i.viewport().close_requested()) {
+            if alt_f4 {
+                self.request_close(ctx);
+            }
             return;
         }
         if crate::view::opening::pending(self) {

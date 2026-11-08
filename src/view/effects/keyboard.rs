@@ -4,7 +4,7 @@ pub(crate) fn help(ui: &mut egui::Ui) -> bool {
     let mut close = false;
     ui.horizontal(|ui| {
         ui.heading("エフェクト — ヘルプ");
-        if ui.button("×").clicked() {
+        if crate::view::help::windowed(ui) && ui.button("×").clicked() {
             close = true;
         }
     });

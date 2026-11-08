@@ -167,7 +167,7 @@ pub fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             },
         ));
         out.push(Command::plain(s, "play.open", &[Key::P], |a, ctx| {
-            a.playback.viewport = ctx.viewport_id();
+            a.playback.view = locate::opener(a, ctx);
             a.playback.open = true
         }));
         if p == Pane::Song {

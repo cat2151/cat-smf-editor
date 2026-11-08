@@ -82,7 +82,8 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
     if !s.settings_open {
         s.companions.settings = None;
     }
-    if !s.piano_open {
+    let piano = s.piano_open && !s.piano_placed;
+    if !piano {
         s.companions.piano = None;
     }
     if s.settings_open {
@@ -104,7 +105,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
             |a, ctx, class| {
                 let _span = crate::frame_trace::span("settings/ui");
                 if class != egui::ViewportClass::Embedded {
-                    if ctx.input(|i| i.viewport().close_requested()) {
+                    if crate::view::alt_f4::closes(ctx) {
                         s.settings_open = false;
                         return;
                     }
@@ -131,7 +132,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
             },
         );
     }
-    if s.piano_open {
+    if piano {
         let other = s
             .companions
             .settings
@@ -151,9 +152,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
             builder,
             |a, ctx, class| {
                 let _span = crate::frame_trace::span("piano/ui");
-                if class != egui::ViewportClass::Embedded
-                    && ctx.input(|i| i.viewport().close_requested())
-                {
+                if class != egui::ViewportClass::Embedded && crate::view::alt_f4::closes(ctx) {
                     s.piano_open = false;
                     return;
                 }
@@ -325,12 +324,13 @@ pub(super) fn settings(ui: &mut egui::Ui, s: &mut Session) -> egui::Vec2 {
     (grid.response.rect.max.to_vec2() + egui::Vec2::splat(MARGIN)).ceil()
 }
 
-/// Gives each open keyboard window to the editor once its native window exists.
-pub(super) fn adopt(ctx: &egui::Context, s: &mut Session) {
+/// Gives each open keyboard window to the editor once its native window exists; `keyboard` is
+/// whether the keyboard has a window of its own rather than a pane.
+pub(super) fn adopt(ctx: &egui::Context, s: &mut Session, keyboard: bool) {
     let open = [
-        (window::TITLE, true),
+        (window::TITLE, keyboard),
         (companions::SETTINGS_TITLE, s.settings_open),
-        (companions::PIANO_TITLE, s.piano_open),
+        (companions::PIANO_TITLE, s.piano_open && !s.piano_placed),
         (capture::TITLE, s.capture.is_some()),
     ];
     // A closed companion gets a new native window when it reopens.
@@ -338,7 +338,9 @@ pub(super) fn adopt(ctx: &egui::Context, s: &mut Session) {
         .retain(|t| open.iter().any(|(title, shown)| title == t && *shown));
     // Reopened at startup, the keyboard opens before `origin` is the foreground window.
     #[cfg(windows)]
-    if s.owner.is_none() && ctx.input_for(s.origin, |i| i.focused) {
+    if s.owner.is_none()
+        && crate::view::presentation::input_for(ctx, s.origin, |i| i.focused) == Some(true)
+    {
         s.owner = super::super::analysis::owner::editor();
     }
     #[cfg(windows)]

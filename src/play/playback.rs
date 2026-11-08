@@ -27,7 +27,8 @@ pub enum Mode {
 pub struct Playback {
     pub parameter_preview: Option<crate::view::parameter_editor::preview::Preview>,
     pub open: bool,
-    pub viewport: egui::ViewportId,
+    /// The view the Play window opened from; it shows in that view's window.
+    pub view: crate::view::dock::ViewKind,
     pub last: Mode,
     pub pending: Option<crate::play::transport::Prepared>,
     pub active: Option<crate::play::transport::Active>,
@@ -39,6 +40,8 @@ pub struct Playback {
     pub mixer_focus: bool,
     pub mixer_track: usize,
     pub mixer_master: bool,
+    /// What the mixer pane did this frame, applied by `mixer::show`.
+    pub mixer_pane: Option<crate::play::mixer::Outcome>,
 }
 
 impl Playback {
@@ -52,7 +55,7 @@ impl Default for Playback {
         Self {
             parameter_preview: None,
             open: false,
-            viewport: egui::ViewportId::ROOT,
+            view: crate::view::dock::ViewKind::EventList,
             last: Mode::default(),
             pending: None,
             active: None,
@@ -63,6 +66,7 @@ impl Default for Playback {
             mixer_focus: true,
             mixer_track: 0,
             mixer_master: true,
+            mixer_pane: None,
         }
     }
 }
@@ -236,7 +240,7 @@ pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
-    if !app.playback.open || ctx.viewport_id() != app.playback.viewport {
+    if !app.playback.open || !crate::view::dock::locate::shows(app, ctx, app.playback.view) {
         return;
     }
     if crate::view::track_overview::is_song(app) {

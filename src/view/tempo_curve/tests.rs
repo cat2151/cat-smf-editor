@@ -407,3 +407,4 @@ mod deferred;
 mod grid;
 mod initial_meta;
 mod note_references;
+mod pane;

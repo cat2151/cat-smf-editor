@@ -153,6 +153,7 @@ fn present_body(a: &mut App) {
     if crate::view::drums::is_open(a) {
         workspace::reset_windows(a);
         a.patterns.root_focus = true;
+        crate::view::drums::take_keys(a);
     }
 }
 

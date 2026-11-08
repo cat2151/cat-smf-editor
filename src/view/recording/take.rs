@@ -46,7 +46,7 @@ pub(super) fn reveal(a: &mut App, s: &Session, id: u64) -> Result<(), String> {
     a.patterns.container = Some(catalog.patterns[&id].container);
     if let Some(p) = [Pane::Scene, Pane::Song]
         .into_iter()
-        .find(|p| p.viewport() == s.origin)
+        .find(|p| p.view() == s.from)
     {
         a.patterns.workspace.selection_mut(p).choice = Some(PatternOrScene::Pattern(id));
         a.patterns.workspace.selection_mut(p).query.clear();

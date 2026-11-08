@@ -246,10 +246,11 @@ fn menu(ui: &mut egui::Ui, s: &mut Session) {
     crate::view::presentation::menu_button(ui, "☰", |ui| {
         // Wide enough for the keys; the popup shifts left inside the window.
         ui.set_min_width(150.0);
-        for (label, key, open) in [
-            ("設定", "Ctrl+,", &mut s.settings_open),
-            ("Piano", "Ctrl+.", &mut s.piano_open),
-        ] {
+        let piano = (!s.piano_placed).then_some(("Piano", "Ctrl+.", &mut s.piano_open));
+        for (label, key, open) in [Some(("設定", "Ctrl+,", &mut s.settings_open)), piano]
+            .into_iter()
+            .flatten()
+        {
             // egui paints shortcuts in the weak color, unreadable on the hovered row.
             let key = egui::RichText::new(key).color(ui.visuals().text_color());
             let button = egui::Button::new(label).shortcut_text(key).selected(*open);
@@ -332,7 +333,10 @@ pub(super) fn covers(a: &App, ctx: &egui::Context) -> Vec<egui::Rect> {
             super::super::patterns::mode::song_window(a)
                 && (p == Pane::Song || a.patterns.workspace.scene_window)
         })
-        .filter_map(|p| ctx.input_for(p.viewport(), |i| i.viewport().outer_rect))
+        .filter_map(|p| {
+            crate::view::presentation::input_for(ctx, p.viewport(), |i| i.viewport().outer_rect)
+                .flatten()
+        })
         .collect()
 }
 
@@ -368,19 +372,35 @@ pub(super) fn place(screen: egui::Rect, covers: &[egui::Rect], size: egui::Vec2)
         .unwrap()
 }
 
-pub(super) fn show(ctx: &egui::Context, class: egui::ViewportClass, s: &mut Session) {
+/// The frame lights while recording.
+fn frame(style: &egui::Style, s: &Session) -> egui::Frame {
     let color = if s.recorder.as_ref().is_some_and(Recorder::started) {
         RECORDING
     } else {
         egui::Color32::from_gray(90)
     };
-    let body = |ui: &mut egui::Ui| {
-        playing(ui, s);
-        if let Some(error) = &s.error {
-            ui.colored_label(ui.visuals().error_fg_color, error);
-        }
-    };
-    let frame = egui::Frame::central_panel(&ctx.style()).stroke(egui::Stroke::new(2.0_f32, color));
+    egui::Frame::central_panel(style).stroke(egui::Stroke::new(2.0_f32, color))
+}
+
+fn body(ui: &mut egui::Ui, s: &mut Session) {
+    playing(ui, s);
+    if let Some(error) = &s.error {
+        ui.colored_label(ui.visuals().error_fg_color, error);
+    }
+}
+
+/// The keyboard filling a pane.
+pub(super) fn pane(ui: &mut egui::Ui, s: &mut Session) {
+    frame(ui.style(), s).show(ui, |ui| {
+        ui.set_min_size(ui.available_size());
+        body(ui, s);
+    });
+    super::choices::creation(ui.ctx(), s);
+}
+
+pub(super) fn show(ctx: &egui::Context, class: egui::ViewportClass, s: &mut Session) {
+    let frame = frame(&ctx.style(), s);
+    let body = |ui: &mut egui::Ui| body(ui, s);
     if class == egui::ViewportClass::Embedded {
         egui::Window::new(TITLE).frame(frame).show(ctx, body);
     } else {

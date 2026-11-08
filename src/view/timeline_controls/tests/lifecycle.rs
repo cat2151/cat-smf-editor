@@ -10,15 +10,15 @@ fn scroll(f: &Fixture) -> f32 {
 
 #[test]
 fn hiding_and_reopening_a_timeline_does_not_resume_a_held_drag() {
-    for screen in Screen::ALL {
-        let mut f = Fixture::new(screen);
+    for (screen, pane) in Fixture::cases() {
+        let mut f = Fixture::new(screen, pane);
         let before = f.bytes();
         let map = f.rect("minimap");
         let point = |fraction| egui::pos2(map.left() + map.width() * fraction, map.center().y);
         f.pointer(point(0.6), Primary, true);
         f.frame(vec![egui::Event::PointerMoved(point(0.7))]);
         f.frame(vec![]);
-        assert!(scroll(&f) > 0.0, "fixture pans {screen:?}");
+        assert!(scroll(&f) > 0.0, "fixture pans {screen:?} pane={pane}");
         f.visible(false);
         f.frame(vec![]);
         f.visible(true);
@@ -30,16 +30,19 @@ fn hiding_and_reopening_a_timeline_does_not_resume_a_held_drag() {
         f.frame(vec![]);
         f.pointer(point(0.9), Primary, false);
         f.frame(vec![]);
-        assert!((scroll(&f) - reopened).abs() < 0.5, "stale drag {screen:?}");
+        assert!(
+            (scroll(&f) - reopened).abs() < 0.5,
+            "stale drag {screen:?} pane={pane}"
+        );
         assert_eq!(
             crate::play::playback::location(&f.app).0,
             cursor,
-            "stale click {screen:?}"
+            "stale click {screen:?} pane={pane}"
         );
         assert!(
             f.app.playback.pending.is_none() && f.app.playback.active.is_none(),
-            "{screen:?}"
+            "{screen:?} pane={pane}"
         );
-        assert_eq!(f.bytes(), before, "{screen:?}");
+        assert_eq!(f.bytes(), before, "{screen:?} pane={pane}");
     }
 }

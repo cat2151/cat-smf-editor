@@ -111,7 +111,7 @@ mod tests {
             .unwrap()
             .focused = Some(true);
         let _ = ctx.run(input, |ctx| {
-            super::super::widgets::show(&mut app, ctx, &mut None);
+            super::super::widgets::show(&mut app, ctx, None, &mut None);
             assert_eq!(ctx.style(), original);
         });
     }

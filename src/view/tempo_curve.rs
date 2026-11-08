@@ -45,6 +45,8 @@ pub struct State {
     repeat_drag: crate::view::timeline_repeat::State,
     /// Why the last edit was not applied.
     pub(crate) error: Option<String>,
+    /// What the pane drew this frame, applied by `show` after the main window's pass.
+    pane: Option<(std::sync::Arc<cat_smf_editor::model::Music>, body::Outcome)>,
 }
 
 /// A point being dragged; the edit is applied on release.
@@ -91,8 +93,10 @@ pub(crate) fn tempo_events(loaded: &Loaded) -> Vec<(u64, f64)> {
         .collect()
 }
 
+mod body;
 mod show;
 pub use show::show;
+pub(crate) use show::{pane, run, suspend};
 
 /// Width covers all notes and points; height fits the viewport.
 fn size(layout: &Layout, curve: Option<&Curve>, height: f32) -> egui::Vec2 {

@@ -4,6 +4,7 @@ use super::*;
 /// At startup, before the first frame.
 pub(crate) fn begin(a: &mut App) {
     a.patterns.recording.resuming = a.config.phrase_loop;
+    a.patterns.recording.starting = true;
 }
 
 /// Opens as Shift+R in the Song window once it has a place on the screen, so the keyboard
@@ -12,11 +13,13 @@ pub(crate) fn begin(a: &mut App) {
 pub(super) fn follow(a: &mut App, ctx: &egui::Context) {
     if a.patterns.recording.is_open() || a.loaded.is_none() {
         a.patterns.recording.resuming = false;
+        a.patterns.recording.starting = false;
         return;
     }
     let song = super::super::patterns::mode::song_window(a);
     let resuming = a.patterns.recording.resuming;
     if !resuming && !(song && a.patterns.recording.failed != Some(a.song_id)) {
+        a.patterns.recording.starting = false;
         return;
     }
     // A confirmation, such as the exit one, would lose its keys to the new keyboard window.
@@ -28,37 +31,59 @@ pub(super) fn follow(a: &mut App, ctx: &egui::Context) {
     {
         return;
     }
+    // The main window first appears at the end of its first frame and takes the front then, so
+    // a keyboard opened during that frame would lose the front to it.
+    if ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT) == 0 {
+        return;
+    }
     let pane = song.then_some(Pane::Song);
-    // The Song window takes the focus once at startup; the keyboard opens after it has.
+    // The keyboard is placed beside the window showing the Song, its own or the one holding
+    // its pane, so it waits for that window's place on the screen.
     if let Some(p) = pane
-        && (ctx
-            .input_for(p.viewport(), |i| i.viewport().outer_rect)
-            .is_none()
-            || resuming && !ctx.input_for(p.viewport(), |i| i.focused))
+        && input_for(ctx, locate::viewport_of(a, p.view()), |i| {
+            i.viewport().outer_rect
+        })
+        .flatten()
+        .is_none()
     {
         return;
     }
     a.patterns.recording.resuming = false;
-    let origin = pane.map_or(ctx.viewport_id(), Pane::viewport);
-    if let Err(error) = open_from(a, ctx, origin, pane, false) {
+    let starting = std::mem::take(&mut a.patterns.recording.starting);
+    let back = starting && !a.config.keyboard_focused;
+    // The grid the app closed with keeps the keys, since a pane that loses them closes it.
+    let grid = back && focus::focused(a) == ViewKind::StepSequencer;
+    let view = pane.map_or(locate::opener(a, ctx), Pane::view);
+    if let Err(error) = open_from(a, ctx, view, pane, false, !grid) {
         a.patterns.recording.failed = Some(a.song_id);
         a.load_error = Some(error);
         return;
     }
     // The new keyboard window takes the focus; it goes back where the app closed with it.
-    if resuming
-        && !a.config.keyboard_focused
-        && let Some(s) = a.patterns.recording.session.as_mut()
-    {
+    if back && let Some(s) = a.patterns.recording.session.as_mut() {
         s.focused = false;
-        ctx.send_viewport_cmd_to(origin, egui::ViewportCommand::Focus);
+        let origin = s.origin;
+        if grid {
+            super::hand_back(
+                a,
+                ctx,
+                ViewKind::StepSequencer,
+                locate::viewport_of(a, ViewKind::StepSequencer),
+            );
+        } else {
+            super::hand_back(a, ctx, view, origin);
+        }
     }
 }
 
 /// Brings the keyboard back from its minimized state, to the front.
 pub(crate) fn restore(ctx: &egui::Context) {
-    ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Minimized(false));
-    ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
+    send_to(
+        ctx,
+        window::viewport(),
+        egui::ViewportCommand::Minimized(false),
+    );
+    send_to(ctx, window::viewport(), egui::ViewportCommand::Focus);
 }
 
 pub(super) fn shut(a: &mut App, state: &mut State) {

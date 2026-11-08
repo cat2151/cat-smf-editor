@@ -5,7 +5,12 @@ use egui::Color32;
 const LOOP_HOVER: &str = "A-B間をLoop  R";
 const SOLO_HOVER: &str = "Loopでこのtrackだけを鳴らす  S";
 
-pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) {
+pub(super) fn show(
+    app: &mut App,
+    ctx: &egui::Context,
+    pane: Option<&mut egui::Ui>,
+    action: &mut Option<Op>,
+) {
     if app.drum_editor.confirm_create {
         let response =
             crate::view::presentation::modal(ctx, egui::Id::new("drum-create")).show(ctx, |ui| {
@@ -42,7 +47,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, action: &mut Option<Op>) 
     let surface = super::surface::Surface::new(app, ctx, sounding);
     let window = super::window::Kind::Drums;
     let mut open = true;
-    window.show(app, ctx, &mut open, |app, ui| {
+    window.show(app, ctx, pane, &mut open, |app, ui| {
         let loaded = app.loaded.as_ref().unwrap();
         let patch = &loaded.patches[track];
         let state = &mut app.drum_editor;

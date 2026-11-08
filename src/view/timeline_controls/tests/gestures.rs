@@ -9,16 +9,16 @@ fn snapshot(f: &Fixture) -> Snapshot {
 
 #[test]
 fn all_registered_ui_adapters_pan_live_preserve_domain_and_release_without_click() {
-    for screen in Screen::ALL {
-        let mut f = Fixture::new(screen);
+    for (screen, pane) in Fixture::cases() {
+        let mut f = Fixture::new(screen, pane);
         let before = f.bytes();
         let generation = f.app.generation;
         let initial = snapshot(&f);
-        assert!(initial.width > 0.0, "{screen:?}");
+        assert!(initial.width > 0.0, "{screen:?} pane={pane}");
         let map = f.rect("minimap");
         assert!(
             f.rect("visible").width() < map.width() * 0.8,
-            "long fixture: {screen:?}"
+            "long fixture: {screen:?} pane={pane}"
         );
         f.app.playback.repeat = Some((0, 480));
         for outside in [false, true] {
@@ -35,24 +35,32 @@ fn all_registered_ui_adapters_pan_live_preserve_domain_and_release_without_click
             f.frame(vec![egui::Event::PointerMoved(to)]);
             f.frame(vec![]);
             let held = snapshot(&f);
-            assert!(held.scroll > 0.0, "{screen:?}");
-            assert!(!f.app.playback.follow, "{screen:?}");
+            assert!(held.scroll > 0.0, "{screen:?} pane={pane}");
+            assert!(!f.app.playback.follow, "{screen:?} pane={pane}");
             f.pointer(to, Primary, false);
             f.frame(vec![]);
             assert!(
                 (snapshot(&f).scroll - held.scroll).abs() < 0.5,
-                "release {screen:?}"
+                "release {screen:?} pane={pane}"
             );
-            assert_eq!(snapshot(&f).end_x, initial.end_x, "zoom {screen:?}");
-            assert_eq!(f.app.playback.repeat, Some((0, 480)), "{screen:?}");
+            assert_eq!(
+                snapshot(&f).end_x,
+                initial.end_x,
+                "zoom {screen:?} pane={pane}"
+            );
+            assert_eq!(
+                f.app.playback.repeat,
+                Some((0, 480)),
+                "{screen:?} pane={pane}"
+            );
             assert_eq!(
                 crate::play::playback::location(&f.app).0,
                 cursor,
-                "drag must not seek {screen:?}"
+                "drag must not seek {screen:?} pane={pane}"
             );
             assert!(
                 f.app.playback.pending.is_none() && f.app.playback.active.is_none(),
-                "{screen:?}"
+                "{screen:?} pane={pane}"
             );
             assert_eq!(f.app.generation, generation);
             assert_eq!(f.bytes(), before);
@@ -75,7 +83,7 @@ fn all_registered_ui_adapters_pan_live_preserve_domain_and_release_without_click
             let s = snapshot(&f);
             assert!(
                 s.scroll >= 0.0 && s.scroll <= (s.end_x - s.width).max(0.0) + 0.5,
-                "{screen:?} {s:?}"
+                "{screen:?} pane={pane} {s:?}"
             );
         }
     }
@@ -83,8 +91,8 @@ fn all_registered_ui_adapters_pan_live_preserve_domain_and_release_without_click
 
 #[test]
 fn all_registered_bar_adapters_share_click_range_and_wheel_zoom() {
-    for screen in Screen::ALL.into_iter().filter(|s| s.has_bars()) {
-        let mut f = Fixture::new(screen);
+    for (screen, pane) in Fixture::cases().filter(|(s, _)| s.has_bars()) {
+        let mut f = Fixture::new(screen, pane);
         let bytes = f.bytes();
         let before = snapshot(&f).end_x;
         // The zoom bar is above the overview, with a known 24px thickness.
@@ -93,13 +101,16 @@ fn all_registered_bar_adapters_share_click_range_and_wheel_zoom() {
         f.pointer(pos, Primary, true);
         f.pointer(pos, Primary, false);
         f.frame(vec![]);
-        assert!(snapshot(&f).end_x > before, "left click {screen:?}");
+        assert!(
+            snapshot(&f).end_x > before,
+            "left click {screen:?} pane={pane}"
+        );
         f.pointer(pos, Secondary, true);
         f.pointer(pos, Secondary, false);
         f.frame(vec![]);
         assert!(
             (snapshot(&f).end_x - before).abs() < 1.0,
-            "right click {screen:?}"
+            "right click {screen:?} pane={pane}"
         );
         let prior = snapshot(&f).end_x;
         f.frame(vec![
@@ -113,7 +124,7 @@ fn all_registered_bar_adapters_share_click_range_and_wheel_zoom() {
         for _ in 0..12 {
             f.frame(vec![]);
         }
-        assert!(snapshot(&f).end_x > prior, "wheel {screen:?}");
+        assert!(snapshot(&f).end_x > prior, "wheel {screen:?} pane={pane}");
         for button in [Primary, Secondary] {
             let from = pos - egui::vec2(60.0, 0.0);
             let to = pos + egui::vec2(60.0, 0.0);
@@ -128,7 +139,10 @@ fn all_registered_bar_adapters_share_click_range_and_wheel_zoom() {
             f.frame(vec![egui::Event::PointerMoved(to)]);
             f.pointer(to, button, false);
             f.frame(vec![]);
-            assert!(snapshot(&f).end_x > before, "range {button:?} {screen:?}");
+            assert!(
+                snapshot(&f).end_x > before,
+                "range {button:?} {screen:?} pane={pane}"
+            );
         }
         assert_eq!(f.bytes(), bytes);
     }
@@ -152,20 +166,24 @@ fn all_registered_bar_adapters_draw_the_range_over_content_without_zooming_until
             .data(|d| d.get_temp::<Option<egui::Rect>>(egui::Id::new((f.screen, "forecast"))))
             .flatten()
     }
-    for screen in Screen::ALL.into_iter().filter(|s| s.has_bars()) {
-        let mut f = Fixture::new(screen);
+    for (screen, pane) in Fixture::cases().filter(|(s, _)| s.has_bars()) {
+        let mut f = Fixture::new(screen, pane);
         let bytes = f.bytes();
         let before = snapshot(&f);
         let map = f.rect("minimap");
         let pos = egui::pos2(map.center().x, map.top() - 12.0);
         let (from, to) = (pos - egui::vec2(60.0, 0.0), pos + egui::vec2(60.0, 0.0));
-        assert!(!band(&f, from.x, to.x), "{screen:?}");
+        assert!(!band(&f, from.x, to.x), "{screen:?} pane={pane}");
         f.pointer(from, Primary, true);
         f.frame(vec![egui::Event::PointerMoved(to)]);
         for _ in 0..20 {
             f.frame(vec![]);
-            assert_eq!(snapshot(&f).end_x, before.end_x, "held {screen:?}");
-            assert!(band(&f, from.x, to.x), "band {screen:?}");
+            assert_eq!(
+                snapshot(&f).end_x,
+                before.end_x,
+                "held {screen:?} pane={pane}"
+            );
+            assert!(band(&f, from.x, to.x), "band {screen:?} pane={pane}");
         }
         let predicted = forecast(&f).expect("forecast while held");
         f.pointer(to, Primary, false);
@@ -173,20 +191,29 @@ fn all_registered_bar_adapters_draw_the_range_over_content_without_zooming_until
         f.frame(vec![]);
         assert!(
             snapshot(&f).end_x > before.end_x * 2.0,
-            "release {screen:?}"
+            "release {screen:?} pane={pane}"
         );
-        assert!(!band(&f, from.x, to.x), "band after release {screen:?}");
-        assert!(forecast(&f).is_none(), "forecast after release {screen:?}");
+        assert!(
+            !band(&f, from.x, to.x),
+            "band after release {screen:?} pane={pane}"
+        );
+        assert!(
+            forecast(&f).is_none(),
+            "forecast after release {screen:?} pane={pane}"
+        );
         let after = f.rect("visible");
         if screen == Screen::Song {
             // Song's fixed label and gaps do not scale, so its release fit lands
             // off the 90%-centered target that the forecast shows.
-            assert!(after.intersects(predicted), "forecast {screen:?}");
+            assert!(
+                after.intersects(predicted),
+                "forecast {screen:?} pane={pane}"
+            );
         } else {
             assert!(
                 (after.left() - predicted.left()).abs() < 1.0
                     && (after.right() - predicted.right()).abs() < 1.0,
-                "forecast {screen:?} {predicted:?} {after:?}"
+                "forecast {screen:?} pane={pane} {predicted:?} {after:?}"
             );
         }
         assert_eq!(f.bytes(), bytes);

@@ -1,4 +1,5 @@
 //! 画面描画: パネル・行・鍵盤・help。
+pub(crate) mod alt_f4;
 pub(crate) mod analysis;
 pub(crate) mod beat_audition;
 pub(crate) mod busy;
@@ -27,6 +28,7 @@ mod pitch_keyboard;
 pub(crate) mod presentation;
 mod row;
 pub(crate) use row::beat_color;
+pub(crate) mod dock;
 pub(crate) mod files;
 pub(crate) mod macro_editor;
 pub(crate) mod parameter_editor;
@@ -76,6 +78,14 @@ pub(crate) fn track_color(track: usize) -> Color32 {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    if ctx.viewport_id() == egui::ViewportId::ROOT
+        && ctx.output(|o| o.num_completed_passes == 0)
+        && let Err(error) = app
+            .external_editor
+            .launch_pending(ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT))
+    {
+        app.load_error = Some(error);
+    }
     help::input(app, ctx);
     {
         let _span = crate::frame_trace::span("validate");
@@ -88,6 +98,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
     opening::advance(app, ctx);
     crate::play::sung::prerender::poll(app, ctx);
+    crate::store::layout::update(app, ctx);
     voicevox::singer::poll(app, ctx);
     let opening_input = opening::suspend_input(app, ctx);
     patterns::workspace::suspend_background(app, ctx);
@@ -124,13 +135,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         let _span = crate::frame_trace::span("patterns");
         patterns::show(app, ctx);
     }
-    patterns::workspace::root_dialog(app, ctx);
+    patterns::workspace::host_dialog(app, ctx);
     track_rename::show(app, ctx);
     if crate::view::modal::is_open(app) || app.patterns.recording.is_open() {
         app.audition.pump();
     }
     // Outside show_contents: a viewport skipped for one frame closes.
     analysis::show(app, ctx);
+    dock::window::show(app, ctx);
     patterns::presentation::refocus_root(app, ctx);
     patterns::workspace::show(app, ctx);
     recording::show(app, ctx);
@@ -299,13 +311,16 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
     let mut replace_effect = None;
     let mut map_click = None;
     egui::CentralPanel::default().show(ctx, |ui| {
-        if !presentation::background_enabled(app) {
+        if !presentation::panes_enabled(app, ctx, dock::Host::Root) {
             ui.disable();
         }
         if !invalid_smf && let Some(error) = &app.load_error {
             ui.colored_label(Color32::LIGHT_RED, error);
         }
         if let Some(error) = &app.saved.error {
+            ui.colored_label(Color32::LIGHT_RED, error);
+        }
+        if let Some(error) = &app.layout.error {
             ui.colored_label(Color32::LIGHT_RED, error);
         }
         map_click = score_panes::show(app, ui, &mut browse_patch, &mut replace_effect);

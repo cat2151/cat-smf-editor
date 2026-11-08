@@ -13,7 +13,7 @@ fn event(tick: u64, status: u8, meta_type: u8, data: Vec<u8>) -> Event {
 }
 
 /// Conductor, a melody of one note per measure for four measures, and an empty track.
-fn fixture() -> App {
+pub(super) fn fixture() -> App {
     let end = || event(7680, 0xff, 0x2f, vec![]);
     let mut melody = Vec::new();
     for measure in 0..4 {

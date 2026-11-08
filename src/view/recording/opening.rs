@@ -11,21 +11,27 @@ fn song_key(music: &cat_smf_editor::model::Music) -> recording::Key {
 }
 
 pub(super) fn open(a: &mut App, ctx: &egui::Context) -> Result<(), String> {
-    let pane = super::super::patterns::workspace::pane(ctx);
-    open_from(a, ctx, ctx.viewport_id(), pane, true)
+    let pane = super::super::patterns::workspace::pane(a, ctx);
+    open_from(a, ctx, locate::opener(a, ctx), pane, true, true)
 }
 
-/// Opens as Shift+R in `origin`, which is `pane` when that is a pattern window.
+/// Opens as Shift+R in view `from`, which is `pane` when that is a pattern view. Without
+/// `front` the focused pane keeps the keys, so a placed grid stays open.
 pub(super) fn open_from(
     a: &mut App,
     ctx: &egui::Context,
-    origin: egui::ViewportId,
+    from: ViewKind,
     pane: Option<Pane>,
     stop_playback: bool,
+    front: bool,
 ) -> Result<(), String> {
+    let origin = locate::viewport_of(a, from);
     if let Some(s) = a.patterns.recording.session.as_mut() {
         s.origin = origin;
-        restore(ctx);
+        s.from = from;
+        if front {
+            super::front(a, ctx);
+        }
         return Ok(());
     }
     if modal::is_open(a) {
@@ -107,6 +113,9 @@ pub(super) fn open_from(
     super::super::piano_roll::cancel_keyboard(a, ctx);
     let mut session = Session {
         origin,
+        from,
+        home: locate::viewport_of(a, ViewKind::Keyboard),
+        drawn: None,
         #[cfg(windows)]
         owner: super::super::analysis::owner::editor(),
         #[cfg(not(windows))]
@@ -121,6 +130,7 @@ pub(super) fn open_from(
         item: setup::Item::Range,
         settings_open: false,
         piano_open: true,
+        piano_placed: false,
         raise: false,
         focused: true,
         minimized: false,
@@ -155,6 +165,9 @@ pub(super) fn open_from(
     // Pads come first; a sound that cannot play opens the settings beside the error.
     session.settings_open = !play::start(a, &mut session);
     a.patterns.recording.session = Some(session);
+    if front && focus::placed(a, ViewKind::Keyboard) {
+        super::front(a, ctx);
+    }
     modal::mark_owned(ctx);
     modal::clear(ctx);
     ctx.request_repaint();

@@ -3,13 +3,19 @@ use serde::Serialize;
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Mutex, OnceLock,
     },
     time::Instant,
 };
 
 static TRACE: OnceLock<Trace> = OnceLock::new();
+// Independent of optional tracing: layout work waits for actual nonzero sequence output.
+static AUDIO_STARTED: AtomicBool = AtomicBool::new(false);
+
+pub fn audio_started() -> bool {
+    AUDIO_STARTED.load(Ordering::Relaxed)
+}
 
 struct Trace {
     start: Instant,
@@ -92,6 +98,10 @@ pub fn audio_pending() -> bool {
 }
 
 pub fn audio_block(samples: &[f32]) {
+    let audible = samples.iter().any(|s| s.is_finite() && s.abs() > 1e-7);
+    if audible {
+        AUDIO_STARTED.store(true, Ordering::Relaxed);
+    }
     let Some(trace) = TRACE.get() else { return };
     if trace.audible.load(Ordering::Relaxed) != 0 {
         return;
@@ -100,7 +110,7 @@ pub fn audio_block(samples: &[f32]) {
     let _ = trace
         .callback
         .compare_exchange(0, now, Ordering::Relaxed, Ordering::Relaxed);
-    if samples.iter().any(|s| s.is_finite() && s.abs() > 1e-7) {
+    if audible {
         let _ = trace
             .audible
             .compare_exchange(0, now, Ordering::Relaxed, Ordering::Relaxed);

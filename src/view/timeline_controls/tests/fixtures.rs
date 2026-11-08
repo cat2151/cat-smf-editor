@@ -7,6 +7,8 @@ pub(super) struct Fixture {
     pub app: App,
     pub ctx: egui::Context,
     pub screen: Screen,
+    /// The screen sits in a pane of the main window instead of its own window.
+    pane: bool,
     workspace: Option<view::patterns::workspace::Pane>,
     time: f64,
     pub shapes: Vec<egui::epaint::ClippedShape>,
@@ -49,7 +51,48 @@ impl Fixture {
         mode
     }
 
+    /// Every registered screen as its own window, then each screen that can also sit in a pane.
+    pub fn cases() -> impl Iterator<Item = (Screen, bool)> {
+        Screen::ALL
+            .into_iter()
+            .map(|screen| (screen, false))
+            .chain([
+                (Screen::PianoRoll, true),
+                (Screen::Tempo, true),
+                (Screen::Song, true),
+                (Screen::Scene, true),
+                (Screen::Parameter, true),
+                (Screen::TrackOverview, true),
+                (Screen::TrackOverviewSong, true),
+            ])
+    }
+
     pub fn visible(&mut self, visible: bool) {
+        if self.pane {
+            // Hidden by taking it out of the layout, which also leaves it closed.
+            self.app.layout.spec = if visible {
+                pane_layout(self.screen)
+            } else {
+                Default::default()
+            };
+            match self.screen {
+                Screen::Tempo => self.app.tempo_curve.open = visible,
+                // The pattern view keeps its window, which a menu over the editor hides.
+                Screen::Song | Screen::Scene => self.app.comma_menu.open = !visible,
+                Screen::Parameter => {
+                    if visible {
+                        self.app.parameter_editor.open = true;
+                    } else {
+                        self.app.parameter_editor.close();
+                    }
+                }
+                Screen::TrackOverview | Screen::TrackOverviewSong => {
+                    self.app.track_overview.open = visible
+                }
+                _ => self.app.piano_roll.open = visible,
+            }
+            return;
+        }
         match self.screen {
             Screen::Staff => self.app.note_mode = visible,
             // The pattern windows stay with the song; a menu over the editor hides them.
@@ -69,7 +112,7 @@ impl Fixture {
         }
     }
 
-    pub fn new(screen: Screen) -> Self {
+    pub fn new(screen: Screen, pane: bool) -> Self {
         // A missing arm after adding a production ID is intentionally a compile error.
         let (mut app, ctx, workspace) = match screen {
             Screen::TrackOverviewSong => {
@@ -168,16 +211,30 @@ impl Fixture {
                     bypass: false,
                 });
         }
+        if pane {
+            app.layout.spec = pane_layout(screen);
+        }
         let mut fixture = Self {
             app,
             ctx,
             screen,
+            pane,
             workspace,
             time: 20.0,
             shapes: Vec::new(),
         };
         for _ in 0..4 {
             fixture.frame(vec![]);
+        }
+        if pane {
+            // The other half of the 1500x900 main window from the event list, not a window of its own.
+            let map = fixture.rect("minimap");
+            let half = if below(screen) {
+                egui::Rect::from_min_max(egui::pos2(0.0, 450.0), egui::pos2(1500.0, 900.0))
+            } else {
+                egui::Rect::from_min_max(egui::pos2(750.0, 0.0), egui::pos2(1500.0, 900.0))
+            };
+            assert!(half.contains_rect(map), "{map:?}");
         }
         fixture
     }
@@ -190,7 +247,8 @@ impl Fixture {
                     d.remove::<egui::Rect>(egui::Id::new((p.title(), "cell", 0usize, measure)));
                 }
             });
-
+        }
+        if let Some(p) = self.workspace.filter(|_| !self.pane) {
             view::patterns::workspace_tests::frame(&mut self.app, &self.ctx, p.viewport(), events);
             self.shapes = self
                 .ctx
@@ -239,4 +297,29 @@ impl Fixture {
     pub fn bytes(&self) -> Vec<u8> {
         cat_smf_editor::smf_io::encode(&self.app.loaded.as_ref().unwrap().music).unwrap()
     }
+}
+
+/// The view sits under the event list rather than beside it. Half the window's width holds
+/// less than two zoomed-in patterns of the overview's Song version, whose markers need two
+/// pattern boundaries in view.
+fn below(screen: Screen) -> bool {
+    matches!(screen, Screen::TrackOverview | Screen::TrackOverviewSong)
+}
+
+/// The event list beside, or above, the screen's view.
+fn pane_layout(screen: Screen) -> crate::store::layout::Spec {
+    let view = match screen {
+        Screen::Tempo => "tempo_curve",
+        Screen::Song => "song",
+        Screen::Scene => "scene",
+        Screen::Parameter => "parameter_curve",
+        Screen::TrackOverview | Screen::TrackOverviewSong => "track_overview",
+        _ => "piano_roll",
+    };
+    let axis = if below(screen) { "column" } else { "row" };
+    crate::store::layout::parse(&format!(
+        "[root]
+{axis} = [{{ view = \"event_list\" }}, {{ view = \"{view}\" }}]"
+    ))
+    .unwrap()
 }

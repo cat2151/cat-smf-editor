@@ -7,6 +7,9 @@ pub(crate) fn viewport() -> egui::ViewportId {
 
 /// Opens help above every other window, leaving the keyboard focus where it is.
 pub(crate) fn summon(a: &mut App) {
+    if crate::view::dock::focus::placed(a, crate::view::dock::ViewKind::Help) {
+        return;
+    }
     a.help_open = true;
     a.help.raise = true;
     a.help.flash = Some(std::time::Instant::now());
@@ -62,7 +65,18 @@ fn remember(a: &mut App) {
     }
 }
 
+/// Help placed in a pane always shows there, for the view that last had the focus.
+pub(crate) fn pane(a: &mut App, ui: &mut egui::Ui) {
+    egui::ScrollArea::both()
+        .id_salt("help-pane")
+        .show(ui, |ui| super::body(a, ui));
+}
+
 pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
+    if crate::view::dock::focus::placed(a, crate::view::dock::ViewKind::Help) {
+        a.help.builder = None;
+        return;
+    }
     if !a.help_open {
         remember(a);
         a.help.builder = None;
@@ -72,7 +86,8 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         !super::placement::visible(w, ctx.native_pixels_per_point().unwrap_or(1.0))
     }) {
         a.help.geometry = None;
-        ctx.send_viewport_cmd_to(
+        crate::view::presentation::send_to(
+            ctx,
             viewport(),
             egui::ViewportCommand::OuterPosition(ctx.input(|i| {
                 i.viewport()
@@ -104,11 +119,8 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
             return; // This UI requires a native backend; never replace the editor with help.
         }
         let input = crate::view::modal::begin(a, ctx);
-        let close = ctx.input(|i| {
-            i.viewport().close_requested()
-                || i.key_pressed(egui::Key::Escape)
-                || i.key_pressed(egui::Key::F1)
-        });
+        let close = crate::view::alt_f4::closes(ctx)
+            || ctx.input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::F1));
         if close {
             a.help_open = false;
         }

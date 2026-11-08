@@ -1,4 +1,6 @@
-//! Placement of the curve overlay, with separate floating and maximized geometry.
+//! Where the curve is drawn: its floating window, with separate floating and maximized
+//! geometry, or a pane.
+use crate::app::App;
 use eframe::egui;
 
 pub(super) fn window(ctx: &egui::Context, maximized: bool, title: String) -> egui::Window<'static> {
@@ -23,6 +25,32 @@ pub(super) fn window(ctx: &egui::Context, maximized: bool, title: String) -> egu
             .fixed_rect(ctx.screen_rect())
     } else {
         window.default_size([900.0, 520.0]).min_height(180.0)
+    }
+}
+
+/// Draws the curve as a pane; the window holding the pane already routed its keys.
+pub(crate) fn pane(app: &mut App, ui: &mut egui::Ui) {
+    if app.parameter_editor.picker.is_some() || !app.parameter_editor.open || !docked(app, ui.ctx())
+    {
+        return;
+    }
+    let ctx = ui.ctx().clone();
+    super::curve::show(app, &ctx, Some(ui));
+}
+
+/// The curve lives in a pane, except inside a Views preview, which always shows it floating.
+pub(super) fn docked(app: &App, ctx: &egui::Context) -> bool {
+    !crate::view::command_input::preview_active(ctx)
+        && crate::view::dock::focus::placed(app, crate::view::dock::ViewKind::ParameterCurve)
+}
+
+/// A hidden dock window drops the curve's gestures.
+pub(crate) fn suspend(app: &mut App) {
+    let s = &mut app.parameter_editor;
+    s.viewport.suspend();
+    s.repeat_drag = Default::default();
+    if std::mem::take(&mut s.drag) {
+        s.draft = None;
     }
 }
 

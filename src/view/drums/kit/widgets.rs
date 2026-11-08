@@ -1,7 +1,7 @@
 use super::commands::{apply, Action};
 use super::*;
 use egui::Color32;
-pub(super) fn show(a: &mut App, ctx: &egui::Context) {
+pub(super) fn show(a: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>) {
     let measure = playback::measure(a);
     let rows = rows(a);
     let patch = a.loaded.as_ref().unwrap().patches[a.track].clone();
@@ -12,7 +12,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
     let mut action = None;
     let mut open = true;
     let window = super::super::window::Kind::Kit;
-    window.show(a, ctx, &mut open, |a, ui| {
+    window.show(a, ctx, pane, &mut open, |a, ui| {
         let state = &mut a.drum_editor;
         if let Some(input) = &mut state.kit.input {
             ui.label(format!(

@@ -7,7 +7,8 @@ pub enum Purpose {
     ResizeScene,
 }
 pub struct Dialog {
-    pub viewport: egui::ViewportId,
+    /// The view that opened it.
+    pub view: ViewKind,
     purpose: Purpose,
     song: u64,
     scene: Option<u64>,
@@ -23,7 +24,7 @@ pub struct Dialog {
 impl Dialog {
     pub fn new(a: &App, ctx: &egui::Context, purpose: Purpose, pane: Pane) -> Self {
         let mut d = Self {
-            viewport: ctx.viewport_id(),
+            view: locate::opener(a, ctx),
             purpose,
             song: a.song_id,
             scene: scene_id(a, pane),
@@ -106,7 +107,7 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
     let Some(mut d) = a.patterns.workspace.dialog.take() else {
         return;
     };
-    if d.viewport != ctx.viewport_id() {
+    if !locate::shows(a, ctx, d.view) {
         a.patterns.workspace.dialog = Some(d);
         return;
     }

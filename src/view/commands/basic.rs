@@ -91,7 +91,10 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             super::super::drums::add_track(a)
         }));
     }
-    if matches!(s, Screen::Main | Screen::Timeline | Screen::Overview) {
+    if matches!(
+        s,
+        Screen::Main | Screen::Score | Screen::Timeline | Screen::Overview
+    ) {
         out.push(
             Command::new(
                 s,
@@ -186,7 +189,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             &[Key::Escape],
             super::super::trill_edit::cancel,
         ),
-        Screen::Main | Screen::Timeline | Screen::Mixer => {
+        Screen::Main | Screen::Score | Screen::Timeline | Screen::Mixer => {
             if s != Screen::Mixer {
                 add("app.help", &[Key::F1], |a, _| crate::view::help::summon(a));
             }
@@ -248,7 +251,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             if s != Screen::Mixer {
                 add("play.open", &[Key::P], |a, ctx| {
                     a.playback.open = true;
-                    a.playback.viewport = ctx.viewport_id();
+                    a.playback.view = crate::view::dock::locate::opener(a, ctx);
                 });
                 add("play.last", &[Key::Space], |a, _| {
                     playback::start(a, a.playback.last)
@@ -262,7 +265,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                     if a.playback.mixer_focused() {
                         a.playback.mixer_open = false;
                     } else if a.playback.mixer_open {
-                        a.playback.mixer_focus = true;
+                        mixer::focus(a);
                     } else {
                         mixer::open(a);
                     }
@@ -294,6 +297,7 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     if matches!(
         s,
         Screen::Main
+            | Screen::Score
             | Screen::TrackRename
             | Screen::Timeline
             | Screen::Overview

@@ -1,4 +1,5 @@
 use super::*;
+use crate::view::dock::focus;
 
 /// Screens whose commands every non-transient palette offers.
 pub fn destinations(a: &App) -> Vec<Screen> {
@@ -70,6 +71,11 @@ fn leave_to_main(a: &mut App, ctx: &egui::Context) -> bool {
         if screen == Screen::Main {
             return true;
         }
+        // A pane that only holds the focus, with nothing open to close, hands it back.
+        if screen.close().is_none() && screen == focus::screen(focus::focused(a)) {
+            a.pane_focus = None;
+            continue;
+        }
         let Some(close) = screen
             .close()
             .and_then(|id| definitions(a, screen).into_iter().find(|c| c.id == id))
@@ -100,7 +106,7 @@ fn enter(a: &mut App, ctx: &egui::Context, screen: Screen) {
         Screen::Split => a.track_view.split_open = true,
         Screen::Play => {
             a.playback.open = true;
-            a.playback.viewport = egui::ViewportId::ROOT;
+            a.playback.view = crate::view::dock::ViewKind::EventList;
         }
         Screen::Mixer => {
             crate::play::mixer::open(a);

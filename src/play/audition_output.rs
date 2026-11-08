@@ -391,7 +391,8 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     if callback_failed.load(Ordering::Relaxed) {
                         diagnostics.failure(1);
                     }
-                    if cat_smf_editor::startup_trace::audio_pending()
+                    if (!cat_smf_editor::startup_trace::audio_started()
+                        || cat_smf_editor::startup_trace::audio_pending())
                         && command.parts.iter().any(|part| part.sequence.is_some())
                     {
                         cat_smf_editor::startup_trace::audio_block(mixed);

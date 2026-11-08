@@ -237,7 +237,8 @@ pub(super) fn expire_preview(a: &mut App) {
         a.drum_editor.kit.preview = None;
     }
 }
-pub(super) fn show(a: &mut App, ctx: &egui::Context) {
+/// A pane leaves the keys to the window holding it, which routed them before its panes.
+pub(super) fn show(a: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>) {
     sync(a);
     expire_preview(a);
     for event in ctx.input(|i| i.events.clone()) {
@@ -246,14 +247,16 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
                 matches!(event, egui::ImeEvent::Enabled | egui::ImeEvent::Preedit(_));
         }
     }
-    crate::view::commands::route(a, ctx);
+    if pane.is_none() {
+        crate::view::commands::route(a, ctx);
+    }
     if !super::is_open(a) {
         return;
     }
     if a.drum_editor.kit.picker.is_some() {
         picker::show(a, ctx);
     } else {
-        widgets::show(a, ctx);
+        widgets::show(a, ctx, pane);
     }
 }
 

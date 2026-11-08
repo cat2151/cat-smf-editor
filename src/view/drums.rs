@@ -37,10 +37,16 @@ mod mute_tests;
 #[cfg(test)]
 mod native_tests;
 #[cfg(test)]
+mod pane_focus_tests;
+#[cfg(test)]
+mod pane_tests;
+#[cfg(test)]
 mod parity_tests;
 mod pattern;
 mod presentation;
-pub(crate) use presentation::{close, dismiss, display, follow, is_open, open, reconcile};
+pub(crate) use presentation::{
+    close, dismiss, display, follow, is_open, open, reconcile, take_keys,
+};
 pub(crate) mod playback;
 mod surface;
 #[cfg(test)]
@@ -269,24 +275,54 @@ fn result(app: &mut App, result: Result<(), String>) {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
-    if !is_open(app) {
+    if !is_open(app) || docked(app, ctx) {
         return;
     }
+    draw(app, ctx, None);
+}
+
+/// Draws the grid as a pane; the window holding the pane already routed its keys.
+pub(crate) fn pane(app: &mut App, ui: &mut egui::Ui) {
+    if !is_open(app) || !docked(app, ui.ctx()) {
+        return;
+    }
+    let ctx = ui.ctx().clone();
+    draw(app, &ctx, Some(ui));
+}
+
+/// The grid lives in a pane, except inside a Views preview, which always shows it floating.
+fn docked(app: &App, ctx: &egui::Context) -> bool {
+    !super::command_input::preview_active(ctx)
+        && super::dock::focus::placed(app, super::dock::ViewKind::StepSequencer)
+}
+
+/// One grid of the three, floating or in `pane`.
+fn draw(app: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>) {
     if kit::active(app) {
-        kit::show(app, ctx);
+        kit::show(app, ctx, pane);
         return;
     }
     if melody::active(app) {
-        melody::show(app, ctx);
+        melody::show(app, ctx, pane);
         return;
     }
-    super::commands::route(app, ctx);
+    if pane.is_none() {
+        super::commands::route(app, ctx);
+    }
     if !is_open(app) {
         return;
     }
     let mut action: Option<commands::Op> = None;
-    widgets::show(app, ctx, &mut action);
+    widgets::show(app, ctx, pane, &mut action);
     if let Some(key) = action {
         commands::apply(app, key);
+    }
+}
+
+/// A hidden dock window drops the grid's gesture and ends its preview note.
+pub(crate) fn suspend(app: &mut App) {
+    melody::suspend(app);
+    if app.drum_editor.kit.take_preview() {
+        app.audition.stop_key();
     }
 }

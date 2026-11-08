@@ -70,6 +70,8 @@ fn pattern_song_starts_before_ui_and_keeps_playing_after_editor_restore() {
                     assert!(crate::view::patterns::mode::song_window(&app));
                     assert!(app.note_mode);
                     let ctx = egui::Context::default();
+                    // The keyboard waits for the main window's first frame.
+                    let _ = ctx.run(egui::RawInput::default(), |_| {});
                     let mut input = egui::RawInput {
                         viewport_id: crate::view::patterns::workspace::Pane::Song.viewport(),
                         ..Default::default()
@@ -85,7 +87,13 @@ fn pattern_song_starts_before_ui_and_keeps_playing_after_editor_restore() {
                             ..Default::default()
                         },
                     );
-                    let _ = ctx.run(input, |ctx| crate::view::recording::show(&mut app, ctx));
+                    let _ = ctx.run(input, |ctx| {
+                        crate::view::presentation::windows::shown(
+                            ctx,
+                            crate::view::patterns::workspace::Pane::Song.viewport(),
+                        );
+                        crate::view::recording::show(&mut app, ctx)
+                    });
                     assert!(app.patterns.recording.is_open());
                     assert_eq!(
                         app.playback.active.as_ref().unwrap().mode,

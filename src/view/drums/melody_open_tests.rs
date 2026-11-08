@@ -51,3 +51,49 @@ fn a_container_opened_on_the_grid_reopens_it_for_every_pattern_and_after_a_resta
     assert!(!is_open(&a));
     assert!(a.session().unwrap().step_containers.is_empty());
 }
+
+/// The Song and the grid share a window, as in the shipped layout: a click on another placed
+/// pattern of the container hands the keys to the Song yet keeps the grid on.
+#[test]
+fn a_docked_grid_stays_on_when_a_song_cell_of_another_pattern_is_clicked() {
+    use crate::view::dock::{focus, ViewKind};
+    use crate::view::patterns::workspace::{self, Pane};
+    use cat_smf_editor::score::scene::arrangement::{self, PatternOrScene};
+    let mut a = ordinary_pattern();
+    a.layout.spec = crate::store::layout::parse(
+        r#"
+[[window]]
+rect = [0, 0, 1200, 800]
+column = [{ view = "song" }, { view = "step_sequencer" }]
+"#,
+    )
+    .unwrap();
+    let first = crate::view::patterns::mode::editing(&a, a.track)
+        .unwrap()
+        .pattern;
+    crate::view::patterns::library::create(&mut a, None).unwrap();
+    let catalog =
+        cat_smf_editor::score::pattern::Catalog::read(&a.loaded.as_ref().unwrap().music).unwrap();
+    let second = *catalog.patterns.keys().find(|&&id| id != first).unwrap();
+    a.edit_tracks(|m| {
+        let lane = arrangement::add_lane(m, None)?;
+        arrangement::place(m, None, lane, 1, Some(PatternOrScene::Pattern(first)))?;
+        arrangement::place(m, None, lane, 2, Some(PatternOrScene::Pattern(second)))
+    })
+    .unwrap();
+    crate::view::patterns::library::edit(&mut a, first).unwrap();
+    // The palette's Step sequencer command.
+    open(&mut a);
+    assert!(is_open(&a) && melody::active(&a), "{:?}", a.load_error);
+    // The press gives the Song pane the keys; the release clicks the cell.
+    focus::set(&mut a, ViewKind::Song);
+    let s = a.patterns.workspace.selection_mut(Pane::Song);
+    s.placing = true;
+    s.row = 0;
+    s.measure = 2;
+    workspace::click_body(&mut a, Pane::Song);
+    assert_eq!(a.load_error, None);
+    let edited = crate::view::patterns::mode::editing(&a, a.track).map(|c| c.pattern);
+    assert_eq!(edited, Some(second));
+    assert!(is_open(&a) && melody::active(&a));
+}

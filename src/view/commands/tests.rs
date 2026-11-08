@@ -296,3 +296,34 @@ fn input_windows_offer_only_themselves_and_are_not_left_from_a_pane() {
     assert!(a.mml_input.open);
     assert!(!a.layer_editor.open);
 }
+
+/// A focused Song pane holds no input, so a palette command of the event list still runs.
+#[test]
+fn palette_leaves_a_focused_song_pane() {
+    use crate::view::dock::{focus, ViewKind};
+    let mut a = crate::view::tests::app(cat_smf_editor::edit::tracks::new_song());
+    crate::view::patterns::library::add_container_with(&mut a, None).unwrap();
+    a.layout.spec = crate::store::layout::parse(
+        r#"
+[[window]]
+column = [{ view = "song" }, { view = "step_sequencer" }]
+[window.monitor_placement]
+monitor = "center"
+left_percent = 0
+top_percent = 0
+width_percent = 100
+height_percent = 100
+"#,
+    )
+    .unwrap();
+    focus::set(&mut a, ViewKind::Song);
+    let c = egui::Context::default();
+    assert_eq!(owner(&a, &c), Screen::Song);
+    assert!(
+        run_id(&mut a, &c, Screen::Main, "drum.open"),
+        "{:?}",
+        a.load_error
+    );
+    assert!(crate::view::drums::is_open(&a));
+    assert_eq!(a.load_error, None);
+}

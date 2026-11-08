@@ -22,31 +22,59 @@ fn focus_sent(c: &egui::Context, id: egui::ViewportId) -> bool {
 }
 
 #[test]
-fn the_keyboard_waits_until_the_song_window_has_taken_the_focus() {
+fn a_resumed_keyboard_that_had_the_focus_at_exit_keeps_it() {
     let (mut a, c) = start(true);
-    // Created in the same frame, the keyboard would lose the focus to the Song window.
-    focus(&c, egui::ViewportId::ROOT);
-    for _ in 0..3 {
-        frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
-    }
-    assert!(!a.patterns.recording.is_open());
-    focus(&c, Pane::Song.viewport());
+    // Building the song asked for the focus; the resumed app has not yet.
     focus_sent(&c, Pane::Song.viewport());
+    focus_sent(&c, egui::ViewportId::ROOT);
+    focus(&c, egui::ViewportId::ROOT);
     frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
     assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
+    // The new keyboard window has the focus; no other window asks for it.
+    focus(&c, window::viewport());
+    for _ in 0..5 {
+        frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+    }
     assert!(!focus_sent(&c, Pane::Song.viewport()));
+    assert!(!focus_sent(&c, egui::ViewportId::ROOT));
+    assert!(close_for_exit(&mut a));
+    assert!(a.config.keyboard_focused);
+}
+
+#[test]
+fn the_resumed_keyboard_opens_after_the_first_frame_of_the_main_window() {
+    for keyboard_focused in [true, false] {
+        let (mut a, _) = start(keyboard_focused);
+        // A fresh context starts at the main window's first frame, as the app does.
+        let c = context();
+        c.data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new(("window-geometry", Pane::Song.viewport())),
+                [460.0_f32, 520.0, 760.0, 520.0],
+            )
+        });
+        // The main window appears and takes the front only at the end of its first frame.
+        frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+        assert!(!a.patterns.recording.is_open());
+        for _ in 0..3 {
+            frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+        }
+        assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
+    }
 }
 
 #[test]
 fn the_song_window_gets_the_focus_back_when_it_had_it_at_exit() {
-    let (mut a, c) = start(false);
-    focus(&c, egui::ViewportId::ROOT);
-    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
-    focus(&c, Pane::Song.viewport());
-    focus_sent(&c, Pane::Song.viewport());
-    frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
-    assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
-    assert!(focus_sent(&c, Pane::Song.viewport()));
+    for phrase_loop in [true, false] {
+        let (mut a, c) = start(false);
+        a.config.phrase_loop = phrase_loop;
+        resume(&mut a);
+        focus_sent(&c, Pane::Song.viewport());
+        focus(&c, egui::ViewportId::ROOT);
+        frame(&mut a, &c, egui::ViewportId::ROOT, vec![]);
+        assert!(a.patterns.recording.is_open(), "{:?}", a.load_error);
+        assert!(focus_sent(&c, Pane::Song.viewport()), "{phrase_loop}");
+    }
 }
 
 #[test]

@@ -36,6 +36,8 @@ pub struct State {
     chord: Option<chord_timing::Session>,
     /// Why the last drag was not applied.
     pub(crate) error: Option<String>,
+    /// What the pane drew this frame, applied by `show` after the main window's pass.
+    pane: Option<body::Outcome>,
 }
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
@@ -78,12 +80,14 @@ pub(crate) fn open(app: &mut App) {
         });
     if conductor && app.loaded.as_ref().is_some_and(|l| l.visible().format == 1) {
         app.tempo_curve = crate::view::tempo_curve::State::opened();
+        crate::view::dock::focus::set(app, crate::view::dock::ViewKind::TempoCurve);
     } else {
         app.piano_roll = State {
             open: true,
             reveal: true,
             ..Default::default()
         };
+        crate::view::dock::focus::set(app, crate::view::dock::ViewKind::PianoRoll);
     }
 }
 
@@ -354,7 +358,7 @@ fn beats_of(loaded: &Loaded, meter: usize, end: u64, scale: f32) -> Vec<(f32, u1
     })
 }
 
-pub(crate) use window::show;
+pub(crate) use window::{pane, run, show, suspend};
 
 /// Beat lines over the full height of `rect`; a measure's first beat is thicker.
 pub(crate) fn draw_beats(painter: &egui::Painter, rect: egui::Rect, beats: &[(f32, u128)]) {
@@ -391,6 +395,7 @@ pub(super) mod lyrics;
 #[cfg(test)]
 pub(crate) mod tests;
 
+mod body;
 mod window;
 
 mod canvas;

@@ -6,6 +6,7 @@ use crate::view::{
 };
 use cat_smf_editor::model::{Event, Music, Track};
 use eframe::egui::{self, Key};
+mod pane;
 
 fn event(tick: u64, status: u8, data: Vec<u8>) -> Event {
     Event {

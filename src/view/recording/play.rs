@@ -287,7 +287,8 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
         }
         Key::F1 | Key::Questionmark => super::super::help::summon(a),
         Key::Comma if ctrl => s.settings_open = !s.settings_open,
-        Key::Period if ctrl => s.piano_open = !s.piano_open,
+        // A piano placed in a pane is always shown.
+        Key::Period if ctrl => s.piano_open ^= !s.piano_placed,
         Key::E if ctrl => super::phrase::toggle(a, s),
         Key::T if ctrl => s.clicked = Some(window::Button::Browse),
         Key::J if ctrl => super::capture::toggle(a, s),
@@ -326,8 +327,8 @@ pub(super) fn suspend(s: &mut Session) {
     s.mouse = [None; 2];
 }
 
-/// `true` closes the window.
-pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool {
+/// `true` closes the window. Without `active` the keys of `ctx` belong to another view.
+pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session, active: bool) -> bool {
     if advance(a, s) {
         return true;
     }
@@ -336,13 +337,14 @@ pub(super) fn process(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool
         return false;
     }
     let at = s.clock.elapsed();
-    let focused = ctx.input(|i| {
-        i.focused
-            && !i
-                .events
-                .iter()
-                .any(|e| matches!(e, egui::Event::WindowFocused(false)))
-    });
+    let focused = active
+        && ctx.input(|i| {
+            i.focused
+                && !i
+                    .events
+                    .iter()
+                    .any(|e| matches!(e, egui::Event::WindowFocused(false)))
+        });
     s.raise |= ctx.input(|i| {
         i.events
             .iter()

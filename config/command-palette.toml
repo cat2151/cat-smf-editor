@@ -9,6 +9,7 @@
 
 [screens]
 Main = "Event list"
+Score = "Score"
 EditStyle = "Edit style"
 TrackRename = "Track name"
 Settings = "Settings"
@@ -69,6 +70,27 @@ name = "Help"
 ids = ["app.help"]
 screen = "Song"
 name = "Help"
+
+[[command]]
+ids = ["editor.register"]
+name = "外部テキストエディタ登録"
+tooltip = "実行ファイルのフルパスを登録します。Enter: 保存、Esc: キャンセル。空欄で登録解除。"
+search = "editor text エディタ 設定"
+
+[[command]]
+ids = ["config.edit-layout"]
+name = "layout.toml を編集"
+search = "layout レイアウト 設定 edit config setting"
+
+[[command]]
+ids = ["config.edit-settings"]
+name = "settings.toml を編集"
+search = "settings 設定 edit config setting"
+
+[[command]]
+ids = ["config.edit-command-palette"]
+name = "command-palette.toml を編集"
+search = "command palette コマンドパレット 設定 edit config setting"
 
 [[command]]
 ids = ["app.quit"]
@@ -408,7 +430,7 @@ name = "次のエフェクト"
 ids = ["effect.open"]
 name = "エフェクト"
 tooltip = "楽器のエフェクトを編集します。"
-search = "effects"
+search = "effects edit"
 
 [[command]]
 ids = ["effect.open"]
@@ -689,7 +711,7 @@ name = "Octave +1"
 ids = ["layer.open"]
 name = "レイヤー"
 tooltip = "楽器の音色レイヤー（複数の音色を重ねる）を編集します。"
-search = "layers"
+search = "layers edit instrument"
 
 [[command]]
 ids = ["layer.prev"]
@@ -998,6 +1020,20 @@ name = "次のtrack"
 [[command]]
 ids = ["overview.track-prev"]
 name = "前のtrack"
+
+[[command]]
+ids = ["pane.focus-next"]
+name = "次のpane"
+search = "pane focus next"
+
+[[command]]
+ids = ["pane.focus-prev"]
+name = "前のpane"
+search = "pane focus previous"
+
+[[command]]
+ids = ["pane.unfocus"]
+name = "Event listへ戻る"
 
 [[command]]
 ids = ["parameter.cancel"]

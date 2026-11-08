@@ -7,7 +7,7 @@ use cat_smf_editor::{
     },
 };
 
-mod fixture;
+pub(super) mod fixture;
 use fixture::{fixture, index_curve};
 
 fn frame(app: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {

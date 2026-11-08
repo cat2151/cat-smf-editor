@@ -3,11 +3,18 @@ use crate::view::palette::tests::windows::{fixture, ALL};
 use crate::view::patterns::workspace_tests::{context, frame, key};
 use egui::{Key, Modifiers, ViewportId};
 const ROOT: ViewportId = ViewportId::ROOT;
-const FAMILIES: [Native; 4] = [
+
+/// Floating windows registered so far in the last frame of window `id`.
+pub(crate) fn registered(c: &egui::Context, id: ViewportId) -> usize {
+    c.data(|d| d.get_temp::<Layers>(egui::Id::new(("presentation-layers", id))))
+        .map_or(0, |l| l.registered.len())
+}
+const FAMILIES: [Native; 5] = [
     Native::Analysis,
     Native::Workspace,
     Native::Keyboard,
     Native::Help,
+    Native::Dock,
 ];
 
 #[test]
@@ -22,7 +29,12 @@ fn every_root_owner_controls_all_native_families() {
         let c = context();
         let expected = matches!(
             screen,
-            Screen::Main | Screen::Timeline | Screen::Mixer | Screen::Drums | Screen::Selection
+            Screen::Main
+                | Screen::Score
+                | Screen::Timeline
+                | Screen::Mixer
+                | Screen::Drums
+                | Screen::Selection
         );
         for native in FAMILIES {
             let id = ViewportId::from_hash_of(format!("{native:?}"));
@@ -247,10 +259,14 @@ fn production_surfaces_use_the_shared_gateway() {
                 .replace('\\', "/");
             if relative == "src/view/presentation.rs"
                 || relative == "src/view/presentation/popups.rs"
+                || relative == "src/view/presentation/windows.rs"
             {
                 continue;
             }
             let source = std::fs::read_to_string(&path).unwrap();
+            for bypass in [".input_for(", "send_viewport_cmd_to(", ".viewport_for("] {
+                assert!(!source.contains(bypass), "native window bypass: {relative}");
+            }
             for bypass in [
                 ".context_menu(",
                 ".menu_button(",
@@ -269,6 +285,7 @@ fn production_surfaces_use_the_shared_gateway() {
                     | "src/view/recording/capture.rs"
                     | "src/view/recording/companions.rs"
                     | "src/view/patterns/workspace.rs"
+                    | "src/view/dock/window.rs"
                     | "src/view/command_input/views/preview.rs"
             );
             assert!(
@@ -376,3 +393,5 @@ fn menu_registration_owns_keys_before_next_frames_widgets_run() {
         });
     }
 }
+mod panes;
+mod windows;

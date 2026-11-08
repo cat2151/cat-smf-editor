@@ -44,6 +44,16 @@ pub(crate) fn open(app: &mut App) {
     if super::melody::active(app) {
         crate::view::patterns::navigation::remember_grid(app, true);
     }
+    take_keys(app);
+}
+
+/// A grid opened by the user's own input takes the keys of the pane it sits in. Undo and other
+/// re-presentations leave them where they are.
+pub(crate) fn take_keys(app: &mut App) {
+    use crate::view::dock::{focus, ViewKind};
+    if is_open(app) && focus::placed(app, ViewKind::StepSequencer) {
+        focus::set(app, ViewKind::StepSequencer);
+    }
 }
 
 /// Present an already resolved target. No creation, SMF writes or audition here.
@@ -85,13 +95,25 @@ pub(crate) fn display(app: &mut App) {
         catalog: app.drum_editor.catalog.take(),
         ..Default::default()
     };
+    // Floating editors give way to the grid. Placed views keep their panes; `focus::set` hands
+    // the keys among them, so an Undo leaves the keys where they are.
+    use crate::view::dock::{focus, ViewKind};
+    let floats = |view| !focus::placed(app, view);
+    let (piano, tempo, curve, mixer) = (
+        floats(ViewKind::PianoRoll),
+        floats(ViewKind::TempoCurve),
+        floats(ViewKind::ParameterCurve),
+        floats(ViewKind::Mixer),
+    );
     app.layer_editor.open = false;
-    app.piano_roll.open = false;
-    app.tempo_curve.open = false;
-    app.parameter_editor.close();
+    app.piano_roll.open &= !piano;
+    app.tempo_curve.open &= !tempo;
+    if curve {
+        app.parameter_editor.close();
+    }
     app.effect_editor = Default::default();
     app.playback.open = false;
-    app.playback.mixer_open = false;
+    app.playback.mixer_open &= !mixer;
     app.comma_menu.open = false;
     app.edit_menu.open = false;
     app.track_view.go_open = false;

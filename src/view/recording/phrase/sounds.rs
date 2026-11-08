@@ -167,7 +167,11 @@ pub(in crate::view::recording) fn browse(a: &mut App, ctx: &egui::Context, s: &S
         crate::player::kit_selection::open(a, false, false);
     } else if display(s).1 {
         crate::view::layers::open(a);
-        ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+        crate::view::presentation::send_to(
+            ctx,
+            egui::ViewportId::ROOT,
+            egui::ViewportCommand::Focus,
+        );
     } else {
         crate::player::bulk::request(a);
     }

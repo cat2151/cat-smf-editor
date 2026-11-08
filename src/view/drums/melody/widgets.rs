@@ -21,7 +21,7 @@ pub(super) fn x(step: usize) -> f32 {
     LABEL + step as f32 * CELL.x + (step / 4 + 1) as f32 * GAP
 }
 
-pub(super) fn show(a: &mut App, ctx: &egui::Context) {
+pub(super) fn show(a: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>) {
     if a.drum_editor
         .melody
         .gesture
@@ -74,7 +74,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context) {
     let mut action = None;
     let mut finished = None;
     let mut open = true;
-    super::super::window::Kind::Melody.show(a, ctx, &mut open, |a, ui| {
+    super::super::window::Kind::Melody.show(a, ctx, pane, &mut open, |a, ui| {
         let state = &mut a.drum_editor;
         ui.horizontal_wrapped(|ui| {
             if ui.button("◀").on_hover_text("PageUp").clicked() {

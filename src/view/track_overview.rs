@@ -11,7 +11,7 @@ mod panes;
 mod song;
 pub(crate) mod song_playback;
 mod window;
-pub(crate) use window::show;
+pub(crate) use window::{pane, show, suspend};
 
 #[derive(Default)]
 pub struct State {
@@ -303,7 +303,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         jump(a, track, tick);
     });
     add("play.open", &[Key::P], false, |a, ctx| {
-        a.playback.viewport = ctx.viewport_id();
+        a.playback.view = crate::view::dock::locate::opener(a, ctx);
         if !song::enabled(a) {
             focus_cell(a);
         }
@@ -329,5 +329,7 @@ fn focus_cell(app: &mut App) {
     crate::cursor::split::go(app, track, tick);
 }
 
+#[cfg(test)]
+mod pane_tests;
 #[cfg(test)]
 mod tests;

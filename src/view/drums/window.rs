@@ -36,14 +36,19 @@ impl Kind {
     }
 
     /// Every grid uses this shell so focus colors, style isolation and position
-    /// persistence cannot require a second implementation when either changes.
+    /// persistence cannot require a second implementation when either changes. In a pane the
+    /// body draws straight into it, and the pane's frame shows the keyboard ownership instead.
     pub(super) fn show(
         self,
         app: &mut App,
         ctx: &egui::Context,
+        pane: Option<&mut egui::Ui>,
         open: &mut bool,
         body: impl FnOnce(&mut App, &mut egui::Ui),
     ) {
+        if let Some(ui) = pane {
+            return body(app, ui);
+        }
         let original = super::title::style(app, ctx);
         let track_title = &app.loaded.as_ref().unwrap().track_titles[app.track];
         let name = match self {

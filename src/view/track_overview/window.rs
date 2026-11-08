@@ -14,10 +14,37 @@ enum Action {
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     if !app.track_overview.open {
-        app.track_overview.viewport.suspend();
-        app.track_overview.repeat_drag = Default::default();
+        suspend(app);
         return;
     }
+    if !docked(app, ctx) {
+        draw(app, ctx, None);
+    }
+}
+
+/// Draws the overview as a pane; the window holding the pane already routed its keys.
+pub(crate) fn pane(app: &mut App, ui: &mut egui::Ui) {
+    if !app.track_overview.open || !docked(app, ui.ctx()) {
+        return;
+    }
+    let ctx = ui.ctx().clone();
+    draw(app, &ctx, Some(ui));
+}
+
+/// The overview lives in a pane, except inside a Views preview, which always shows it floating.
+fn docked(app: &App, ctx: &egui::Context) -> bool {
+    !crate::view::command_input::preview_active(ctx)
+        && crate::view::dock::focus::placed(app, crate::view::dock::ViewKind::TrackOverview)
+}
+
+/// A closed overview, or a hidden dock window, drops its gestures.
+pub(crate) fn suspend(app: &mut App) {
+    app.track_overview.viewport.suspend();
+    app.track_overview.repeat_drag = Default::default();
+}
+
+/// One frame of the overview, in its floating window or in `pane`.
+fn draw(app: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>) {
     let Some(loaded) = &app.loaded else {
         return;
     };
@@ -100,212 +127,205 @@ pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
     let mut action = None;
     let mut repeat_action = None;
     let mut open = true;
-    placement(ctx, app.config.piano_roll_maximized)
-        .open(&mut open)
-        .show(ctx, |ui| {
-            if let Some(error) = &minimap.error {
-                ui.colored_label(Color32::LIGHT_RED, error);
+    let maximized = app.config.piano_roll_maximized;
+    let mut body = |ui: &mut egui::Ui| {
+        if let Some(error) = &minimap.error {
+            ui.colored_label(Color32::LIGHT_RED, error);
+        }
+        let area = state.viewport.bars(ui, state.repeat_drag.is_none());
+        let time_scale = overview.scale * state.viewport.zoom().x;
+        let timeline = state.viewport.binding(
+            &time_scale,
+            (overview.size.x / overview.scale).round() as u64,
+        );
+        let (area, navigated) =
+            state
+                .viewport
+                .minimap_on(ui, area, &overview, minimap.layers(), playing, &timeline);
+        following.minimap(&mut app.playback.follow, navigated);
+        let names = area.with_max_x(area.left() + NAMES_WIDTH);
+        let area = area.with_min_x(names.right());
+        ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
+            ui.spacing_mut().scroll.floating = false;
+            let bar = ui.spacing().scroll.allocated_width();
+            for layout in &mut layouts {
+                state.viewport.scale_layout(layout);
             }
-            let area = state.viewport.bars(ui, state.repeat_drag.is_none());
-            let time_scale = overview.scale * state.viewport.zoom().x;
-            let timeline = state.viewport.binding(
-                &time_scale,
-                (overview.size.x / overview.scale).round() as u64,
-            );
-            let (area, navigated) = state.viewport.minimap_on(
-                ui,
-                area,
-                &overview,
-                minimap.layers(),
-                playing,
-                &timeline,
-            );
-            following.minimap(&mut app.playback.follow, navigated);
-            let names = area.with_max_x(area.left() + NAMES_WIDTH);
-            let area = area.with_min_x(names.right());
-            ui.scope_builder(egui::UiBuilder::new().max_rect(area), |ui| {
-                ui.spacing_mut().scroll.floating = false;
-                let bar = ui.spacing().scroll.allocated_width();
-                for layout in &mut layouts {
-                    state.viewport.scale_layout(layout);
-                }
-                let pane_height = layouts[0].size.y;
-                let shown = egui::vec2(area.width() - bar, area.height() - bar - repeat::HEIGHT);
-                let mut scrollbar =
-                    egui::Rect::from_min_max(area.min, area.max - egui::Vec2::splat(bar))
-                        .shrink2(egui::Vec2::splat(crate::view::timeline_zoom::BUTTON));
-                scrollbar.min.y += repeat::HEIGHT;
-                let mut scroll = egui::ScrollArea::both()
-                    .id_salt("track-overview")
-                    .auto_shrink([false, false])
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                    .scroll_bar_rect(scrollbar)
-                    .drag_to_scroll(false);
-                let pending = state.viewport.pending.take();
-                let current = pending.unwrap_or(state.viewport.scroll);
-                let scale = layouts[0].scale;
-                if let Some(tick) = following.tick() {
-                    scroll = scroll.scroll_offset(egui::vec2(
-                        (tick as f32 * scale - shown.x / 2.0).max(0.0),
-                        current.y,
-                    ));
-                } else if reveal && !navigated {
-                    let (track, start) = state.cell;
-                    let end = end_of(track, start);
-                    let cell = egui::Rect::from_x_y_ranges(
-                        start as f32 * scale..=end as f32 * scale,
-                        track as f32 * pane_height..=(track + 1) as f32 * pane_height,
+            let pane_height = layouts[0].size.y;
+            let shown = egui::vec2(area.width() - bar, area.height() - bar - repeat::HEIGHT);
+            let mut scrollbar =
+                egui::Rect::from_min_max(area.min, area.max - egui::Vec2::splat(bar))
+                    .shrink2(egui::Vec2::splat(crate::view::timeline_zoom::BUTTON));
+            scrollbar.min.y += repeat::HEIGHT;
+            let mut scroll = egui::ScrollArea::both()
+                .id_salt("track-overview")
+                .auto_shrink([false, false])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .scroll_bar_rect(scrollbar)
+                .drag_to_scroll(false);
+            let pending = state.viewport.pending.take();
+            let current = pending.unwrap_or(state.viewport.scroll);
+            let scale = layouts[0].scale;
+            if let Some(tick) = following.tick() {
+                scroll = scroll.scroll_offset(egui::vec2(
+                    (tick as f32 * scale - shown.x / 2.0).max(0.0),
+                    current.y,
+                ));
+            } else if reveal && !navigated {
+                let (track, start) = state.cell;
+                let end = end_of(track, start);
+                let cell = egui::Rect::from_x_y_ranges(
+                    start as f32 * scale..=end as f32 * scale,
+                    track as f32 * pane_height..=(track + 1) as f32 * pane_height,
+                );
+                scroll = scroll.scroll_offset(reveal_offset(current, shown, cell));
+            } else if let Some(offset) = pending {
+                scroll = scroll.scroll_offset(offset);
+            }
+            let output = scroll.show_viewport(ui, |ui, visible| {
+                let width = layouts
+                    .iter()
+                    .map(|l| l.size.x)
+                    .fold(visible.width(), f32::max);
+                let (whole, _) = ui.allocate_exact_size(
+                    egui::vec2(width, pane_height * tracks.len() as f32 + repeat::HEIGHT),
+                    egui::Sense::hover(),
+                );
+                let screen = egui::Rect::from_min_max(
+                    whole.min + visible.min.to_vec2(),
+                    whole.min + visible.max.to_vec2(),
+                );
+                let row = egui::Rect::from_min_size(
+                    egui::pos2(whole.left(), screen.top()),
+                    egui::vec2(width, repeat::HEIGHT),
+                );
+                repeat_action = timeline.repeat(ui, row, range, &mut state.repeat_drag);
+                let panes = screen.with_min_y(screen.top() + repeat::HEIGHT);
+                for (slot, layout) in layouts.iter().enumerate() {
+                    let rect = egui::Rect::from_min_size(
+                        egui::pos2(
+                            whole.left(),
+                            whole.top() + repeat::HEIGHT + slot as f32 * pane_height,
+                        ),
+                        egui::vec2(width, pane_height),
                     );
-                    scroll = scroll.scroll_offset(reveal_offset(current, shown, cell));
-                } else if let Some(offset) = pending {
-                    scroll = scroll.scroll_offset(offset);
-                }
-                let output = scroll.show_viewport(ui, |ui, visible| {
-                    let width = layouts
-                        .iter()
-                        .map(|l| l.size.x)
-                        .fold(visible.width(), f32::max);
-                    let (whole, _) = ui.allocate_exact_size(
-                        egui::vec2(width, pane_height * tracks.len() as f32 + repeat::HEIGHT),
-                        egui::Sense::hover(),
-                    );
-                    let screen = egui::Rect::from_min_max(
-                        whole.min + visible.min.to_vec2(),
-                        whole.min + visible.max.to_vec2(),
-                    );
-                    let row = egui::Rect::from_min_size(
-                        egui::pos2(whole.left(), screen.top()),
-                        egui::vec2(width, repeat::HEIGHT),
-                    );
-                    repeat_action = timeline.repeat(ui, row, range, &mut state.repeat_drag);
-                    let panes = screen.with_min_y(screen.top() + repeat::HEIGHT);
-                    for (slot, layout) in layouts.iter().enumerate() {
-                        let rect = egui::Rect::from_min_size(
-                            egui::pos2(
-                                whole.left(),
-                                whole.top() + repeat::HEIGHT + slot as f32 * pane_height,
-                            ),
-                            egui::vec2(width, pane_height),
+                    let clip = rect.intersect(panes);
+                    if clip.height() <= 0.0 {
+                        continue;
+                    }
+                    let painter = ui.painter_at(clip);
+                    let track = tracks[slot];
+                    let color = crate::view::track_color(track);
+                    draw_pane(&painter, rect, layout, kinds[slot], drums[slot], color);
+                    // Tempo events and the tempo curve live on the conductor track.
+                    if track == 0 {
+                        crate::view::timeline_minimap::tempos::draw(
+                            &painter,
+                            rect,
+                            rect.width() / layout.scale,
+                            minimap.layers(),
                         );
-                        let clip = rect.intersect(panes);
-                        if clip.height() <= 0.0 {
-                            continue;
-                        }
-                        let painter = ui.painter_at(clip);
-                        let track = tracks[slot];
-                        let color = crate::view::track_color(track);
-                        draw_pane(&painter, rect, layout, kinds[slot], drums[slot], color);
-                        // Tempo events and the tempo curve live on the conductor track.
-                        if track == 0 {
-                            crate::view::timeline_minimap::tempos::draw(
-                                &painter,
-                                rect,
-                                rect.width() / layout.scale,
-                                minimap.layers(),
-                            );
-                        }
-                        super::curves::draw(&painter, rect, layout.scale, &curves[slot]);
-                        if let Some(song) = &song {
-                            super::drawing::patterns(
-                                &painter,
-                                rect,
-                                layout.scale,
-                                &song.rows[slot],
-                            );
-                        }
-                        if state.cell.0 == slot {
-                            let start = state.cell.1;
-                            let end = end_of(track, start);
-                            painter.rect_stroke(
-                                egui::Rect::from_x_y_ranges(
-                                    rect.left() + start as f32 * layout.scale
-                                        ..=rect.left() + end as f32 * layout.scale,
-                                    lane(rect).y_range(),
-                                ),
-                                0.0,
-                                // White, since orange is one of the track colors.
-                                egui::Stroke::new(2.0_f32, Color32::WHITE),
-                                egui::StrokeKind::Inside,
-                            );
-                        }
-                        let response = ui.interact(
-                            clip,
-                            crate::view::command_input::preview_id(
-                                ui.ctx(),
-                                egui::Id::new(("track-overview-pane", slot)),
+                    }
+                    super::curves::draw(&painter, rect, layout.scale, &curves[slot]);
+                    if let Some(song) = &song {
+                        super::drawing::patterns(&painter, rect, layout.scale, &song.rows[slot]);
+                    }
+                    if state.cell.0 == slot {
+                        let start = state.cell.1;
+                        let end = end_of(track, start);
+                        painter.rect_stroke(
+                            egui::Rect::from_x_y_ranges(
+                                rect.left() + start as f32 * layout.scale
+                                    ..=rect.left() + end as f32 * layout.scale,
+                                lane(rect).y_range(),
                             ),
-                            egui::Sense::click(),
+                            0.0,
+                            // White, since orange is one of the track colors.
+                            egui::Stroke::new(2.0_f32, Color32::WHITE),
+                            egui::StrokeKind::Inside,
                         );
-                        let at = |pos: egui::Pos2| {
-                            let tick = ((pos.x - rect.left()) / layout.scale).max(0.0) as u64;
-                            start_of(track, tick)
+                    }
+                    let response = ui.interact(
+                        clip,
+                        crate::view::command_input::preview_id(
+                            ui.ctx(),
+                            egui::Id::new(("track-overview-pane", slot)),
+                        ),
+                        egui::Sense::click(),
+                    );
+                    let at = |pos: egui::Pos2| {
+                        let tick = ((pos.x - rect.left()) / layout.scale).max(0.0) as u64;
+                        start_of(track, tick)
+                    };
+                    if response.clicked()
+                        && let Some(pos) = response.interact_pointer_pos()
+                    {
+                        action = Some(Action::Play(slot, at(pos)));
+                    }
+                    if response.secondary_clicked()
+                        && let Some(pos) = response.interact_pointer_pos()
+                    {
+                        state.menu = Some((slot, at(pos)));
+                    }
+                    crate::view::presentation::context_menu(&response, |ui| {
+                        let Some((track, tick)) = state.menu else {
+                            ui.close_menu();
+                            return;
                         };
-                        if response.clicked()
-                            && let Some(pos) = response.interact_pointer_pos()
+                        if ui
+                            .button(if song.is_some() {
+                                "t — Container play"
+                            } else {
+                                "t — track play"
+                            })
+                            .clicked()
+                            || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::T))
                         {
-                            action = Some(Action::Play(slot, at(pos)));
+                            action = Some(Action::TrackPlay(track, tick));
+                            ui.close_menu();
                         }
-                        if response.secondary_clicked()
-                            && let Some(pos) = response.interact_pointer_pos()
+                        if ui.button("g — jump").clicked()
+                            || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::G))
                         {
-                            state.menu = Some((slot, at(pos)));
+                            action = Some(Action::Jump(track, tick));
+                            ui.close_menu();
                         }
-                        crate::view::presentation::context_menu(&response, |ui| {
-                            let Some((track, tick)) = state.menu else {
-                                ui.close_menu();
-                                return;
-                            };
-                            if ui
-                                .button(if song.is_some() {
-                                    "t — Container play"
-                                } else {
-                                    "t — track play"
-                                })
-                                .clicked()
-                                || ui.input_mut(|i| {
-                                    i.consume_key(egui::Modifiers::NONE, egui::Key::T)
-                                })
-                            {
-                                action = Some(Action::TrackPlay(track, tick));
-                                ui.close_menu();
-                            }
-                            if ui.button("g — jump").clicked()
-                                || ui.input_mut(|i| {
-                                    i.consume_key(egui::Modifiers::NONE, egui::Key::G)
-                                })
-                            {
-                                action = Some(Action::Jump(track, tick));
-                                ui.close_menu();
-                            }
-                        });
-                        let header = egui::Rect::from_x_y_ranges(names.x_range(), rect.y_range());
-                        // Outside the scroll area, whose clip would hide the names.
-                        draw_name(
-                            &egui::Painter::new(
-                                ui.ctx().clone(),
-                                ui.layer_id(),
-                                egui::Rect::from_x_y_ranges(names.x_range(), clip.y_range()),
-                            ),
-                            header,
-                            &loaded.track_titles[track],
-                            color,
-                            state.cell.0 == slot,
-                        );
-                    }
-                    if let Some(tick) = playing {
-                        ui.painter().vline(
-                            whole.left() + tick as f32 * scale,
-                            panes.y_range(),
-                            egui::Stroke::new(2.0_f32, repeat::PLAYHEAD),
-                        );
-                    }
-                });
-                let panel = output
-                    .inner_rect
-                    .with_min_y(output.inner_rect.top() + repeat::HEIGHT);
-                state.viewport.finish(ui, area, panel, output.state.offset);
+                    });
+                    let header = egui::Rect::from_x_y_ranges(names.x_range(), rect.y_range());
+                    // Outside the scroll area, whose clip would hide the names.
+                    draw_name(
+                        &egui::Painter::new(
+                            ui.ctx().clone(),
+                            ui.layer_id(),
+                            egui::Rect::from_x_y_ranges(names.x_range(), clip.y_range()),
+                        ),
+                        header,
+                        &loaded.track_titles[track],
+                        color,
+                        state.cell.0 == slot,
+                    );
+                }
+                if let Some(tick) = playing {
+                    ui.painter().vline(
+                        whole.left() + tick as f32 * scale,
+                        panes.y_range(),
+                        egui::Stroke::new(2.0_f32, repeat::PLAYHEAD),
+                    );
+                }
             });
+            let panel = output
+                .inner_rect
+                .with_min_y(output.inner_rect.top() + repeat::HEIGHT);
+            state.viewport.finish(ui, area, panel, output.state.offset);
         });
+    };
+    if let Some(ui) = pane {
+        body(ui);
+    } else {
+        placement(ctx, maximized)
+            .open(&mut open)
+            .show(ctx, |ui| body(ui));
+    }
     if !open {
         app.track_overview.open = false;
     }

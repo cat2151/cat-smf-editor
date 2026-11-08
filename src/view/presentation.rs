@@ -11,6 +11,8 @@ pub(crate) enum Native {
     Workspace,
     Keyboard,
     Help,
+    /// A window of panes from `layout.toml`.
+    Dock,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -25,6 +27,7 @@ impl Screen {
     fn presentation(self) -> Policy {
         match self {
             Self::Main
+            | Self::Score
             | Self::Timeline
             | Self::Mixer
             | Self::Drums
@@ -91,14 +94,36 @@ fn priority(a: &App) -> Option<egui::ViewportId> {
         return Some(egui::ViewportId::ROOT);
     }
     match commands::root_owner(a) {
-        Screen::Play => Some(a.playback.viewport),
+        Screen::Play => Some(crate::view::dock::locate::viewport_of(a, a.playback.view)),
         Screen::ArrangementInput => Some(
             a.patterns
                 .workspace
                 .dialog
                 .as_ref()
-                .map_or(egui::ViewportId::ROOT, |d| d.viewport),
+                .map_or(egui::ViewportId::ROOT, |d| {
+                    crate::view::dock::locate::viewport_of(a, d.view)
+                }),
         ),
+        // The grid's own input and its track-creation dialog stay in the window holding the grid.
+        Screen::DrumInput | Screen::DrumCreate => Some(crate::view::dock::locate::viewport_of(
+            a,
+            crate::view::dock::ViewKind::StepSequencer,
+        )),
+        // The curve's point input and its variation chooser stay in the window holding the curve.
+        Screen::ParameterInput => Some(crate::view::dock::locate::viewport_of(
+            a,
+            crate::view::dock::ViewKind::ParameterCurve,
+        )),
+        // The chord timing buttons stay in the window holding the roll.
+        Screen::ChordTiming => Some(crate::view::dock::locate::viewport_of(
+            a,
+            crate::view::dock::ViewKind::PianoRoll,
+        )),
+        // The overview keeps the window holding it, as the main window holds its floating one.
+        Screen::Overview => Some(crate::view::dock::locate::viewport_of(
+            a,
+            crate::view::dock::ViewKind::TrackOverview,
+        )),
         owner => (!owner.allows_companions()).then_some(egui::ViewportId::ROOT),
     }
 }
@@ -115,6 +140,8 @@ struct NativeState {
     modal: Option<(egui::ViewportId, u64)>,
     popup: Option<(egui::ViewportId, u64)>,
     seen: Vec<(egui::ViewportId, Native, bool)>,
+    previous: Vec<egui::ViewportId>,
+    pending: Vec<(egui::ViewportId, egui::ViewportCommand)>,
 }
 fn native_key() -> egui::Id {
     egui::Id::new("presentation-native")
@@ -170,11 +197,8 @@ impl Native {
         let visible = requested && self.visible(a, ctx, id);
         let pass = ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT);
         ctx.data_mut(|d| {
-            let state = d.get_temp_mut_or_default::<NativeState>(native_key());
-            if state.pass != pass {
-                state.pass = pass;
-                state.seen.clear();
-            }
+            d.get_temp_mut_or_default::<NativeState>(native_key())
+                .begin(pass)
         });
         ctx.show_viewport_immediate(id, builder.with_visible(visible), |ctx, class| {
             if class != egui::ViewportClass::Embedded {
@@ -242,7 +266,9 @@ pub(crate) fn modal(ctx: &egui::Context, id: egui::Id) -> egui::Modal {
 }
 
 mod popups;
+pub(crate) mod windows;
 pub(crate) use popups::{context_menu, menu_button, popup_below_widget};
+pub(crate) use windows::{input_for, send_to};
 
 #[derive(Clone, Default)]
 struct Layers {
@@ -263,6 +289,11 @@ pub(crate) fn prepare(a: &App, ctx: &egui::Context) {
             state.modal = None;
         }
     });
+    layers(a, ctx);
+}
+
+/// Starts the frame's floating windows of `ctx`'s window, owned by that window's input owner.
+pub(crate) fn layers(a: &App, ctx: &egui::Context) {
     let key = key(ctx);
     let owner = commands::owner(a, ctx);
     ctx.data_mut(|d| {
@@ -293,6 +324,27 @@ pub(crate) fn refresh(a: &App, ctx: &egui::Context) {
 
 pub(crate) fn background_enabled(a: &App) -> bool {
     commands::root_owner(a).allows_companions()
+}
+
+/// The placed view whose own input, or the overview itself, is open: its pane stays usable
+/// while the rest of the windows are disabled, as its floating window does.
+pub(crate) fn input_view(a: &App, ctx: &egui::Context) -> Option<crate::view::dock::ViewKind> {
+    use crate::view::dock::{focus, ViewKind};
+    let view = match commands::root_owner(a) {
+        Screen::DrumInput => ViewKind::StepSequencer,
+        Screen::ParameterInput => ViewKind::ParameterCurve,
+        Screen::Overview => ViewKind::TrackOverview,
+        _ => return None,
+    };
+    (focus::placed(a, view) && !crate::view::command_input::preview_active(ctx)).then_some(view)
+}
+
+/// The panes of `host` are disabled as a whole, unless one of them holds the open input; then
+/// each of the others disables itself.
+pub(crate) fn panes_enabled(a: &App, ctx: &egui::Context, host: crate::view::dock::Host) -> bool {
+    background_enabled(a)
+        || input_view(a, ctx)
+            .is_some_and(|view| crate::view::dock::focus::root(a).host_of(view) == Some(host))
 }
 
 fn register(ctx: &egui::Context, screen: Screen, id: egui::Id) -> (egui::Order, bool) {
@@ -338,9 +390,7 @@ pub(crate) fn finish(a: &App, ctx: &egui::Context) {
     let pass = ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT);
     let seen = ctx.data_mut(|d| {
         let state = d.get_temp_mut_or_default::<NativeState>(native_key());
-        if state.pass != pass {
-            state.seen.clear();
-        }
+        state.begin(pass);
         if state.modal.is_some_and(|(id, _)| {
             id != egui::ViewportId::ROOT && !state.seen.iter().any(|(shown, _, _)| *shown == id)
         }) {
@@ -373,8 +423,9 @@ pub(crate) fn finish(a: &App, ctx: &egui::Context) {
         focus
     });
     if let Some(target) = focus {
-        ctx.send_viewport_cmd_to(target, egui::ViewportCommand::Focus);
+        send_to(ctx, target, egui::ViewportCommand::Focus);
     }
+    windows::flush(ctx);
     // Real modal layers and their backdrop retain priority over floating editors.
     if super::modal::is_open(a)
         || ctx.memory(|m| m.top_modal_layer().is_some() || m.any_popup_open())
@@ -396,4 +447,4 @@ pub(crate) fn finish(a: &App, ctx: &egui::Context) {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

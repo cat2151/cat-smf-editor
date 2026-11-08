@@ -13,6 +13,10 @@ mod persistence;
 mod picker_ui;
 use persistence::{current, curve_owner, store};
 #[cfg(test)]
+mod mixer_focus_tests;
+#[cfg(test)]
+mod pane_tests;
+#[cfg(test)]
 mod pattern_tests;
 pub use picker_ui::keep_ime;
 use picker_ui::picker_ui;
@@ -29,6 +33,7 @@ pub(crate) mod tests;
 mod variation;
 mod window;
 pub(crate) use variation::open as open_variation;
+pub(crate) use window::{pane, suspend};
 #[cfg(test)]
 mod variation_tests;
 pub(crate) use commands::collect;
@@ -371,8 +376,8 @@ fn source_track(app: &App) -> usize {
 pub fn show(app: &mut App, ctx: &egui::Context) {
     if app.parameter_editor.picker.is_some() {
         picker_ui(app, ctx);
-    } else if app.parameter_editor.open {
-        curve::show(app, ctx);
+    } else if app.parameter_editor.open && !window::docked(app, ctx) {
+        curve::show(app, ctx, None);
     }
 }
 
@@ -385,7 +390,7 @@ pub(crate) fn show_preview(
     app.parameter_editor.open = true;
     app.parameter_editor.curve_track = lane;
     app.parameter_editor.variation_layer = layer;
-    curve::show(app, ctx);
+    curve::show(app, ctx, None);
 }
 
 pub(super) fn value_label(

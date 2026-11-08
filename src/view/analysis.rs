@@ -8,6 +8,8 @@ use std::time::Duration;
 
 #[cfg(windows)]
 pub(crate) mod owner;
+#[cfg(test)]
+mod pane_tests;
 
 /// Unique among the editor's windows; the owner is found by it.
 const TITLE: &str = "Spectrum";
@@ -28,6 +30,9 @@ pub struct State {
 impl State {
     pub fn is_open(&self) -> bool {
         self.worker.is_some()
+    }
+    pub(crate) fn viewport(&self) -> egui::ViewportId {
+        viewport(self.placement)
     }
 }
 
@@ -62,6 +67,11 @@ pub fn reset_window(app: &mut App) {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    if crate::view::dock::focus::placed(app, crate::view::dock::ViewKind::Analysis) {
+        // Taking the pane out of the layout opens a new OS window, which needs its owner again.
+        app.analysis.owned = false;
+        return;
+    }
     let Some(worker) = &app.analysis.worker else {
         return;
     };
@@ -94,15 +104,11 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             let _span = crate::frame_trace::span("analysis/ui");
             let palette_input = crate::view::modal::begin(app, ctx);
             crate::view::commands::route(app, ctx);
-            let (requested, outer, inner) = ctx.input(|i| {
+            let (outer, inner) = ctx.input(|i| {
                 let viewport = i.viewport();
-                (
-                    viewport.close_requested(),
-                    viewport.outer_rect,
-                    viewport.inner_rect,
-                )
+                (viewport.outer_rect, viewport.inner_rect)
             });
-            close = requested;
+            close = crate::view::alt_f4::closes(ctx);
             if let (Some(outer), Some(inner)) = (outer, inner) {
                 app.analysis.seen = Some([outer.min.x, outer.min.y, inner.width(), inner.height()]);
             }
@@ -110,9 +116,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 body(ui, spectrum.as_deref(), lissajous.as_deref());
             });
             crate::view::modal::end(app, ctx, palette_input);
-            // The child viewport is painted by the root update, which must keep running.
-            ctx.request_repaint_after_for(Duration::from_millis(50), egui::ViewportId::ROOT);
-            ctx.request_repaint_after(Duration::from_millis(50));
+            repaint(ctx);
         },
     );
     drop(window_span);
@@ -134,6 +138,25 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 #[cfg(test)]
 pub(crate) fn companion_visible(app: &App, ctx: &egui::Context) -> bool {
     super::presentation::companions_visible(app, ctx)
+}
+
+/// Draws the analysis as a pane, empty while the analysis is closed.
+pub(crate) fn pane(app: &App, ui: &mut egui::Ui) {
+    let Some(worker) = &app.analysis.worker else {
+        return;
+    };
+    body(
+        ui,
+        worker.spectrum().as_deref(),
+        worker.lissajous().as_deref(),
+    );
+    repaint(ui.ctx());
+}
+
+/// A child viewport is painted by the root update, which must keep running.
+fn repaint(ctx: &egui::Context) {
+    ctx.request_repaint_after_for(Duration::from_millis(50), egui::ViewportId::ROOT);
+    ctx.request_repaint_after(Duration::from_millis(50));
 }
 
 pub(crate) fn viewport(placement: u64) -> egui::ViewportId {

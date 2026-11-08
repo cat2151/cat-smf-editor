@@ -54,6 +54,10 @@ pub(crate) fn begin(a: &mut App, ctx: &egui::Context) -> Option<egui::InputState
     let opening=ctx.input(|i|i.events.iter().any(|e|matches!(e,egui::Event::Key{key:Key::P,pressed:true,repeat:false,modifiers,..} if commands::matches(*modifiers,Modifiers::CTRL|Modifiers::SHIFT))));
     if !a.palette.is_open() && opening && a.palette.handled != Some(token) {
         let origin = Origin::capture(a, ctx);
+        let directory = a.config.path.as_ref().and_then(|path| path.parent());
+        if let Err(error) = a.external_editor.load_once(directory) {
+            a.load_error = Some(error);
+        }
         let mut descriptions = std::mem::take(&mut a.palette.descriptions);
         descriptions.reload(&mut a.load_error);
         let commands = descriptions.apply(commands::candidates(a, ctx));

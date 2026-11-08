@@ -2,7 +2,7 @@ use super::*;
 use std::ops::{Deref, DerefMut};
 
 // Keep fingerprint inputs and thread-local roots alive through edits and Undo.
-pub(super) struct Fixture {
+pub(in crate::view::parameter_editor) struct Fixture {
     app: App,
     _instrument: crate::test_support::instrument::Instrument,
 }
@@ -18,7 +18,7 @@ impl DerefMut for Fixture {
     }
 }
 
-pub(super) fn fixture() -> Fixture {
+pub(in crate::view::parameter_editor) fn fixture() -> Fixture {
     let mut music = tracks::new_song();
     let lane = |value| Curve {
         version: 1,
@@ -70,7 +70,7 @@ pub(super) fn fixture() -> Fixture {
     }
 }
 
-pub(super) fn index_curve() -> Curve {
+pub(in crate::view::parameter_editor) fn index_curve() -> Curve {
     Curve {
         version: 1,
         target: Target {

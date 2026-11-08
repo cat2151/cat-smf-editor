@@ -1,0 +1,103 @@
+# 画面の配置設定。アプリからは書き換えません。
+# repo内のtarget配下から実行すると、このファイルを直接読みます（releaseも同じ）。
+# 配布exeでは %LOCALAPPDATA%/cat-smf-editor/layout.toml を手動配置してください。
+# ファイルがなければ標準配置です。自動生成・repoとAppDataの同期はしません。
+# メイン画面は先に表示し、音声開始後にこの配置を読み込みます。
+# 保存するとすぐ反映されます。エラー時は直前の配置を保ち、エラーを赤字で表示します。
+#
+# [root] を省略するとイベント一覧を表示し、ノートモードでは右に五線譜を表示します。
+# 標準の配置例：
+#
+# [root]
+# row = [
+#   { view = "event_list" },
+#   { view = "score" },
+# ]
+#
+# row は横並び、column は縦並び。
+# row の中は width（幅の比率）、column の中は height（高さの比率）。省略時は 1。
+# 各画面は1か所だけ配置できます。
+# 画面名：event_list（イベント一覧）、score（五線譜）、piano_roll（ピアノロール）、
+# tempo_curve（テンポカーブ）、mixer（ミキサー）、analysis（スペクトラム・リサジュー）、
+# song（Pattern / Song）、scene（Scene）、keyboard（Virtual MIDI keyboard）、
+# piano（Virtual MIDI keyboard · Piano）、help（ヘルプ）、
+# step_sequencer（Drum sequencer / Drum kit / Step sequencer）、
+# parameter_curve（Parameter curve / Macro variation curve）、track_overview（Track Overview）。
+#
+# [root]
+# row = [
+#   { view = "event_list", width = 2 },
+#   { width = 3, column = [
+#       { view = "score", height = 3 },
+#       { view = "piano_roll", height = 2 },
+#   ] },
+# ]
+#
+# [[window]] で別ウィンドウを追加。中の配置方法は同じです。
+# title は省略でき、含まれるviewから自動生成されます。
+# [window.monitor_placement] は指定モニタの作業領域内の位置・サイズです。
+# タスクバーを除き、タイトルバー・枠を含めた外寸を百分率（0..100）で指定します。
+# monitor = "left" / "center" / "right" または番号（例: monitor = 2）。
+# 左右は各モニタの中心X座標順。1台ならすべて同じ画面です。
+# centerは奇数台の中央。偶数台や中心Xが同じ候補は曖昧なので番号を指定します。
+# 番号はWindowsのDISPLAY番号です。接続変更で変わる場合があります。
+# 未接続・曖昧な指定はエラーとして直前の有効な配置を保ちます。
+# 絶対指定も必要なら rect = [x, y, 幅, 高さ] を単独で使えます。
+# rectはsettings.tomlと同じ論理座標。monitor_placementとの併記は不可です。
+# 閉じる操作（×・Alt+F4）はアプリの終了です。ウィンドウの削除はこのファイルで行います。
+# イベント一覧はメインウィンドウに配置してください。
+#
+# [[window]]
+# column = [
+#   { view = "piano_roll", height = 2 },
+#   { view = "mixer" },
+# ]
+# [window.monitor_placement]
+# monitor = "right"
+# left_percent = 0
+# top_percent = 0
+# width_percent = 100
+# height_percent = 100
+#
+# Song と Virtual MIDI keyboard を1つのウィンドウに、
+# スペクトラム・リサジューを別のウィンドウに配置する例：
+#
+# [[window]]
+# column = [
+#   { view = "song", height = 2 },
+#   { view = "keyboard" },
+# ]
+# [window.monitor_placement]
+# monitor = "center"
+# left_percent = 0
+# top_percent = 0
+# width_percent = 100
+# height_percent = 100
+#
+# [[window]]
+# view = "analysis"
+# [window.monitor_placement]
+# monitor = "right"
+# left_percent = 0
+# top_percent = 0
+# width_percent = 100
+# height_percent = 100
+
+#
+# 開発中の配置
+[[window]]
+column = [
+  { view = "song", height = 1 },
+  { view = "step_sequencer" },
+  { view = "keyboard" },
+  { view = "piano" },
+  { view = "mixer" },
+  { view = "analysis" },
+]
+
+[window.monitor_placement]
+monitor = "center"
+left_percent = 0
+top_percent = 0
+width_percent = 100
+height_percent = 100

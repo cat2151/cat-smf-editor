@@ -1,5 +1,6 @@
 //! The arrangement windows share a lifetime, but never a selected cell.
 use super::*;
+use crate::view::dock::{locate, ViewKind};
 use cat_smf_editor::message;
 use cat_smf_editor::score::{
     pattern::Catalog,
@@ -40,6 +41,12 @@ impl Pane {
             Self::Song => Screen::Song,
         }
     }
+    pub(crate) fn view(self) -> ViewKind {
+        match self {
+            Self::Scene => ViewKind::Scene,
+            Self::Song => ViewKind::Song,
+        }
+    }
     pub fn title(self) -> &'static str {
         match self {
             Self::Scene => "Scene",
@@ -47,10 +54,13 @@ impl Pane {
         }
     }
 }
-pub fn pane(ctx: &egui::Context) -> Option<Pane> {
-    [Pane::Scene, Pane::Song]
-        .into_iter()
-        .find(|p| p.viewport() == ctx.viewport_id())
+/// The pattern view `ctx` shows.
+pub fn pane(a: &App, ctx: &egui::Context) -> Option<Pane> {
+    match crate::view::dock::locate::view_at(a, ctx)? {
+        ViewKind::Scene => Some(Pane::Scene),
+        ViewKind::Song => Some(Pane::Song),
+        _ => None,
+    }
 }
 #[derive(Default)]
 pub struct State {
@@ -82,12 +92,21 @@ impl State {
         }
     }
 }
+/// The dialog belongs to the view `ctx` shows.
 pub fn input_owner(a: &App, ctx: &egui::Context) -> bool {
     a.patterns
         .workspace
         .dialog
         .as_ref()
-        .is_some_and(|d| d.viewport == ctx.viewport_id())
+        .is_some_and(|d| locate::view_at(a, ctx) == Some(d.view))
+}
+/// The dialog is drawn in `ctx`.
+fn dialog_shown(a: &App, ctx: &egui::Context) -> bool {
+    a.patterns
+        .workspace
+        .dialog
+        .as_ref()
+        .is_some_and(|d| locate::shows(a, ctx, d.view))
 }
 pub fn query_id(p: Pane) -> egui::Id {
     egui::Id::new((p.title(), "part-query"))
@@ -102,13 +121,9 @@ pub fn focused_query(ctx: &egui::Context) -> Option<Pane> {
                 && ctx.memory(|m| m.had_focus_last_frame(id))
     })
 }
+/// Only the view that opened the dialog keeps its input.
 pub fn suspend_background(a: &App, ctx: &egui::Context) {
-    if a.patterns
-        .workspace
-        .dialog
-        .as_ref()
-        .is_some_and(|d| d.viewport != ctx.viewport_id())
-    {
+    if a.patterns.workspace.dialog.is_some() && !input_owner(a, ctx) {
         ctx.input_mut(|i| {
             i.events.clear();
             i.raw.events.clear();
@@ -166,9 +181,36 @@ pub fn focus(a: &mut App, ctx: &egui::Context, p: Pane) {
             m.surrender_focus(id);
         }
     });
-    a.patterns.workspace.selection_mut(p).focus = true;
-    ctx.send_viewport_cmd_to(p.viewport(), egui::ViewportCommand::Focus);
+    if crate::view::dock::focus::placed(a, p.view()) {
+        crate::view::dock::focus::set(a, p.view());
+    } else {
+        a.patterns.workspace.selection_mut(p).focus = true;
+    }
+    crate::view::presentation::send_to(
+        ctx,
+        locate::viewport_of(a, p.view()),
+        egui::ViewportCommand::Focus,
+    );
     ctx.request_repaint();
+}
+/// `p` has something to show: the song has containers, and the Scene was asked for.
+pub(crate) fn shown(a: &App, p: Pane) -> bool {
+    mode::song_window(a) && (p == Pane::Song || a.patterns.workspace.scene_window)
+}
+/// Draws `p` as a pane, empty while it has nothing to show.
+pub(crate) fn leaf(a: &mut App, ui: &mut egui::Ui, p: Pane) {
+    if shown(a, p) {
+        panel::show(a, ui, p);
+    } else {
+        suspend(a, p);
+    }
+}
+/// A frame in which `p` is not drawn ends its timeline gestures.
+pub(crate) fn suspend(a: &mut App, p: Pane) {
+    match p {
+        Pane::Song => a.patterns.workspace.timeline.suspend(),
+        Pane::Scene => a.patterns.workspace.scene_timeline.suspend(),
+    }
 }
 pub fn reset_windows(a: &mut App) {
     a.patterns.workspace.timeline.suspend();
@@ -272,8 +314,9 @@ pub fn open_dialog(a: &mut App, ctx: &egui::Context, purpose: dialog::Purpose, p
     enable(a);
     a.patterns.workspace.dialog = Some(dialog::Dialog::new(a, ctx, purpose, p));
 }
-pub fn root_dialog(a: &mut App, ctx: &egui::Context) {
-    if input_owner(a, ctx) {
+/// Draws the dialog if it belongs to a view of the pane window `ctx`.
+pub fn host_dialog(a: &mut App, ctx: &egui::Context) {
+    if dialog_shown(a, ctx) {
         dialog::show(a, ctx);
     }
 }
@@ -286,20 +329,22 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
         if !mode::song_window(a) {
             break;
         }
+        if crate::view::dock::focus::placed(a, p.view()) {
+            // Taking the pane out of the layout opens a new OS window, which needs its owner again.
+            a.patterns.workspace.selection_mut(p).owned = false;
+            continue;
+        }
         let requested = if let Some(d) = &a.patterns.workspace.dialog {
-            d.viewport == p.viewport()
+            locate::viewport_of(a, d.view) == p.viewport()
         } else {
-            (p == Pane::Song || a.patterns.workspace.scene_window)
+            shown(a, p)
                 && !(a.palette.owns_root() || a.command_input.owns_root())
                 && !a.patterns.confirming_creation()
         };
         let visible =
             requested && crate::view::presentation::Native::Workspace.visible(a, ctx, p.viewport());
         if !visible {
-            match p {
-                Pane::Song => a.patterns.workspace.timeline.suspend(),
-                Pane::Scene => a.patterns.workspace.scene_timeline.suspend(),
-            }
+            suspend(a, p);
         }
         let opened = super::windows::rect(a, p.title());
         let opened = *a
@@ -346,12 +391,15 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
                 } else {
                     egui::CentralPanel::default().show(ctx, |ui| panel::show(a, ui, p));
                 }
-                if input_owner(a, ctx) {
+                if dialog_shown(a, ctx) {
                     dialog::show(a, ctx);
                 }
                 crate::play::playback::show(a, ctx);
                 crate::view::modal::end(a, ctx, input);
-                // The song's patterns keep this window; nothing closes it.
+                // The song's patterns keep this window, so its × quits the app.
+                if crate::view::alt_f4::closes(ctx) {
+                    a.request_close(ctx);
+                }
                 if ctx.input(|i| i.viewport().close_requested()) {
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 }

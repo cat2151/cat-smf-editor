@@ -36,6 +36,7 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
             ("Ctrl+→ ←", "次 / 前のトラック"),
             ("F2", "トラック名変更"),
             ("Home / End", "track先頭 / 末尾"),
+            ("F6 / Shift+F6", "次 / 前のpane"),
         ],
     ),
     (
@@ -81,7 +82,14 @@ pub(super) fn close_guide(ui: &mut egui::Ui) {
             )],
         );
     });
-    ui.weak("Esc: 閉じる");
+    if windowed(ui) {
+        ui.weak("Esc: 閉じる");
+    }
+}
+
+/// Whether help is drawn in its own window; a help pane has nothing to close.
+pub(crate) fn windowed(ui: &egui::Ui) -> bool {
+    ui.ctx().viewport_id() == viewport()
 }
 
 pub(crate) fn view_rows(ui: &mut egui::Ui) {
@@ -101,7 +109,7 @@ pub(crate) fn view_rows(ui: &mut egui::Ui) {
 }
 
 pub(crate) use context::{input, observe, observe_recording, State};
-pub(crate) use window::{lift, restore, show, summon, viewport};
+pub(crate) use window::{lift, pane, restore, show, summon, viewport};
 mod context;
 mod overlays;
 mod pages;
@@ -212,3 +220,5 @@ mod native_tests;
 
 #[cfg(test)]
 mod overlay_tests;
+#[cfg(test)]
+mod pane_tests;

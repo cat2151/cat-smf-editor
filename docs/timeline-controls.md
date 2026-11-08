@@ -55,6 +55,7 @@ Parameterはownerとvariationの縦axisを保全する。Sceneにはrepeat/zoom�
 1. `screens!(...)` の登録宣言にIDを加え、click policyと実在する部品を宣言する。未分類を名前の推測や任意のopt-outで処理しない。追加の意図的な操作差にはuserの判断が必要である。
 2. 実contentのaxis・範囲・ScrollArea出力を既存adapterと同じ入口に接続する。Views等の埋め込み経路は画面adapterを再利用する。
 3. `timeline_controls/tests/fixtures.rs` のexhaustive matchに、実画面の起動・入力投入・描画観測を追加する。fallbackを置かない。新IDにfixtureがなければ、matchがコンパイルエラーになる。
+   paneにも置ける画面は `Fixture::cases` にpane版を加え、同じ共通テストを浮動版とpane版の両方へ通す。
 4. 共通のdrag・zoom・click policy・repeat操作列を通す。期待tickは既知の音符、描画された小節やcurveの印から決め、adapterのaxis関数で期待値を再計算しない。Sceneのバー除外は実際の画面構成に対応する。
 5. キーボード所有権、overlay、IME、複数pane、resize、縦操作との非干渉を、関連する既存画面テストでも確認する。
 

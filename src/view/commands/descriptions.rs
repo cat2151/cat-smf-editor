@@ -202,7 +202,7 @@ fn source_path(executable: &Path, project: &Path) -> Option<PathBuf> {
         .then(|| project.join("config/command-palette.toml"))
 }
 
-fn external_path() -> Option<PathBuf> {
+pub(crate) fn external_path() -> Option<PathBuf> {
     #[cfg(test)]
     tests::record(tests::Work::Locate);
     // Cache only the location; external file contents are reread on every opening.

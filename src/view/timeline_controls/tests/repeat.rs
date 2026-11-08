@@ -170,8 +170,8 @@ fn markers(f: &Fixture) -> (f32, f32, (u64, u64)) {
 
 #[test]
 fn every_repeat_adapter_uses_drawn_markers_after_zoom_and_scroll() {
-    for screen in Screen::ALL.into_iter().filter(|s| s.has_bars()) {
-        let mut f = Fixture::new(screen);
+    for (screen, pane) in Fixture::cases().filter(|(s, _)| s.has_bars()) {
+        let mut f = Fixture::new(screen, pane);
         let map = f.rect("minimap");
         let zoom = egui::pos2(f.rect("repeat").left() + 20.0, map.top() - 12.0);
         f.pointer(zoom, Primary, true);
@@ -193,7 +193,7 @@ fn every_repeat_adapter_uses_drawn_markers_after_zoom_and_scroll() {
         let row = f.rect("repeat");
         assert!(
             row.x_range().contains(left) && row.x_range().contains(right),
-            "visible markers {screen:?}: {left}..{right} in {row:?}"
+            "visible markers {screen:?} pane={pane}: {left}..{right} in {row:?}"
         );
         let left = egui::pos2(left, row.center().y);
         let right = egui::pos2(right, row.center().y);
@@ -212,7 +212,7 @@ fn every_repeat_adapter_uses_drawn_markers_after_zoom_and_scroll() {
             assert_eq!(
                 f.app.playback.repeat,
                 Some((a, b)),
-                "{screen:?} reverse={reverse}"
+                "{screen:?} pane={pane} reverse={reverse}"
             );
         }
         let adjust = left.lerp(right, 0.75);
@@ -221,11 +221,11 @@ fn every_repeat_adapter_uses_drawn_markers_after_zoom_and_scroll() {
         assert_eq!(
             f.app.playback.repeat,
             Some((a, a + (b - a) * 3 / 4)),
-            "right endpoint {screen:?}"
+            "right endpoint {screen:?} pane={pane}"
         );
         f.pointer(adjust, Primary, true);
         f.pointer(adjust, Primary, false);
-        assert_eq!(f.app.playback.repeat, None, "clear {screen:?}");
-        assert_eq!(f.bytes(), before, "{screen:?}");
+        assert_eq!(f.app.playback.repeat, None, "clear {screen:?} pane={pane}");
+        assert_eq!(f.bytes(), before, "{screen:?} pane={pane}");
     }
 }

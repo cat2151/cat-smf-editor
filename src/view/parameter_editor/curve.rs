@@ -45,7 +45,8 @@ pub(super) fn resolve(app: &mut App) -> Result<(), String> {
     app.parameter_editor.selected = (!c.points.is_empty()).then_some((Kind::Point, 0));
     Ok(())
 }
-pub(super) fn show(app: &mut App, ctx: &egui::Context) {
+/// One frame of the curve, in its floating window or in `pane`.
+pub(super) fn show(app: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>) {
     let Ok(c) = current(app) else {
         app.parameter_editor.close();
         return;
@@ -133,68 +134,75 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context) {
     } else {
         app.config.parameter_curve_maximized
     };
-    super::window::window(ctx, maximized, window_title.clone())
-        .open(&mut open)
-        .show(ctx, |ui| {
-            if maximized {
-                // The footer may be empty; egui otherwise shrinks the window to its contents.
-                ui.set_min_size(ui.available_size());
-                ui.heading(&window_title);
-            }
-            if let Some(e) = &s.error {
-                ui.colored_label(Color32::LIGHT_RED, e);
-            }
-            if let Some(layout) = &layout {
-                let (edit, action, tick, navigation) = ui
-                    .add_enabled_ui(s.input.is_none(), |ui| {
-                        super::canvas::show(ui, s, &c, layout, playing, follow, repeat)
-                    })
-                    .inner;
-                edited = edit;
-                range_action = action;
-                seek = tick;
-                navigated = navigation;
-            }
-            if variation && super::variation::point_input(s) && s.input.is_some() {
-                // Point values are chosen in the foreground variation overlay.
-            } else if let Some(input) = &mut s.input {
-                ui.separator();
-                ui.horizontal(|ui| {
-                    if !variation {
-                        ui.label("Tick");
-                        let r = ui.add(
-                            egui::TextEdit::singleline(&mut input.tick)
-                                .id(egui::Id::new("parameter-tick-input"))
-                                .desired_width(110.0),
-                        );
-                        if input.focus {
-                            r.request_focus();
-                            input.focus = false;
-                        }
+    let mut body = |ui: &mut egui::Ui| {
+        if let Some(e) = &s.error {
+            ui.colored_label(Color32::LIGHT_RED, e);
+        }
+        if let Some(layout) = &layout {
+            let (edit, action, tick, navigation) = ui
+                .add_enabled_ui(s.input.is_none(), |ui| {
+                    super::canvas::show(ui, s, &c, layout, playing, follow, repeat)
+                })
+                .inner;
+            edited = edit;
+            range_action = action;
+            seek = tick;
+            navigated = navigation;
+        }
+        if variation && super::variation::point_input(s) && s.input.is_some() {
+            // Point values are chosen in the foreground variation overlay.
+        } else if let Some(input) = &mut s.input {
+            ui.separator();
+            ui.horizontal(|ui| {
+                if !variation {
+                    ui.label("Tick");
+                    let r = ui.add(
+                        egui::TextEdit::singleline(&mut input.tick)
+                            .id(egui::Id::new("parameter-tick-input"))
+                            .desired_width(110.0),
+                    );
+                    if input.focus {
+                        r.request_focus();
+                        input.focus = false;
                     }
-                    if let Some(text) = &value_text {
-                        ui.label(text);
-                    }
-                    confirm = ui.button("Apply  Enter").clicked();
-                    cancel = ui.button("Cancel  Esc").clicked();
-                });
-            } else if let Some((kind, index)) = s.selected {
-                let point = if kind == Kind::Point {
-                    c.points.get(index)
-                } else {
-                    c.controls.get(index)
-                };
-                if let Some(p) = point {
-                    ui.label(format!(
-                        "{}  ·  {}",
-                        p.tick,
-                        value_text
-                            .as_deref()
-                            .map_or_else(|| p.value.to_string(), str::to_owned)
-                    ));
                 }
+                if let Some(text) = &value_text {
+                    ui.label(text);
+                }
+                confirm = ui.button("Apply  Enter").clicked();
+                cancel = ui.button("Cancel  Esc").clicked();
+            });
+        } else if let Some((kind, index)) = s.selected {
+            let point = if kind == Kind::Point {
+                c.points.get(index)
+            } else {
+                c.controls.get(index)
+            };
+            if let Some(p) = point {
+                ui.label(format!(
+                    "{}  ·  {}",
+                    p.tick,
+                    value_text
+                        .as_deref()
+                        .map_or_else(|| p.value.to_string(), str::to_owned)
+                ));
             }
-        });
+        }
+    };
+    if let Some(ui) = pane {
+        body(ui);
+    } else {
+        super::window::window(ctx, maximized, window_title.clone())
+            .open(&mut open)
+            .show(ctx, |ui| {
+                if maximized {
+                    // The footer may be empty; egui otherwise shrinks the window to its contents.
+                    ui.set_min_size(ui.available_size());
+                    ui.heading(&window_title);
+                }
+                body(ui);
+            });
+    }
     if !open {
         app.parameter_editor.close();
     }

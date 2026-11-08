@@ -6,9 +6,10 @@ use crate::view::patterns::workspace_tests::{button, context, focus, key, verifi
 use cat_smf_editor::edit::tracks::new_song;
 use eframe::egui::{self, Key, Modifiers};
 
-pub(crate) const ALL: [Screen; 46] = [
+pub(crate) const ALL: [Screen; 47] = [
     Screen::Global,
     Screen::Main,
+    Screen::Score,
     Screen::EditStyle,
     Screen::TrackRename,
     Screen::Settings,
@@ -83,6 +84,10 @@ pub(crate) fn fixture(screen: Screen) -> Option<(App, egui::Context, Vec<egui::V
     Some(match screen {
         Screen::Global => return None,
         Screen::Main => on_root(|_| {}),
+        Screen::Score => on_root(|a| {
+            a.note_mode = true;
+            a.pane_focus = Some(dock::ViewKind::Score);
+        }),
         Screen::EditStyle => on_root(edit_style::open),
         Screen::TrackRename => on_root(|a| track_rename::begin(a, 0)),
         Screen::Settings => on_root(comma_menu::open),
@@ -268,6 +273,6 @@ fn every_window_is_tried() {
         );
         registered += native.find_iter(&source).count();
     }
-    // Analysis, help, Scene/Song, keyboard, Capture, settings, piano.
-    assert_eq!(registered, 7, "add a fixture for each new native window");
+    // Analysis, help, Scene/Song, keyboard, Capture, settings, piano, dock (`dock::window::tests`).
+    assert_eq!(registered, 8, "add a fixture for each new native window");
 }

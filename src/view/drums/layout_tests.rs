@@ -20,7 +20,9 @@ fn cursor_changes_color_only_while_drums_own_focus() {
             .focused = Some(focused);
         let mut color = None;
         for pass in 0..3 {
-            let output = ctx.run(input.clone(), |ctx| widgets::show(&mut app, ctx, &mut None));
+            let output = ctx.run(input.clone(), |ctx| {
+                widgets::show(&mut app, ctx, None, &mut None)
+            });
             let (_, _, cells) = ctx
                 .data(|d| {
                     d.get_temp::<(egui::Rect, egui::Rect, Vec<egui::Rect>)>(egui::Id::new(

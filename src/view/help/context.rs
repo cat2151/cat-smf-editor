@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::view::commands::{owner, Screen};
+use crate::view::dock::{locate::view_at, ViewKind};
 use eframe::egui;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -43,7 +44,7 @@ pub struct State {
 
 /// Called before modal suspension, including native companion viewports.
 pub(crate) fn input(a: &mut App, ctx: &egui::Context) {
-    if ctx.viewport_id() == super::viewport() {
+    if view_at(a, ctx) == Some(ViewKind::Help) {
         return;
     }
     // In the palette F1 belongs to the selected command's explanation.
@@ -91,7 +92,7 @@ pub(crate) fn input(a: &mut App, ctx: &egui::Context) {
 }
 
 pub(crate) fn observe(a: &mut App, ctx: &egui::Context) {
-    if ctx.viewport_id() == super::viewport() {
+    if view_at(a, ctx) == Some(ViewKind::Help) {
         return;
     }
     let next = resolve(a, ctx);
@@ -109,7 +110,7 @@ pub(crate) fn observe_recording(a: &mut App, ctx: &egui::Context) {
 }
 
 fn resolve(a: &App, ctx: &egui::Context) -> Target {
-    if crate::view::recording::owns(ctx.viewport_id()) {
+    if view_at(a, ctx) == Some(ViewKind::Keyboard) {
         return Target::Recording;
     }
     if a.palette.is_open() {
@@ -129,7 +130,7 @@ fn resolve(a: &App, ctx: &egui::Context) -> Target {
         Screen::Song => Target::Song,
         // A query belongs to its pane, not to an unrelated root editor.
         Screen::ArrangementInput => {
-            crate::view::patterns::workspace::pane(ctx).map_or(Target::Main, |p| match p {
+            crate::view::patterns::workspace::pane(a, ctx).map_or(Target::Main, |p| match p {
                 crate::view::patterns::workspace::Pane::Scene => Target::Scene,
                 crate::view::patterns::workspace::Pane::Song => Target::Song,
             })

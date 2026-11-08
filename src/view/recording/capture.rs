@@ -332,7 +332,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
     let b = s.capture.as_mut().unwrap();
     b.place = Some(at);
     if visible && std::mem::take(&mut b.focus) {
-        ctx.send_viewport_cmd_to(viewport(), egui::ViewportCommand::Focus);
+        super::super::presentation::send_to(ctx, viewport(), egui::ViewportCommand::Focus);
     }
     let title = title(a, s);
     s.capture.as_mut().unwrap().caption.clone_from(&title);
@@ -363,7 +363,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
                     });
                 return;
             }
-            if ctx.input(|i| i.viewport().close_requested()) {
+            if crate::view::alt_f4::closes(ctx) {
                 close(a, s);
                 return;
             }
@@ -376,7 +376,7 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, s: &mut Session, keyboard: 
                 keys(a, s, &ctx.input(|i| i.events.clone()));
             }
             if s.capture.is_none() {
-                ctx.send_viewport_cmd_to(window::viewport(), egui::ViewportCommand::Focus);
+                super::super::presentation::send_to(ctx, s.home, egui::ViewportCommand::Focus);
             } else {
                 let position = position(a, s);
                 let tempo = super::super::patterns::timing::cursor_map(a);

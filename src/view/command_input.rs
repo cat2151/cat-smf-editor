@@ -7,6 +7,7 @@ use crate::app::App;
 use cat_smf_editor::message;
 use eframe::egui::{self, Key, Modifiers};
 use modal::clear;
+mod external_editor;
 pub(crate) mod guide_edit;
 mod insert_event;
 mod pattern_args;
@@ -24,6 +25,7 @@ pub struct State {
     insert_event: Option<insert_event::State>,
     same_measure: Option<same_measure::State>,
     pattern_args: Option<pattern_args::State>,
+    external_editor: Option<external_editor::State>,
 }
 impl State {
     pub(crate) fn views_open(&self) -> bool {
@@ -84,6 +86,8 @@ pub(crate) fn end(a: &mut App, ctx: &egui::Context, input: Option<egui::InputSta
     state.handled = Some(token);
     let done = if !valid {
         true
+    } else if let Some(s) = &mut state.external_editor {
+        external_editor::show(a, ctx, s, fresh)
     } else if let Some(s) = &mut state.pattern_args {
         pattern_args::show(a, ctx, s, fresh)
     } else if let Some(s) = &mut state.insert_event {
@@ -189,4 +193,16 @@ pub(crate) fn start(
     clear(ctx);
     ctx.request_repaint();
     Ok(Execution::Input)
+}
+
+pub(crate) fn register_editor(a: &mut App, ctx: &egui::Context) {
+    a.command_input = State {
+        origin: Some(Origin::capture(a, ctx)),
+        handled: Some(modal::frame_token(ctx)),
+        external_editor: Some(external_editor::State::new(a)),
+        ..Default::default()
+    };
+    modal::mark_owned(ctx);
+    clear(ctx);
+    ctx.request_repaint();
 }

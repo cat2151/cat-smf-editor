@@ -64,10 +64,13 @@ fn run() -> eframe::Result<()> {
     let settings_error = settings.as_ref().err().cloned();
     let settings = settings.unwrap_or_default();
     drop(_settings_span);
-    let options = eframe::NativeOptions {
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut options = eframe::NativeOptions {
         viewport: settings.viewport(),
         ..Default::default()
     };
+    #[cfg(windows)]
+    view::alt_f4::hook(&mut options);
     eframe::run_native(
         "cat-smf-editor",
         options,

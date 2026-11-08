@@ -4,12 +4,12 @@ use egui::PointerButton::Primary;
 
 #[test]
 fn registered_stopped_click_policies_are_explicit_and_do_not_edit() {
-    for screen in Screen::ALL {
-        let mut f = Fixture::new(screen);
+    for (screen, pane) in Fixture::cases() {
+        let mut f = Fixture::new(screen, pane);
         assert_eq!(
             screen.policy(),
             f.expected_click(),
-            "registered stopped-click contract {screen:?}"
+            "registered stopped-click contract {screen:?} pane={pane}"
         );
         let bytes = f.bytes();
         let cursor = crate::play::playback::location(&f.app).0;
@@ -19,17 +19,17 @@ fn registered_stopped_click_policies_are_explicit_and_do_not_edit() {
         f.pointer(pos, Primary, true);
         f.pointer(pos, Primary, false);
         f.frame(vec![]);
-        assert!(!f.app.playback.follow, "{screen:?}");
+        assert!(!f.app.playback.follow, "{screen:?} pane={pane}");
         match f.expected_click() {
             Click::SeekPlaying => {
                 assert!(
                     f.app.playback.pending.is_none() && f.app.playback.active.is_none(),
-                    "{screen:?}"
+                    "{screen:?} pane={pane}"
                 );
                 assert_eq!(
                     crate::play::playback::location(&f.app).0,
                     cursor,
-                    "{screen:?}"
+                    "{screen:?} pane={pane}"
                 );
             }
             Click::Cursor => {
@@ -55,13 +55,13 @@ fn registered_stopped_click_policies_are_explicit_and_do_not_edit() {
 
 #[test]
 fn every_registered_ui_drag_during_playback_preserves_position_scope_and_repeat() {
-    for screen in Screen::ALL {
-        let mut f = Fixture::new(screen);
+    for (screen, pane) in Fixture::cases() {
+        let mut f = Fixture::new(screen, pane);
         let mode = f.start_playback();
         transport::advance(&mut f.app);
         assert!(
             f.app.playback.active.is_some(),
-            "fixture {screen:?}: {:?}",
+            "fixture {screen:?} pane={pane}: {:?}",
             f.app.load_error
         );
         f.app.audition.set_test_seconds(1.0);
@@ -83,19 +83,22 @@ fn every_registered_ui_drag_during_playback_preserves_position_scope_and_repeat(
         f.pointer(to, Primary, false);
         f.frame(vec![]);
         f.frame(vec![]);
-        assert!(!f.app.playback.follow, "{screen:?}");
+        assert!(!f.app.playback.follow, "{screen:?} pane={pane}");
         assert_eq!(f.app.playback.repeat, Some((0, 153600)));
         let active = f.app.playback.active.as_ref().expect("still playing");
-        assert_eq!(active.mode, mode, "{screen:?}");
-        assert_eq!(active.start_seconds, seconds, "drag cannot seek {screen:?}");
+        assert_eq!(active.mode, mode, "{screen:?} pane={pane}");
+        assert_eq!(
+            active.start_seconds, seconds,
+            "drag cannot seek {screen:?} pane={pane}"
+        );
         assert_eq!(f.bytes(), before);
     }
 }
 
 #[test]
 fn probe_follow() {
-    for screen in Screen::ALL {
-        let mut f = Fixture::new(screen);
+    for (screen, pane) in Fixture::cases() {
+        let mut f = Fixture::new(screen, pane);
         f.start_playback();
         transport::advance(&mut f.app);
         f.app.audition.set_test_seconds(1.0);
@@ -137,7 +140,7 @@ fn probe_follow() {
             ));
         }
         eprintln!(
-            "PROBE {screen:?} F-key toggled_to={after_key} | {}",
+            "PROBE {screen:?} pane={pane} F-key toggled_to={after_key} | {}",
             log.join(" | ")
         );
     }

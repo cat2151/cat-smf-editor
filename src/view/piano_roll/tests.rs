@@ -399,6 +399,7 @@ mod drag;
 mod navigation;
 
 mod overview_repeat;
+mod pane;
 mod split;
 
 mod playback;

@@ -10,7 +10,7 @@ pub(super) fn frame(a: &mut App, ctx: &egui::Context, events: Vec<egui::Event>, 
             events,
             ..Default::default()
         },
-        |ctx| show(a, ctx),
+        |ctx| show(a, ctx, None),
     );
 }
 pub(super) fn key(a: &mut App, ctx: &egui::Context, key: Key, modifiers: egui::Modifiers) {

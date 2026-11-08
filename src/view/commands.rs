@@ -3,6 +3,7 @@ use crate::app::App;
 use eframe::egui::{self, Key, Modifiers};
 
 mod basic;
+mod config_files;
 mod execution;
 pub(crate) use execution::{invoke, submit, Execution, Operation, Request};
 pub(crate) mod descriptions;
@@ -10,6 +11,7 @@ mod menus;
 mod mixer;
 mod navigation;
 mod ownership;
+mod panes;
 mod search;
 pub(crate) use search::SearchQuery;
 #[cfg(test)]
@@ -198,10 +200,12 @@ pub fn definitions(app: &App, screen: Screen) -> Vec<Command> {
     }
     super::patterns::mode::collect(app, screen, &mut result);
     basic::collect(app, screen, &mut result);
+    config_files::collect(app, screen, &mut result);
     super::recording::collect(app, screen, &mut result);
     super::patterns::collect(app, screen, &mut result);
     menus::collect(app, screen, &mut result);
     navigation::collect(app, screen, &mut result);
+    panes::collect(app, screen, &mut result);
     super::layers::commands::collect(app, screen, &mut result);
     super::drums::commands::collect(app, screen, &mut result);
     super::macro_editor::collect(app, screen, &mut result);
@@ -322,8 +326,8 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
     let events = ctx.input(|i| i.events.clone());
     for event in events {
         let mut defs = contextual_definitions(app, ctx, screen);
-        // Global のキーは Event list でだけ効き、他の editor へ漏らさない。
-        if screen == Screen::Main {
+        // Global のキーは Event list と五線譜でだけ効き、他の editor へ漏らさない。
+        if matches!(screen, Screen::Main | Screen::Score) {
             defs.extend(contextual_definitions(app, ctx, Screen::Global));
         }
         let command = match event {
@@ -370,7 +374,10 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
             }
         }
     }
-    if screen.owns_keys() {
+    // A keyboard pane reads its own keys after the window routes them.
+    let keyboard = screen == Screen::Recording
+        && super::dock::locate::view_at(app, ctx) == Some(super::dock::ViewKind::Keyboard);
+    if screen.owns_keys() && !keyboard {
         super::comma_menu::swallow(ctx);
     }
 }

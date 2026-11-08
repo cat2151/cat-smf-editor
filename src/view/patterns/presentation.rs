@@ -30,15 +30,24 @@ pub fn label(ui: &mut egui::Ui, name: &str) {
         egui::RichText::new(format!("Pattern · {name}")).strong(),
     );
 }
+/// Hands the keys to the main window's event list.
 pub fn focus_root(a: &mut App, ctx: &egui::Context) {
+    use crate::view::dock::{focus, ViewKind};
+    if matches!(focus::focused(a), ViewKind::Song | ViewKind::Scene) {
+        focus::set(a, ViewKind::EventList);
+    }
     a.patterns.root_focus = true;
-    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+    crate::view::presentation::send_to(ctx, egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
     ctx.request_repaint_of(egui::ViewportId::ROOT);
 }
 /// A child window's command repeats the focus request from the root frame.
 pub fn refocus_root(a: &mut App, ctx: &egui::Context) {
     if a.patterns.root_focus {
-        ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+        crate::view::presentation::send_to(
+            ctx,
+            egui::ViewportId::ROOT,
+            egui::ViewportCommand::Focus,
+        );
         a.patterns.root_focus = false;
     }
 }

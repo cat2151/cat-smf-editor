@@ -174,7 +174,7 @@ name = "Scene name"
 
 #[test]
 fn every_screen_has_a_name_and_a_missing_one_shows_the_variant() {
-    assert_eq!(bundled().screens.len(), 45);
+    assert_eq!(bundled().screens.len(), 46);
     let shown = displayed(vec![command(Screen::Song, "x")]);
     let song = &bundled().screens[&Screen::Song];
     assert_eq!(shown[0].label(), format!("{song}: x"));

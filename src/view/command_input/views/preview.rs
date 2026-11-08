@@ -115,7 +115,7 @@ pub(super) fn show(app: &mut App, ctx: &egui::Context, state: &mut State, view: 
                 app.playback.mixer_track,
                 app.playback.mixer_master,
             );
-            crate::play::mixer::open(app);
+            crate::play::mixer::prepare(app);
             crate::play::mixer::show(app, ctx);
             (
                 app.playback.mixer_open,
