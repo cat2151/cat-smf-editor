@@ -46,6 +46,8 @@ pub(crate) fn app(music: Music) -> App {
         settings_error: None,
         layout: Default::default(),
         pane_focus: None,
+        pane_collapse: Default::default(),
+        pane_tabs: Default::default(),
         config: crate::store::config::Store::default(),
         comma_menu: crate::view::comma_menu::State::default(),
         voicevox: Default::default(),

@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 /// A file dialog filter in a command-building file, not a command id.
 const NOT_ID: &str = "run.exe";
 /// Families whose rows get their names from runtime data, so only the tooltip is defined.
-const NAMED_IN_CODE: [&str; 2] = ["recent.entry", "track.entry"];
+const NAMED_IN_CODE: [&str; 3] = ["pane.fold-entry", "recent.entry", "track.entry"];
 
 #[derive(Default)]
 struct Sources {

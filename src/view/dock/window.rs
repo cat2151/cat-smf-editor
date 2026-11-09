@@ -108,7 +108,8 @@ fn finish(a: &mut App, ctx: &egui::Context, view: ViewKind) {
     }
 }
 
-fn suspend(a: &mut App, ctx: &egui::Context, view: ViewKind) {
+/// Drops the gestures of `view`, which is not drawn this frame.
+pub(crate) fn suspend(a: &mut App, ctx: &egui::Context, view: ViewKind) {
     match view {
         ViewKind::PianoRoll => crate::view::piano_roll::suspend(a, ctx),
         ViewKind::TempoCurve => crate::view::tempo_curve::suspend(a),

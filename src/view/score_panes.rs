@@ -1,5 +1,5 @@
 //! The same score layout for the main view and Views previews.
-use super::dock::{self, Axis, Node, ViewKind};
+use super::dock::{self, collapse, tabs, Axis, Node, ViewKind};
 use super::patterns::workspace::Pane;
 use super::{staff, ACTIVE_PANE};
 use crate::app::App;
@@ -27,6 +27,7 @@ pub(super) fn show(
             replace_effect,
             map_click: &mut map_click,
             framed: dock::focus::framed(app),
+            foldable: collapse::foldable(&layout.root),
         },
     );
     map_click
@@ -44,6 +45,7 @@ pub(crate) fn dock(app: &mut App, ui: &mut egui::Ui, tree: &Node) {
             replace_effect: &mut replace_effect,
             map_click: &mut map_click,
             framed: dock::focus::framed(app),
+            foldable: collapse::foldable(tree),
         },
     );
 }
@@ -63,11 +65,14 @@ struct Leaf<'a> {
     map_click: &'a mut MapClick,
     /// Several panes share the window, so the focused one gets a frame.
     framed: bool,
+    /// The window holds several panes, so each has a header with a fold toggle.
+    foldable: bool,
 }
 
 fn node(app: &mut App, ui: &mut egui::Ui, node: &Node, leaf: &mut Leaf) {
     let (axis, children) = match node {
-        Node::View(view) => return self::view(app, ui, *view, leaf),
+        Node::View(view) => return self::view(app, ui, *view, leaf, ui.max_rect()),
+        Node::Tabs(views) => return self::tabs(app, ui, views, leaf),
         Node::Row(children) => (Axis::Row, children),
         Node::Column(children) => (Axis::Column, children),
     };
@@ -79,9 +84,18 @@ fn node(app: &mut App, ui: &mut egui::Ui, node: &Node, leaf: &mut Leaf) {
         spacing.y
     };
     let weights: Vec<f32> = children.iter().map(|(_, size)| *size).collect();
+    let folded: Vec<bool> = children
+        .iter()
+        .map(|(child, _)| {
+            leaf.foldable
+                && matches!(child, Node::View(_) | Node::Tabs(_))
+                && collapse::folded(app, child.views()[0])
+        })
+        .collect();
+    let fixed = collapse::thickness(ui);
     // Laid out like `ui.columns`, but each pane has its own id: sibling panes sharing one
     // would share the state of their scroll areas.
-    let mut panes: Vec<egui::Ui> = dock::split(rect, axis, &weights, gap)
+    let mut panes: Vec<egui::Ui> = dock::split_folded(rect, axis, &weights, &folded, fixed, gap)
         .into_iter()
         .enumerate()
         .map(|(i, r)| {
@@ -95,13 +109,107 @@ fn node(app: &mut App, ui: &mut egui::Ui, node: &Node, leaf: &mut Leaf) {
             pane
         })
         .collect();
-    for ((child, _), pane) in children.iter().zip(&mut panes) {
-        self::node(app, pane, child, leaf);
+    let count = children.len();
+    for (i, ((child, _), pane)) in children.iter().zip(&mut panes).enumerate() {
+        let side = collapse::Side::of(axis, i, count);
+        match child {
+            Node::View(view) if leaf.foldable => folding(app, pane, *view, side, leaf),
+            Node::Tabs(views) if leaf.foldable => folding_tabs(app, pane, views, side, leaf),
+            _ => self::node(app, pane, child, leaf),
+        }
     }
     ui.advance_cursor_after_rect(rect);
 }
 
-fn view(app: &mut App, ui: &mut egui::Ui, view: ViewKind, leaf: &mut Leaf) {
+/// A pane under its header; a folded one is not drawn and stops as a hidden window's do.
+fn folding(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    view: ViewKind,
+    side: collapse::Side,
+    leaf: &mut Leaf,
+) {
+    let title = |ui: &mut egui::Ui| {
+        ui.label(view.name());
+    };
+    let frame = ui.max_rect();
+    if !collapse::header(app, ui, view, side, title) {
+        dock::window::suspend(app, &ui.ctx().clone(), view);
+        return;
+    }
+    let rect = ui.available_rect_before_wrap();
+    let mut body = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down_justified(egui::Align::LEFT)),
+    );
+    body.set_width(rect.width());
+    self::view(app, &mut body, view, leaf, frame);
+}
+
+/// A tab group with the toggle at the left of its tab names; folded, it shows as its shown tab
+/// and every tab stops.
+fn folding_tabs(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    views: &[ViewKind],
+    side: collapse::Side,
+    leaf: &mut Leaf,
+) {
+    let shown = tabs::sync(app, views);
+    let frame = ui.max_rect();
+    let mut clicked = None;
+    let title = |ui: &mut egui::Ui| clicked = tabs::header(ui, views, shown);
+    if !collapse::header(app, ui, shown, side, title) {
+        let ctx = ui.ctx().clone();
+        for view in views {
+            dock::window::suspend(app, &ctx, *view);
+        }
+        return;
+    }
+    if let Some(view) = clicked {
+        tabs::select(app, views, view);
+    }
+    tab_body(app, ui, views, leaf, frame);
+}
+
+/// The tab names on top, the shown tab under them.
+fn tabs(app: &mut App, ui: &mut egui::Ui, views: &[ViewKind], leaf: &mut Leaf) {
+    let shown = tabs::sync(app, views);
+    let frame = ui.max_rect();
+    if let Some(view) = tabs::header(ui, views, shown) {
+        tabs::select(app, views, view);
+    }
+    tab_body(app, ui, views, leaf, frame);
+}
+
+/// The shown tab; the hidden ones stop as a hidden window's do.
+fn tab_body(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    views: &[ViewKind],
+    leaf: &mut Leaf,
+    frame: egui::Rect,
+) {
+    let shown = tabs::shown(app, views);
+    let ctx = ui.ctx().clone();
+    for view in views.iter().filter(|v| **v != shown) {
+        dock::window::suspend(app, &ctx, *view);
+    }
+    let rect = ui.available_rect_before_wrap();
+    let mut body = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt(("tab", shown.name()))
+            .max_rect(rect)
+            .layout(egui::Layout::top_down_justified(egui::Align::LEFT)),
+    );
+    body.set_width(rect.width());
+    self::view(app, &mut body, shown, leaf, frame);
+}
+
+/// `frame` is the whole pane, its header line included, so the focus frame encloses the line
+/// that was clicked; clicks below the header are the view's own.
+fn view(app: &mut App, ui: &mut egui::Ui, view: ViewKind, leaf: &mut Leaf, frame: egui::Rect) {
     let rect = ui.max_rect();
     // The window stayed enabled for the pane holding the open input; the others still wait.
     if ui.is_enabled()
@@ -114,8 +222,8 @@ fn view(app: &mut App, ui: &mut egui::Ui, view: ViewKind, leaf: &mut Leaf) {
     if leaf.framed {
         dock::focus::click(app, ui, rect, view);
         if dock::focus::focused(app) == view {
-            ui.painter_at(rect).rect_stroke(
-                rect,
+            ui.painter_at(frame).rect_stroke(
+                frame,
                 2.0,
                 egui::Stroke::new(2.0_f32, ACTIVE_PANE),
                 egui::StrokeKind::Inside,

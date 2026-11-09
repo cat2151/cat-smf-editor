@@ -37,6 +37,8 @@ const KEYS: [(Color32, &[(&str, &str)]); 5] = [
             ("F2", "トラック名変更"),
             ("Home / End", "track先頭 / 末尾"),
             ("F6 / Shift+F6", "次 / 前のpane"),
+            ("Ctrl+F6", "paneの折りたたみ"),
+            ("Ctrl+PageDown / PageUp", "次 / 前のタブ"),
         ],
     ),
     (

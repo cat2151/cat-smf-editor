@@ -36,6 +36,8 @@ pub struct App {
     pub layout: crate::store::layout::Watch,
     /// The main window's pane holding the keyboard; `None` is the event list.
     pub pane_focus: Option<crate::view::dock::ViewKind>,
+    pub pane_collapse: crate::view::dock::collapse::Collapsed,
+    pub pane_tabs: crate::view::dock::tabs::Shown,
     pub config: crate::store::config::Store,
     pub comma_menu: crate::view::comma_menu::State,
     pub voicevox: crate::view::voicevox::State,
@@ -148,6 +150,8 @@ impl App {
             settings_error: None,
             layout: Default::default(),
             pane_focus: None,
+            pane_collapse: Default::default(),
+            pane_tabs: Default::default(),
             config: Default::default(),
             comma_menu: crate::view::comma_menu::State::default(),
             voicevox: Default::default(),

@@ -2,8 +2,10 @@
 //! columns whose leaves each hold one view.
 use eframe::egui::{self, Rect};
 
+pub(crate) mod collapse;
 pub(crate) mod focus;
 pub(crate) mod locate;
+pub(crate) mod tabs;
 pub(crate) mod window;
 
 #[cfg(test)]
@@ -33,6 +35,28 @@ pub(crate) enum ViewKind {
     TrackOverview,
 }
 
+impl ViewKind {
+    /// The name `layout.toml` gives the view.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::EventList => "event_list",
+            Self::Score => "score",
+            Self::PianoRoll => "piano_roll",
+            Self::TempoCurve => "tempo_curve",
+            Self::Mixer => "mixer",
+            Self::Analysis => "analysis",
+            Self::Song => "song",
+            Self::Scene => "scene",
+            Self::Keyboard => "keyboard",
+            Self::Piano => "piano",
+            Self::Help => "help",
+            Self::StepSequencer => "step_sequencer",
+            Self::ParameterCurve => "parameter_curve",
+            Self::TrackOverview => "track_overview",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Node {
     /// Children left to right, each with its weight.
@@ -40,6 +64,8 @@ pub(crate) enum Node {
     /// Children top to bottom, each with its weight.
     Column(Vec<(Node, f32)>),
     View(ViewKind),
+    /// Views sharing one pane, one shown at a time.
+    Tabs(Vec<ViewKind>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,7 +98,7 @@ pub(crate) struct Layout {
 pub(crate) enum Error {
     /// A weight is zero, negative or not finite.
     Size(f32),
-    /// A row or column without children.
+    /// A row, column or tabs without children.
     Empty,
     Duplicate(ViewKind),
     /// A view that only the main window can hold, placed in a dock window.
@@ -83,7 +109,7 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Size(size) => write!(f, "size must be positive: {size}"),
-            Error::Empty => write!(f, "a row or column needs at least one pane"),
+            Error::Empty => write!(f, "a row, column or tabs needs at least one pane"),
             Error::Duplicate(view) => write!(f, "view placed twice: {view:?}"),
             Error::MainOnly(view) => write!(f, "view stays in the main window: {view:?}"),
         }
@@ -101,6 +127,7 @@ impl Node {
     fn collect(&self, out: &mut Vec<ViewKind>) {
         match self {
             Node::View(view) => out.push(*view),
+            Node::Tabs(views) => out.extend(views),
             Node::Row(children) | Node::Column(children) => {
                 for (child, _) in children {
                     child.collect(out);
@@ -112,6 +139,8 @@ impl Node {
     fn check(&self) -> Result<(), Error> {
         match self {
             Node::View(_) => Ok(()),
+            Node::Tabs(views) if views.is_empty() => Err(Error::Empty),
+            Node::Tabs(_) => Ok(()),
             Node::Row(children) | Node::Column(children) => {
                 if children.is_empty() {
                     return Err(Error::Empty);
@@ -213,22 +242,57 @@ pub(crate) fn focus_step(
     order.get(next).copied()
 }
 
-/// Splits `rect` along `axis` by `weights`, leaving `gap` between neighbours.
-pub(crate) fn split(rect: Rect, axis: Axis, weights: &[f32], gap: f32) -> Vec<Rect> {
-    let horizontal = axis == Axis::Row;
-    let length = if horizontal {
+/// Splits `rect` along `axis`, leaving `gap` between neighbours: each `folded` child takes
+/// `fixed`, and the open ones share what is left by their `weights`. With every child folded,
+/// the space after them stays empty.
+pub(crate) fn split_folded(
+    rect: Rect,
+    axis: Axis,
+    weights: &[f32],
+    folded: &[bool],
+    fixed: f32,
+    gap: f32,
+) -> Vec<Rect> {
+    let is_folded = |i: usize| folded.get(i).copied().unwrap_or(false);
+    let folds = (0..weights.len()).filter(|i| is_folded(*i)).count();
+    let total: f32 = (0..weights.len())
+        .filter(|i| !is_folded(*i))
+        .map(|i| weights[i])
+        .sum();
+    let free = (free_length(rect, axis, weights.len(), gap) - fixed * folds as f32).max(0.0);
+    let sizes: Vec<f32> = weights
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            if is_folded(i) {
+                fixed
+            } else {
+                free * w / total
+            }
+        })
+        .collect();
+    place(rect, axis, &sizes, gap)
+}
+
+/// The length along `axis` left for `count` children after the gaps between them.
+fn free_length(rect: Rect, axis: Axis, count: usize, gap: f32) -> f32 {
+    let length = if axis == Axis::Row {
         rect.width()
     } else {
         rect.height()
     };
-    let total: f32 = weights.iter().sum();
-    let free = (length - gap * weights.len().saturating_sub(1) as f32).max(0.0);
+    (length - gap * count.saturating_sub(1) as f32).max(0.0)
+}
+
+/// Lays `sizes` out along `axis` from the start of `rect`, `gap` apart.
+fn place(rect: Rect, axis: Axis, sizes: &[f32], gap: f32) -> Vec<Rect> {
+    let horizontal = axis == Axis::Row;
     let mut start = 0.0;
-    weights
+    sizes
         .iter()
         .enumerate()
-        .map(|(i, weight)| {
-            let size = free * weight / total;
+        .map(|(i, size)| {
+            let size = *size;
             let from = start + i as f32 * gap;
             start += size;
             if horizontal {

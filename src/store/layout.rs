@@ -50,6 +50,7 @@ struct Tree {
     view: Option<ViewKind>,
     row: Option<Vec<Child>>,
     column: Option<Vec<Child>>,
+    tabs: Option<Vec<Tab>>,
 }
 
 #[derive(Deserialize)]
@@ -58,6 +59,7 @@ struct Child {
     view: Option<ViewKind>,
     row: Option<Vec<Child>>,
     column: Option<Vec<Child>>,
+    tabs: Option<Vec<Tab>>,
     /// Share of a `row`.
     width: Option<f32>,
     /// Share of a `column`.
@@ -73,12 +75,21 @@ struct Window {
     view: Option<ViewKind>,
     row: Option<Vec<Child>>,
     column: Option<Vec<Child>>,
+    tabs: Option<Vec<Tab>>,
+}
+
+/// A tab holds one view and nothing else, so unknown keys such as `row` or `width` are errors.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Tab {
+    view: ViewKind,
 }
 
 fn node(
     view: Option<ViewKind>,
     row: Option<Vec<Child>>,
     column: Option<Vec<Child>>,
+    tabs: Option<Vec<Tab>>,
 ) -> Result<Option<Node>, String> {
     let children = |list: Vec<Child>, in_row: bool| -> Result<Vec<(Node, f32)>, String> {
         list.into_iter()
@@ -96,30 +107,38 @@ fn node(
                     });
                 }
                 let size = share.unwrap_or(1.0);
-                node(child.view, child.row, child.column)?
+                node(child.view, child.row, child.column, child.tabs)?
                     .map(|node| (node, size))
-                    .ok_or_else(|| "a pane needs one of `view`, `row` or `column`".to_owned())
+                    .ok_or_else(|| {
+                        "a pane needs one of `view`, `row`, `column` or `tabs`".to_owned()
+                    })
             })
             .collect()
     };
-    match (view, row, column) {
-        (None, None, None) => Ok(None),
-        (Some(view), None, None) => Ok(Some(Node::View(view))),
-        (None, Some(row), None) => Ok(Some(Node::Row(children(row, true)?))),
-        (None, None, Some(column)) => Ok(Some(Node::Column(children(column, false)?))),
-        _ => Err("use only one of `view`, `row` and `column` in a pane".to_owned()),
+    match (view, row, column, tabs) {
+        (None, None, None, None) => Ok(None),
+        (Some(view), None, None, None) => Ok(Some(Node::View(view))),
+        (None, Some(row), None, None) => Ok(Some(Node::Row(children(row, true)?))),
+        (None, None, Some(column), None) => Ok(Some(Node::Column(children(column, false)?))),
+        (None, None, None, Some(tabs)) if tabs.is_empty() => {
+            Err("`tabs` needs at least one view".to_owned())
+        }
+        (None, None, None, Some(tabs)) => {
+            Ok(Some(Node::Tabs(tabs.into_iter().map(|t| t.view).collect())))
+        }
+        _ => Err("use only one of `view`, `row`, `column` and `tabs` in a pane".to_owned()),
     }
 }
 
 pub(crate) fn parse(text: &str) -> Result<Spec, String> {
     let file: File = toml::from_str(text).map_err(|e| e.to_string())?;
     let root = file.root.unwrap_or_default();
-    let root = node(root.view, root.row, root.column)?;
+    let root = node(root.view, root.row, root.column, root.tabs)?;
     let docks = file
         .window
         .into_iter()
         .map(|window| {
-            let node = node(window.view, window.row, window.column)?
+            let node = node(window.view, window.row, window.column, window.tabs)?
                 .ok_or_else(|| "window has no panes".to_owned())?;
             let title = window.title.unwrap_or_else(|| window_title(&node));
             let placement = match (window.rect, window.monitor_placement) {
@@ -307,22 +326,7 @@ fn window_title(node: &Node) -> String {
     let mut title = "cat-smf-editor".to_owned();
     for view in node.views() {
         title.push_str(" · ");
-        title.push_str(match view {
-            ViewKind::EventList => "event_list",
-            ViewKind::Score => "score",
-            ViewKind::PianoRoll => "piano_roll",
-            ViewKind::TempoCurve => "tempo_curve",
-            ViewKind::Mixer => "mixer",
-            ViewKind::Analysis => "analysis",
-            ViewKind::Song => "song",
-            ViewKind::Scene => "scene",
-            ViewKind::Keyboard => "keyboard",
-            ViewKind::Piano => "piano",
-            ViewKind::Help => "help",
-            ViewKind::StepSequencer => "step_sequencer",
-            ViewKind::ParameterCurve => "parameter_curve",
-            ViewKind::TrackOverview => "track_overview",
-        });
+        title.push_str(view.name());
     }
     title
 }

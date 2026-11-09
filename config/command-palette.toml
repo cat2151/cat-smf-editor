@@ -1022,6 +1022,17 @@ ids = ["overview.track-prev"]
 name = "前のtrack"
 
 [[command]]
+ids = ["pane.fold"]
+name = "paneの折りたたみ"
+tooltip = "フォーカス中のpaneを畳む / 開く。"
+search = "pane fold collapse"
+
+[[command]]
+ids = ["pane.fold-entry"]
+tooltip = "このpaneを畳む / 開く。"
+search = "pane fold collapse"
+
+[[command]]
 ids = ["pane.focus-next"]
 name = "次のpane"
 search = "pane focus next"
@@ -1030,6 +1041,16 @@ search = "pane focus next"
 ids = ["pane.focus-prev"]
 name = "前のpane"
 search = "pane focus previous"
+
+[[command]]
+ids = ["pane.tab-next"]
+name = "次のタブ"
+search = "pane tab next"
+
+[[command]]
+ids = ["pane.tab-prev"]
+name = "前のタブ"
+search = "pane tab previous"
 
 [[command]]
 ids = ["pane.unfocus"]

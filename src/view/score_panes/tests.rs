@@ -58,11 +58,14 @@ fn shapes(app: &mut App) -> Vec<egui::epaint::ClippedShape> {
     out
 }
 
+/// Below the panes' header line, which every pane of a window holding several has.
+const BELOW_HEADER: f32 = 30.0;
+
 fn right_half(shapes: &[egui::epaint::ClippedShape]) -> usize {
     shapes
         .iter()
         .map(|s| s.shape.visual_bounding_rect())
-        .filter(|r| r.is_finite() && r.min.x > WIDTH / 2.0 + 10.0)
+        .filter(|r| r.is_finite() && r.min.x > WIDTH / 2.0 + 10.0 && r.min.y > BELOW_HEADER)
         .count()
 }
 
@@ -103,4 +106,35 @@ fn the_layout_file_decides_the_panes() {
     let built_in = right_half(&shapes(&mut a));
     assert!(narrow_list > built_in, "{narrow_list} {built_in}");
     assert!(built_in > list_only, "{built_in} {list_only}");
+}
+
+#[test]
+fn a_folded_score_draws_nothing_beside_the_list() {
+    let mut a = app();
+    a.note_mode = true;
+    assert!(right_half(&shapes(&mut a)) > 0);
+    crate::view::dock::collapse::toggle(&mut a, crate::view::dock::ViewKind::Score);
+    assert_eq!(right_half(&shapes(&mut a)), 0);
+}
+
+#[test]
+fn the_focus_frame_encloses_the_pane_header() {
+    let mut a = app();
+    a.note_mode = true;
+    let drawn = shapes(&mut a);
+    let frame = drawn
+        .iter()
+        .find_map(|s| match &s.shape {
+            egui::Shape::Rect(r) if r.stroke.color == crate::view::ACTIVE_PANE => {
+                Some(r.rect.intersect(s.clip_rect))
+            }
+            _ => None,
+        })
+        .expect("the focused pane has a frame");
+    let header = crate::view::dock::collapse::thickness(&egui::Ui::new(
+        egui::Context::default(),
+        egui::Id::NULL,
+        egui::UiBuilder::new(),
+    ));
+    assert!(frame.min.y < header, "{frame:?}");
 }

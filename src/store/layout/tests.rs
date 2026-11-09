@@ -1,6 +1,8 @@
 use super::*;
 use std::time::{Duration, Instant, SystemTime};
 
+mod tabs;
+
 fn view(kind: ViewKind, size: f32) -> (Node, f32) {
     (Node::View(kind), size)
 }
@@ -184,6 +186,12 @@ fn source_layout_and_commented_examples_are_valid() {
         parse(&example).unwrap().resolve(true, false),
         Layout::default_for(true, false)
     );
+    let roots = commented_blocks("# [root]");
+    assert_eq!(roots.len(), 3, "{roots:?}");
+    assert!(matches!(
+        parse(&roots[2]).unwrap().root,
+        Some(Node::Row(children)) if matches!(children[0].0, Node::Tabs(_))
+    ));
     let windows = windows();
     assert_eq!(windows.len(), 3, "{windows:?}");
     let docks = parse(&format!("[root]\nview = \"event_list\"\n{}", windows[0]))
@@ -249,11 +257,16 @@ fn the_template_lists_every_view_name() {
 
 /// The template's commented-out `[[window]]` examples, uncommented.
 fn windows() -> Vec<String> {
+    commented_blocks("# [[window]]")
+}
+
+/// The template's commented-out examples that start with the line `first`, uncommented.
+fn commented_blocks(first: &str) -> Vec<String> {
     let lines: Vec<&str> = TEMPLATE.lines().collect();
     lines
         .iter()
         .enumerate()
-        .filter(|(_, line)| **line == "# [[window]]")
+        .filter(|(_, line)| **line == first)
         .map(|(start, _)| {
             lines[start..]
                 .iter()

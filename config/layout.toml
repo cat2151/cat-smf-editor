@@ -33,6 +33,14 @@
 #   ] },
 # ]
 #
+# tabs は1つのpaneに複数の画面をタブで並べます。タブの中は view だけ（width / height は不可）。
+#
+# [root]
+# row = [
+#   { width = 2, tabs = [ { view = "event_list" }, { view = "track_overview" }, { view = "piano_roll" } ] },
+#   { view = "score" },
+# ]
+#
 # [[window]] で別ウィンドウを追加。中の配置方法は同じです。
 # title は省略でき、含まれるviewから自動生成されます。
 # [window.monitor_placement] は指定モニタの作業領域内の位置・サイズです。

@@ -14,7 +14,7 @@ pub(crate) fn root(a: &App) -> Layout {
 /// Placed views that hold the focus exactly while they are open, so closing one hands the
 /// keys back to the event list. The mixer counts as open while it holds the keys. The order is
 /// the one the main window's keys follow.
-const OPENED: [ViewKind; 5] = [
+pub(super) const OPENED: [ViewKind; 5] = [
     ViewKind::TrackOverview,
     ViewKind::Mixer,
     ViewKind::ParameterCurve,
@@ -22,7 +22,7 @@ const OPENED: [ViewKind; 5] = [
     ViewKind::TempoCurve,
 ];
 
-fn open(a: &App, view: ViewKind) -> bool {
+pub(super) fn open(a: &App, view: ViewKind) -> bool {
     match view {
         ViewKind::PianoRoll => a.piano_roll.open,
         ViewKind::TempoCurve => a.tempo_curve.open,
@@ -78,7 +78,7 @@ pub(crate) fn focused(a: &App) -> ViewKind {
     let views = root(a).views();
     if let Some(view) = OPENED
         .into_iter()
-        .find(|view| views.contains(view) && open(a, *view))
+        .find(|view| views.contains(view) && open(a, *view) && !folded(a, *view))
     {
         return view;
     }
@@ -89,16 +89,24 @@ pub(crate) fn focused(a: &App) -> ViewKind {
 
 /// Help shows the keys of the view that last had the focus, and the piano plays by mouse beside
 /// the keyboard, which keeps the keys; neither takes the focus.
-fn takes_focus(view: ViewKind) -> bool {
+pub(super) fn takes_focus(view: ViewKind) -> bool {
     !matches!(view, ViewKind::Help | ViewKind::Piano)
 }
 
 fn focusable(a: &App, view: ViewKind) -> bool {
-    takes_focus(view) && shown(a, view)
+    takes_focus(view) && shown(a, view) && !folded(a, view) && !hidden(a, view)
+}
+
+fn folded(a: &App, view: ViewKind) -> bool {
+    super::collapse::folded(a, view)
+}
+
+fn hidden(a: &App, view: ViewKind) -> bool {
+    super::tabs::hidden(a, view)
 }
 
 /// A placed view whose pane stays empty while it has nothing to show cannot hold the focus.
-fn shown(a: &App, view: ViewKind) -> bool {
+pub(super) fn shown(a: &App, view: ViewKind) -> bool {
     match view {
         ViewKind::Analysis => a.analysis.is_open(),
         ViewKind::Song => workspace::shown(a, Pane::Song),
@@ -121,8 +129,10 @@ pub(crate) fn owns(a: &App, screen: Screen) -> bool {
     self::screen(focused(a)) == screen
 }
 
-/// Gives `view` the focus; the placed views in `OPENED` open or close with it.
+/// Gives `view` the focus, opening its folded pane; the placed views in `OPENED` open or close
+/// with it.
 pub(crate) fn set(a: &mut App, view: ViewKind) {
+    super::collapse::unfold(a, view);
     a.pane_focus = Some(view);
     for kind in OPENED {
         if placed(a, kind) {
@@ -162,7 +172,11 @@ pub(crate) fn dock_view(a: &App, index: usize) -> Option<ViewKind> {
         .iter()
         .copied()
         .find(|view| focusable(a, *view))
-        .or_else(|| views.into_iter().find(|view| takes_focus(*view)))
+        .or_else(|| {
+            views
+                .into_iter()
+                .find(|view| takes_focus(*view) && !folded(a, *view) && !hidden(a, *view))
+        })
 }
 
 /// A key typed into dock window `index` goes to its panes.
@@ -208,14 +222,20 @@ pub(crate) fn step(a: &mut App, forward: bool) {
     }
 }
 
-/// Panes in the focused pane's window that can take the focus.
+/// The tree of the focused pane's window, folded panes included.
+pub(crate) fn window(a: &App) -> super::Node {
+    let layout = root(a);
+    layout.node(focus_host(a, &layout)).clone()
+}
+
+/// Panes in the focused pane's window that can take the focus, hidden tabs left out.
 pub(crate) fn panes(a: &App) -> usize {
     let layout = root(a);
     layout
         .node(focus_host(a, &layout))
         .views()
         .into_iter()
-        .filter(|view| takes_focus(*view))
+        .filter(|view| takes_focus(*view) && !folded(a, *view) && !hidden(a, *view))
         .count()
 }
 
@@ -227,6 +247,8 @@ pub(crate) fn framed(a: &App) -> bool {
 /// A press inside the pane gives it the focus, unless a layer above it took the press.
 pub(crate) fn click(a: &mut App, ui: &egui::Ui, rect: egui::Rect, view: ViewKind) {
     if takes_focus(view)
+        && !folded(a, view)
+        && !hidden(a, view)
         && ui.is_enabled()
         && ui.ctx().input(|i| i.pointer.any_pressed())
         && ui.rect_contains_pointer(rect)
