@@ -7,6 +7,8 @@ use crate::view::patterns::workspace_tests::{context, frame, key, text};
 use egui::Modifiers;
 
 const ROOT: egui::ViewportId = egui::ViewportId::ROOT;
+mod effects;
+mod layers;
 const KINDS: [Kind; 3] = [Kind::Drums, Kind::Kit, Kind::Melody];
 
 /// The grid above a mixer in a dock window.

@@ -190,6 +190,7 @@ pub(super) enum Button {
     Phrase,
     /// The patch browser, or the layer editor of a layered container.
     Browse,
+    Effects,
     /// The Capture window's menu item.
     Capture,
     /// Takes the repeating phrase to the Song.
@@ -271,20 +272,17 @@ fn menu(ui: &mut egui::Ui, s: &mut Session) {
 }
 
 fn playing(ui: &mut egui::Ui, s: &mut Session) {
-    let row = ui
-        .horizontal(|ui| {
-            transport(ui, s);
-            super::panel::switch(ui, s);
-            super::panel::to_song(ui, s);
-            super::choices::container(ui, s);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                menu(ui, s);
-                super::choices::expression(ui, s);
-            });
-        })
-        .response
-        .rect;
-    super::panel::led(ui, row, s);
+    ui.horizontal(|ui| {
+        transport(ui, s);
+        super::panel::switch(ui, s);
+        super::panel::to_song(ui, s);
+        super::choices::container(ui, s);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            menu(ui, s);
+            super::choices::expression(ui, s);
+        });
+    });
+    super::panel::sound(ui, s);
     lap(ui, s);
     ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
     let mut keys = vec![];

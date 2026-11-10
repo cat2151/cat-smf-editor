@@ -52,6 +52,9 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>
                     state.field = steps + 2;
                     action = Some(Action::Activate);
                 }
+                if ui.button("Effects").on_hover_text("X").clicked() {
+                    action = Some(Action::Common(super::super::commands::Op::Effects));
+                }
                 if ui.button("◀").on_hover_text("PageUp").clicked() {
                     action = Some(Action::Common(super::super::commands::Op::Page(false)));
                 }

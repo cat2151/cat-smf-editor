@@ -116,7 +116,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 body(ui, spectrum.as_deref(), lissajous.as_deref());
             });
             crate::view::modal::end(app, ctx, palette_input);
-            repaint(ctx);
+            repaint(app, ctx);
         },
     );
     drop(window_span);
@@ -150,11 +150,15 @@ pub(crate) fn pane(app: &App, ui: &mut egui::Ui) {
         worker.spectrum().as_deref(),
         worker.lissajous().as_deref(),
     );
-    repaint(ui.ctx());
+    repaint(app, ui.ctx());
 }
 
-/// A child viewport is painted by the root update, which must keep running.
-fn repaint(ctx: &egui::Context) {
+/// A child viewport is painted by the root update, which must keep running. Resting
+/// streams feed only silence, so the frame that saw them rest leaves the last picture.
+fn repaint(app: &App, ctx: &egui::Context) {
+    if app.audition.idle() {
+        return;
+    }
     ctx.request_repaint_after_for(Duration::from_millis(50), egui::ViewportId::ROOT);
     ctx.request_repaint_after(Duration::from_millis(50));
 }

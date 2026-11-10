@@ -5,6 +5,7 @@ use crate::{
 use eframe::egui;
 
 mod body;
+mod fader;
 pub(crate) mod volume;
 pub(crate) use body::Outcome;
 /// Chained effects stand apart from the gray instrument and track labels.

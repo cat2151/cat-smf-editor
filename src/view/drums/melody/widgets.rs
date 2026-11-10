@@ -105,6 +105,17 @@ pub(super) fn show(a: &mut App, ctx: &egui::Context, pane: Option<&mut egui::Ui>
             if let Some(set) = super::controls::row_sets(ui, shown_set) {
                 action = Some(Action::Rows(Some(set)));
             }
+            ui.separator();
+            if ui
+                .button("Inst. layers")
+                .on_hover_text("音色レイヤーを編集します · Shift+T")
+                .clicked()
+            {
+                action = Some(Action::Layers);
+            }
+            if ui.button("Effects").on_hover_text("X").clicked() {
+                action = Some(Action::Common(Op::Effects));
+            }
         });
         match &measure {
             Ok(m) => {

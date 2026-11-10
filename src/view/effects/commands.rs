@@ -123,7 +123,7 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
     };
     for spec in specs(state, chain.len()) {
         let op = spec.action;
-        out.push(Command::new(s, spec.id, &spec.keys, move |a, _| {
+        out.push(Command::new(s, spec.id, &spec.keys, move |a, ctx| {
             if matches!(op, Op::Help) {
                 crate::view::help::summon(a);
                 return;
@@ -132,7 +132,7 @@ pub(crate) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
                 return;
             };
             if let Some(action) = apply(&mut a.effect_editor, chain.len(), op)
-                && let Err(e) = super::apply(a, target, action)
+                && let Err(e) = super::apply(a, ctx, target, action)
             {
                 a.player_selection.error = Some(e);
             }

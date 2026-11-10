@@ -5,6 +5,7 @@ use egui::Modifiers;
 
 #[derive(Clone, Copy)]
 pub(super) enum Action {
+    Layers,
     Move(isize, isize),
     Octave(bool),
     Toggle,
@@ -38,6 +39,12 @@ pub(crate) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
         Action::Common(Op::Cancel),
     );
     add("app.help", &[(Key::F1, none)], Action::Common(Op::Help));
+    add("layer.open", &[(Key::T, shift)], Action::Layers);
+    add(
+        "effect.open",
+        &[(Key::X, none)],
+        Action::Common(Op::Effects),
+    );
     add(
         "melody.row-next",
         &[(Key::J, none), (Key::ArrowDown, none)],
@@ -126,6 +133,10 @@ pub(super) fn apply(a: &mut App, action: Action) {
         return;
     }
     let result = match action {
+        Action::Layers => {
+            crate::view::layers::open_from_sequencer(a);
+            Ok(())
+        }
         Action::Move(rows, steps) => {
             move_cursor(a, rows, steps);
             Ok(())

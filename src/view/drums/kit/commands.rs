@@ -31,7 +31,7 @@ pub(crate) fn collect(a: &App, screen: Screen, out: &mut Vec<Command>) {
     }
     if !a.drum_editor.kit.has_input() {
         out.push(Command::plain(screen, "effect.open", &[Key::X], |a, _| {
-            crate::play::mixer::open_effects(a, false)
+            super::super::commands::apply(a, super::super::commands::Op::Effects)
         }));
     }
     let mut add = |id, keys: &[Key], action| {

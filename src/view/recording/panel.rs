@@ -67,14 +67,33 @@ pub(super) fn to_song(ui: &mut egui::Ui, s: &mut Session) {
     }
 }
 
-/// Centered in `row`; nothing while the phrase is not repeating.
-pub(super) fn led(ui: &mut egui::Ui, row: egui::Rect, s: &mut Session) {
-    if !phrase::looping(s) {
-        return;
-    }
+/// Sound controls share a row while the phrase repeats, clear of the expression controls.
+pub(super) fn sound(ui: &mut egui::Ui, s: &mut Session) {
+    ui.horizontal(|ui| {
+        // Capturing a replacement phrase hides the controls; held pads must not move.
+        ui.set_min_height(LED_SIZE.y);
+        if !phrase::looping(s) {
+            return;
+        }
+        led(ui, s);
+        if s.sound().container.is_some() {
+            let response = ui
+                .add_sized(BROWSE, egui::Button::new("Effects"))
+                .on_hover_text("Ctrl+X");
+            #[cfg(test)]
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("keyboard-effects"), response.rect));
+            if response.clicked() {
+                s.clicked = Some(Button::Effects);
+            }
+        }
+    });
+}
+
+fn led(ui: &mut egui::Ui, s: &mut Session) {
     let (text, layered) = phrase::display(s);
     let browse = !layered && s.sound().container.is_some();
-    let rect = egui::Rect::from_center_size(row.center(), LED_SIZE);
+    let rect = ui.allocate_exact_size(LED_SIZE, egui::Sense::hover()).0;
     let sense = if layered && s.sound().container.is_some() {
         egui::Sense::click()
     } else {
@@ -118,9 +137,12 @@ pub(super) fn led(ui: &mut egui::Ui, row: egui::Rect, s: &mut Session) {
         s.clicked = Some(Button::Browse);
     }
     if browse {
-        let at = egui::Rect::from_min_size(egui::pos2(rect.right() + 6.0, rect.top()), BROWSE);
         let button = egui::Button::new("browse");
-        if ui.put(at, button).on_hover_text("Ctrl+T").clicked() {
+        if ui
+            .add_sized(BROWSE, button)
+            .on_hover_text("Ctrl+T")
+            .clicked()
+        {
             s.clicked = Some(Button::Browse);
         }
     }

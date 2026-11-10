@@ -38,16 +38,25 @@ impl Keys {
         }
     }
 
-    /// Writes a changed CC1 value, then the queued words, into `out`; returns how many.
-    pub(crate) fn take(&mut self, now: Instant, out: &mut [u32]) -> usize {
-        let mut count = 0;
+    /// Whether `take` at `now` would write anything.
+    pub(crate) fn waiting(&self, now: Instant) -> bool {
+        !self.words.is_empty() || self.changed_cc1(now).is_some()
+    }
+
+    fn changed_cc1(&self, now: Instant) -> Option<u8> {
         let since = self
             .sweep
             .map_or(Duration::ZERO, |z| now.saturating_duration_since(z));
         let cc1 = self.modulation.value(since);
-        if let Some(value) = cc1.filter(|_| self.cc1 != cc1 && !out.is_empty()) {
+        cc1.filter(|_| self.cc1 != cc1)
+    }
+
+    /// Writes a changed CC1 value, then the queued words, into `out`; returns how many.
+    pub(crate) fn take(&mut self, now: Instant, out: &mut [u32]) -> usize {
+        let mut count = 0;
+        if let Some(value) = self.changed_cc1(now).filter(|_| !out.is_empty()) {
             out[0] = 0x20B0_0100 | u32::from(value);
-            self.cc1 = cc1;
+            self.cc1 = Some(value);
             count = 1;
         }
         let queued = self.words.len().min(out.len() - count);

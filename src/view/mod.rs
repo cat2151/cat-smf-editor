@@ -378,8 +378,8 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
     if app.playback.pending.is_some() {
         ctx.request_repaint();
     }
-    if app.audition.needs_pump() {
-        ctx.request_repaint_after(std::time::Duration::from_millis(32));
+    if let Some(interval) = app.audition.pump_interval() {
+        ctx.request_repaint_after(interval);
     }
     app.loaded.is_some()
 }

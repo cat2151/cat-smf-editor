@@ -32,6 +32,7 @@ mod resume;
 mod setup;
 mod sweep;
 mod take;
+mod ticking;
 pub(crate) use following::pattern as follow_pattern;
 #[cfg(test)]
 mod tests;
@@ -258,6 +259,12 @@ fn clicked(a: &mut App, ctx: &egui::Context, s: &mut Session) -> bool {
             phrase::browse(a, ctx, s);
             false
         }
+        Some(window::Button::Effects) => {
+            if phrase::looping(s) && s.sound().container.is_some() {
+                super::effects::entrances::bound(a, s.sound().track, ViewKind::Keyboard, s.home);
+            }
+            false
+        }
         b => b.is_some_and(|b| play::button(a, s, b)),
     }
 }
@@ -341,8 +348,11 @@ pub(crate) fn show(a: &mut App, ctx: &egui::Context) {
         a.config.select_phrase_loop(false);
         resume::shut(a, &mut state);
     }
+    let ticking = state.session.as_ref().is_some_and(Session::ticking);
     a.patterns.recording = state;
-    ctx.request_repaint_after(std::time::Duration::from_millis(8));
+    if ticking {
+        ctx.request_repaint_after(std::time::Duration::from_millis(8));
+    }
 }
 
 /// The keyboard's own window; `true` closes the keyboard.

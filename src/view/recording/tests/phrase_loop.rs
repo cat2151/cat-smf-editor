@@ -48,7 +48,7 @@ fn start_loop(a: &mut App, ctx: &egui::Context) -> Instant {
     assert!(!phrase::looping(session(a)));
     rewind(a, measure(a));
     frame(a, ctx, vec![], true);
-    assert!(phrase::looping(session(a)));
+    assert!(phrase::looping(session(a)), "{:?}", session(a).error);
     let (on, off) = (word(60, 80), word(60, 0));
     assert_eq!(
         due(a, start + measure(a) * 2 + quarter * 2),
@@ -190,9 +190,12 @@ fn started(words: &[u32], notes: &[(Duration, u8, u8)]) -> Vec<u8> {
 }
 
 mod controls;
+mod effects;
 
 mod song;
 
 mod patterns;
 
 mod drums;
+
+mod ticking;

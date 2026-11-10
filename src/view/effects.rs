@@ -5,6 +5,7 @@ use cat_smf_editor::message;
 use eframe::egui;
 
 pub(crate) mod commands;
+pub(crate) mod entrances;
 pub(crate) mod keyboard;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -24,6 +25,7 @@ pub struct State {
     count: usize,
     reveal: bool,
     drag: Option<usize>,
+    return_to: Option<(crate::view::dock::ViewKind, egui::ViewportId)>,
 }
 
 impl State {
@@ -115,13 +117,14 @@ enum Action {
     AutoGain,
 }
 
-fn apply(app: &mut App, target: Target, action: Action) -> Result<(), String> {
+fn apply(app: &mut App, ctx: &egui::Context, target: Target, action: Action) -> Result<(), String> {
     let Some(mut chain) = effects(app, target) else {
         return Ok(());
     };
     match action {
         Action::Close => {
             app.effect_editor.target = None;
+            entrances::hand_back(app, ctx);
             return Ok(());
         }
         Action::Browse(slot) => {
@@ -183,7 +186,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         actions.extend(widgets::show(app, ctx, target, &chain));
     }
     for action in actions {
-        if let Err(error) = apply(app, target, action) {
+        if let Err(error) = apply(app, ctx, target, action) {
             app.player_selection.error = Some(error);
             break;
         }

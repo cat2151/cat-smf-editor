@@ -57,7 +57,6 @@ impl Phrase {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn playing(&self) -> bool {
         self.inner.lock().unwrap().is_some()
     }

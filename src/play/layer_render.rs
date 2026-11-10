@@ -89,6 +89,29 @@ pub struct Render<R = note_render::Render, E = ProcessorRef> {
 }
 
 impl<R: Instrument, E: Effect> Render<R, E> {
+    /// Render event-sized instrument fragments without repeatedly processing the
+    /// post-sum effect chain. The caller applies it once to the assembled block.
+    pub fn instruments(&mut self, render: impl FnOnce(&mut Self) -> bool) -> bool {
+        let effects = self.effects.take();
+        let result = render(self);
+        self.effects = effects;
+        result
+    }
+
+    pub fn apply_effects(&mut self, out: &mut [f32], channels: usize) -> bool {
+        if !out.iter().all(|v| v.is_finite())
+            || self
+                .effects
+                .as_mut()
+                .is_some_and(|effect| !effect.apply(out, channels))
+            || !out.iter().all(|v| v.is_finite())
+        {
+            out.fill(0.0);
+            return false;
+        }
+        true
+    }
+
     pub fn new(layers: Vec<(R, Layer)>, effects: Option<E>) -> Self {
         Self {
             routed_notes: vec![[[255; 128]; 16]; layers.len()],

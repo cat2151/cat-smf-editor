@@ -22,6 +22,7 @@ pub(super) enum Op {
     Stop,
     Undo,
     Create,
+    Effects,
 }
 
 pub(super) fn undo_command(
@@ -67,6 +68,7 @@ pub(crate) fn collect(app: &App, screen: Screen, out: &mut Vec<Command>) {
         add("drum.confirm", &[Key::Enter], Op::Confirm);
     } else {
         add("app.help", &[Key::F1], Op::Help);
+        add("effect.open", &[Key::X], Op::Effects);
         {
             add("drum.row-next", &[Key::J, Key::ArrowDown], Op::Move(1, 0));
             add("drum.row-prev", &[Key::K, Key::ArrowUp], Op::Move(-1, 0));
@@ -129,6 +131,10 @@ pub(super) fn apply(app: &mut App, op: Op) {
         }
         Op::Help => {
             crate::view::help::summon(app);
+            Ok(())
+        }
+        Op::Effects => {
+            crate::view::effects::entrances::sequencer(app);
             Ok(())
         }
         Op::Move(y, x) => {

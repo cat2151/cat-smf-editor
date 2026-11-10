@@ -1,13 +1,10 @@
 //! The mixer's faders and effect rows, drawn into a floating window or a pane.
 use super::{effect_name, gain_to_db, EFFECT_COLOR};
-use crate::{
-    app::App,
-    play::track_volume::{MAX_DB, MIN_DB, STEP_DB},
-};
+use crate::app::App;
 use eframe::egui;
 
-const FADER_HEIGHT: f32 = 252.0;
 const COLUMN_WIDTH: f32 = 140.0;
+const ROW_HEIGHT: f32 = 20.0;
 
 /// What the user did in one frame; applied once after the mixer is drawn.
 #[derive(Default)]
@@ -43,6 +40,12 @@ pub(super) fn show(app: &mut App, ui: &mut egui::Ui) -> Outcome {
         return outcome;
     };
     let count = loaded.track_titles.len();
+    let effect_rows = loaded
+        .patches
+        .iter()
+        .map(|p| p.effects.len())
+        .max()
+        .unwrap_or(0);
     app.playback.mixer_track = app.playback.mixer_track.min(count.saturating_sub(1));
     let selection = (
         app.generation,
@@ -57,26 +60,6 @@ pub(super) fn show(app: &mut App, ui: &mut egui::Ui) -> Outcome {
     });
     egui::ScrollArea::horizontal().show(ui, |ui| {
         ui.horizontal_top(|ui| {
-            ui.vertical(|ui| {
-                ui.add_space(40.0 + 2.0 * ui.spacing().item_spacing.y);
-                let (rect, _) =
-                    ui.allocate_exact_size(egui::vec2(55.0, FADER_HEIGHT), egui::Sense::hover());
-                let radius = ui.spacing().interact_size.y / 2.5;
-                let levels = (MAX_DB - MIN_DB) / STEP_DB;
-                for step in 0..=levels {
-                    let db = MAX_DB - step * STEP_DB;
-                    let y = rect.top()
-                        + radius
-                        + (FADER_HEIGHT - 2.0 * radius) * step as f32 / levels as f32;
-                    ui.painter().text(
-                        egui::pos2(rect.right(), y),
-                        egui::Align2::RIGHT_CENTER,
-                        format!("{db:+} dB"),
-                        egui::FontId::proportional(12.0),
-                        ui.visuals().text_color(),
-                    );
-                }
-            });
             for (track, title) in loaded.track_titles.iter().enumerate() {
                 ui.push_id(track, |ui| {
                     let selected = !app.playback.mixer_master && track == app.playback.mixer_track;
@@ -89,7 +72,7 @@ pub(super) fn show(app: &mut App, ui: &mut egui::Ui) -> Outcome {
                         ui.set_width(COLUMN_WIDTH);
                         ui.vertical(|ui| {
                             let header = ui.add_sized(
-                                [COLUMN_WIDTH, 20.0],
+                                [COLUMN_WIDTH, ROW_HEIGHT],
                                 egui::Button::new(title).selected(selected).truncate(),
                             );
                             if header.clicked() {
@@ -97,23 +80,24 @@ pub(super) fn show(app: &mut App, ui: &mut egui::Ui) -> Outcome {
                                 app.playback.mixer_track = track;
                             }
                             ui.add_sized(
-                                [COLUMN_WIDTH, 20.0],
+                                [COLUMN_WIDTH, ROW_HEIGHT],
                                 egui::Label::new(loaded.patches[track].label()).truncate(),
                             )
                             .on_hover_text(loaded.patches[track].label());
-                            if let Some(slot) = effect_rows(ui, &loaded.patches[track].effects) {
+                            let effects = &loaded.patches[track].effects;
+                            if let Some(slot) = effect_labels(ui, effects) {
                                 *chain = Some((crate::view::effects::Target::Track(track), slot));
                             }
+                            // Every strip reserves the same number of effect rows, including
+                            // their trailing spacing, so gains share one vertical coordinate.
+                            for _ in effects.len()..effect_rows {
+                                ui.allocate_exact_size(
+                                    egui::vec2(COLUMN_WIDTH, ROW_HEIGHT),
+                                    egui::Sense::hover(),
+                                );
+                            }
                             let mut db = gain_to_db(app.audition.gain(track));
-                            ui.spacing_mut().slider_width = FADER_HEIGHT;
-                            let response = ui.add(
-                                egui::Slider::new(&mut db, MIN_DB..=MAX_DB)
-                                    .vertical()
-                                    .handle_shape(egui::style::HandleShape::Circle)
-                                    .trailing_fill(true)
-                                    .step_by(STEP_DB as f64)
-                                    .show_value(false),
-                            );
+                            let response = super::fader::show(ui, &mut db);
                             if response.dragged() || response.clicked() {
                                 app.playback.mixer_master = false;
                                 app.playback.mixer_track = track;
@@ -141,7 +125,7 @@ pub(super) fn show(app: &mut App, ui: &mut egui::Ui) -> Outcome {
 }
 
 /// One label per chained effect; returns the clicked slot.
-fn effect_rows(
+fn effect_labels(
     ui: &mut egui::Ui,
     effects: &[cat_smf_editor::chain_settings::PluginState],
 ) -> Option<usize> {
@@ -159,7 +143,7 @@ fn effect_rows(
                 .sense(egui::Sense::click());
         if ui
             .push_id(("effect", slot), |ui| {
-                ui.add_sized([COLUMN_WIDTH, 20.0], label)
+                ui.add_sized([COLUMN_WIDTH, ROW_HEIGHT], label)
             })
             .inner
             .on_hover_text(name)

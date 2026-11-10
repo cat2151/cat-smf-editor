@@ -4,7 +4,7 @@ use cat_smf_editor::{
     model::{Music, Track},
 };
 
-fn effect(id: &str) -> PluginState {
+pub(crate) fn effect(id: &str) -> PluginState {
     crate::test_support::referenced(PluginState {
         reference: None,
         plugin: PluginKey {
@@ -208,6 +208,7 @@ fn text_pos(output: &egui::FullOutput, text: &str) -> egui::Pos2 {
     output
         .shapes
         .iter()
+        .rev()
         .find_map(|s| match &s.shape {
             egui::epaint::Shape::Text(t) if t.galley.text() == text => {
                 Some(t.pos + t.galley.rect.center().to_vec2())
@@ -218,14 +219,13 @@ fn text_pos(output: &egui::FullOutput, text: &str) -> egui::Pos2 {
 }
 
 #[test]
-fn click_selects_and_drag_moves_an_effect_below_another() {
+fn single_click_browses_and_drag_moves_an_effect_below_another() {
     let ctx = egui::Context::default();
     let mut app = fixture();
     open(&mut app, Target::Track(1), 2);
     // The modal sizes itself invisibly first.
     frame(&mut app, &ctx, vec![]);
     let output = frame(&mut app, &ctx, vec![]);
-    let first = text_pos(&output, "1 delay");
     let second = text_pos(&output, "2 reverb");
     let button = |pos, pressed| egui::Event::PointerButton {
         pos,
@@ -240,6 +240,12 @@ fn click_selects_and_drag_moves_an_effect_below_another() {
     );
     frame(&mut app, &ctx, vec![button(second, false)]);
     assert_eq!(app.effect_editor.selected, 1);
+    // As with X, requesting the browser without a player reports an error.
+    assert!(app.player_selection.error.take().is_some());
+    frame(&mut app, &ctx, vec![]);
+    let output = frame(&mut app, &ctx, vec![]);
+    let first = text_pos(&output, "1 delay");
+    let second = text_pos(&output, "2 reverb");
     frame(
         &mut app,
         &ctx,
@@ -254,6 +260,43 @@ fn click_selects_and_drag_moves_an_effect_below_another() {
     frame(&mut app, &ctx, vec![]);
     assert_eq!(names(&track_effects(&app)), ["reverb", "delay", "chorus"]);
     assert_eq!(app.effect_editor.selected, 1);
+    assert!(app.player_selection.error.is_none());
+}
+
+#[test]
+fn bypass_and_remove_buttons_do_not_open_the_browser() {
+    for target in [Target::Track(1), Target::Master] {
+        let ctx = egui::Context::default();
+        let mut app = fixture();
+        open(&mut app, target, 0);
+        frame(&mut app, &ctx, vec![]);
+        let mut output = frame(&mut app, &ctx, vec![]);
+        for expected in [true, false] {
+            let pos = text_pos(&output, "Bypass");
+            output = click(&mut app, &ctx, pos);
+            assert_eq!(
+                effects(&app, target).unwrap().last().unwrap().bypass,
+                expected
+            );
+            assert!(app.player_selection.error.is_none());
+        }
+        let count = effects(&app, target).unwrap().len();
+        let pos = text_pos(&output, "−");
+        click(&mut app, &ctx, pos);
+        assert_eq!(effects(&app, target).unwrap().len(), count - 1);
+        assert!(app.player_selection.error.is_none());
+    }
+}
+
+fn click(app: &mut App, ctx: &egui::Context, pos: egui::Pos2) -> egui::FullOutput {
+    let button = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    frame(app, ctx, vec![egui::Event::PointerMoved(pos), button(true)]);
+    frame(app, ctx, vec![button(false)])
 }
 
 #[test]
@@ -269,6 +312,32 @@ fn chain_draws_its_source_effects_and_sinks_in_signal_order() {
     open(&mut app, Target::Track(1), 0);
     frame(&mut app, &ctx, vec![]);
     let output = frame(&mut app, &ctx, vec![]);
-    let order = ["1 delay", "3 chorus", "Mixer"].map(|t| text_pos(&output, t).y);
+    let order = ["1 delay", "3 chorus", "+", "Mixer"].map(|t| text_pos(&output, t).y);
     assert!(order.is_sorted(), "{order:?}");
+}
+
+#[test]
+fn growing_chain_expands_the_dialog_before_scrolling() {
+    let ctx = egui::Context::default();
+    let mut app = fixture();
+    open(&mut app, Target::Track(1), 0);
+    for count in [0, 1, 3, 5] {
+        app.loaded.as_mut().unwrap().patches[1].effects =
+            (0..count).map(|i| effect(&format!("fx{i}"))).collect();
+        for _ in 0..3 {
+            frame(&mut app, &ctx, vec![]);
+        }
+        let (content, rect, offset) = ctx
+            .data(|d| {
+                d.get_temp::<(egui::Vec2, egui::Rect, egui::Vec2)>(egui::Id::new(
+                    "effect-chain-scroll",
+                ))
+            })
+            .unwrap();
+        assert!(
+            content.y <= rect.height() + 1.0,
+            "{count}: {content:?} {rect:?}"
+        );
+        assert_eq!(offset.y, 0.0);
+    }
 }

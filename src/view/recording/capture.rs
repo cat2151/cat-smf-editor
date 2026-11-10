@@ -47,6 +47,11 @@ pub(super) fn playing(s: &Session, at: Duration) -> bool {
     s.pending.keys.playing(at.as_millis() as u64, GAP)
 }
 
+/// Keys are played that the song does not hold yet.
+pub(super) fn pending(s: &Session) -> bool {
+    s.pending.keys.pending()
+}
+
 /// Puts the ended phrases, or with `all` every phrase, in the song without an undo step.
 pub(super) fn flush(a: &mut App, s: &mut Session, all: bool) -> Result<(), String> {
     let phrases = if all {

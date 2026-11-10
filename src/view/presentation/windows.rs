@@ -5,6 +5,33 @@
 use super::{native_key, NativeState};
 use eframe::egui;
 
+/// An editor opened from a bound surface hands the keys back once modal windows restore.
+pub(crate) fn focus_after_restoration(ctx: &egui::Context, id: egui::ViewportId) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("presentation-return-focus"), id));
+}
+
+pub(super) fn restored_focus(
+    ctx: &egui::Context,
+    target: Option<egui::ViewportId>,
+) -> Option<egui::ViewportId> {
+    ctx.data_mut(|d| {
+        let previous = d.get_temp_mut_or_default::<Option<egui::ViewportId>>(egui::Id::new(
+            "presentation-host",
+        ));
+        // Windows may activate an owned window on Visible(true); finish at the chosen host.
+        let focus = (*previous != target)
+            .then(|| target.or(*previous))
+            .flatten();
+        *previous = target;
+        if target.is_none() {
+            d.remove_temp::<egui::ViewportId>(egui::Id::new("presentation-return-focus"))
+                .or(focus)
+        } else {
+            focus
+        }
+    })
+}
+
 impl NativeState {
     /// Starts root pass `pass`: the windows shown in the previous pass stay reachable.
     pub(super) fn begin(&mut self, pass: u64) {
@@ -61,6 +88,35 @@ pub(crate) fn send_to(ctx: &egui::Context, id: egui::ViewportId, command: egui::
         state.begin(pass);
         state.pending.push((id, command));
     });
+}
+
+/// Sends `Visible(visible)` to window `id` when the value differs from the last one it got, or
+/// once per frame while the window was not shown in the previous frame (the backend may have made
+/// a new native window). egui repaints a window for every command it is sent, so sending an
+/// unchanged value every frame would keep redrawing.
+pub(super) fn send_visible(ctx: &egui::Context, id: egui::ViewportId, visible: bool) {
+    let pass = ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT);
+    let send = ctx.data_mut(|d| {
+        let state = d.get_temp_mut_or_default::<NativeState>(native_key());
+        state.begin(pass);
+        let new_window = !state.previous.contains(&id);
+        match state.sent.iter_mut().find(|(sent, ..)| *sent == id) {
+            Some(last) => {
+                let send = last.1 != visible || (new_window && last.2 != pass);
+                if send {
+                    *last = (id, visible, pass);
+                }
+                send
+            }
+            None => {
+                state.sent.push((id, visible, pass));
+                true
+            }
+        }
+    });
+    if send {
+        ctx.send_viewport_cmd_to(id, egui::ViewportCommand::Visible(visible));
+    }
 }
 
 /// Delivers the commands that waited for a window this frame showed.

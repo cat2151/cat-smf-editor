@@ -5,6 +5,8 @@ use crate::view::piano_roll::tests::at;
 use cat_smf_editor::model::{Event, Music, Track};
 use eframe::egui::{self, Key, Modifiers};
 
+mod faders;
+
 fn event(tick: u64, status: u8, data: &[u8]) -> Event {
     Event {
         delta: 0,

@@ -94,7 +94,7 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     if crate::view::patterns::workspace::focused_query(ctx).is_some() {
         return Screen::ArrangementInput;
     }
-    if view == Some(ViewKind::Keyboard) {
+    if view == Some(ViewKind::Keyboard) && root_owner(a).allows_companions() {
         return Screen::Recording;
     }
     match locate::host_at(a, ctx) {
@@ -199,6 +199,9 @@ pub(crate) fn root_owner(a: &App) -> Screen {
     if a.layer_editor.open {
         return a.layer_editor.command_screen();
     }
+    if a.effect_editor.is_open() {
+        return a.effect_editor.command_screen();
+    }
     if crate::view::drums::is_open(a) {
         if a.drum_editor.confirm_create {
             return Screen::DrumCreate;
@@ -213,9 +216,6 @@ pub(crate) fn root_owner(a: &App) -> Screen {
         {
             return Screen::Drums;
         }
-    }
-    if a.effect_editor.is_open() {
-        return a.effect_editor.command_screen();
     }
     if a.comma_menu.open {
         return if a.comma_menu.program {

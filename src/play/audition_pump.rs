@@ -2,8 +2,42 @@
 use super::Audition;
 use cat_smf_editor::message;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
+
+/// Repaints while a stream renders, so its diagnostics and plugin requests keep moving.
+const RENDERING: Duration = Duration::from_millis(32);
+/// Repaints while every stream rests: only plugins' main-thread requests need servicing.
+const RESTING: Duration = Duration::from_millis(500);
+
+fn interval(idle: bool) -> Duration {
+    if idle {
+        RESTING
+    } else {
+        RENDERING
+    }
+}
 
 impl Audition {
+    /// How soon the next frame must pump; `None` without any stream.
+    pub fn pump_interval(&self) -> Option<Duration> {
+        self.needs_pump().then(|| interval(self.idle()))
+    }
+
+    /// Whether every open stream skips its plugins and none of their plugins waits for
+    /// main-thread work; true without any stream.
+    pub fn idle(&self) -> bool {
+        self.resting()
+            && (!self.needs_pump() || !cat_smf_editor::host::Host::main_thread_work_pending())
+    }
+
+    fn resting(&self) -> bool {
+        self.voice.as_ref().is_none_or(|voice| voice.resting())
+            && [&self.key_voice, &self.live_voice]
+                .into_iter()
+                .flatten()
+                .all(|voice| voice.resting())
+    }
+
     pub fn pump(&mut self) {
         if !self.needs_pump() {
             return;
@@ -65,5 +99,15 @@ impl Audition {
             self.error =
                 Some(error.unwrap_or_else(|| "音声: pluginか音声デバイスが止まりました".into()));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn resting_streams_pump_far_less_often_than_rendering_ones() {
+        assert_eq!(super::interval(false), super::RENDERING);
+        assert_eq!(super::interval(true), super::RESTING);
+        assert!(super::RESTING >= super::RENDERING * 10);
     }
 }

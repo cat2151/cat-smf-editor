@@ -142,6 +142,8 @@ struct NativeState {
     seen: Vec<(egui::ViewportId, Native, bool)>,
     previous: Vec<egui::ViewportId>,
     pending: Vec<(egui::ViewportId, egui::ViewportCommand)>,
+    /// The last `Visible` each window got, and the pass it was sent in.
+    sent: Vec<(egui::ViewportId, bool, u64)>,
 }
 fn native_key() -> egui::Id {
     egui::Id::new("presentation-native")
@@ -183,7 +185,7 @@ impl Native {
     }
 
     /// The callback of a hidden viewport is never run, even if the OS/backend
-    /// still delivers queued pointer/key events. Visible is sent every frame,
+    /// still delivers queued pointer/key events. Visible is sent on every change,
     /// including restoration; a builder alone does not guarantee that transition.
     pub(crate) fn show<R>(
         self,
@@ -201,10 +203,9 @@ impl Native {
                 .begin(pass)
         });
         ctx.show_viewport_immediate(id, builder.with_visible(visible), |ctx, class| {
+            crate::frame_trace::viewport(ctx);
             if class != egui::ViewportClass::Embedded {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(visible));
-            }
-            if class != egui::ViewportClass::Embedded {
+                windows::send_visible(ctx, id, visible);
                 ctx.data_mut(|d| {
                     d.get_temp_mut_or_default::<NativeState>(native_key())
                         .seen
@@ -268,7 +269,7 @@ pub(crate) fn modal(ctx: &egui::Context, id: egui::Id) -> egui::Modal {
 mod popups;
 pub(crate) mod windows;
 pub(crate) use popups::{context_menu, menu_button, popup_below_widget};
-pub(crate) use windows::{input_for, send_to};
+pub(crate) use windows::{focus_after_restoration, input_for, send_to};
 
 #[derive(Clone, Default)]
 struct Layers {
@@ -404,24 +405,10 @@ pub(crate) fn finish(a: &App, ctx: &egui::Context) {
         state.seen.clone()
     });
     for (id, native, requested) in seen {
-        ctx.send_viewport_cmd_to(
-            id,
-            egui::ViewportCommand::Visible(requested && native.visible(a, ctx, id)),
-        );
+        windows::send_visible(ctx, id, requested && native.visible(a, ctx, id));
     }
     let target = effective_priority(a, ctx);
-    let focus = ctx.data_mut(|d| {
-        let previous = d.get_temp_mut_or_default::<Option<egui::ViewportId>>(egui::Id::new(
-            "presentation-host",
-        ));
-        // Windows can activate an owned window when Visible(true) restores it.
-        // Finish that transition at the operation's host, including on closing.
-        let focus = (*previous != target)
-            .then(|| target.or(*previous))
-            .flatten();
-        *previous = target;
-        focus
-    });
+    let focus = windows::restored_focus(ctx, target);
     if let Some(target) = focus {
         send_to(ctx, target, egui::ViewportCommand::Focus);
     }

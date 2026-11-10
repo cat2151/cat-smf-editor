@@ -20,19 +20,18 @@ pub(super) fn show(
     let state = &mut app.effect_editor;
     let contents = |ui: &mut egui::Ui| {
         ui.set_width(WIDTH);
+        // A centered Area otherwise reuses its previous height and clips a grown chain.
+        ui.set_max_height((ctx.screen_rect().height() - 40.0).max(80.0));
         ui.horizontal(|ui| {
             ui.heading(match target {
                 Target::Track(_) => "Track effects",
                 Target::Master => "Master effects",
             });
-            if ui.button("+").clicked() {
-                actions.push(Action::Browse(chain.len()));
-            }
             if ui.button("×").clicked() {
                 actions.push(Action::Close);
             }
         });
-        egui::ScrollArea::vertical()
+        let scroll = egui::ScrollArea::vertical()
             .max_height((ctx.screen_rect().height() - 120.0).max(80.0))
             .show(ui, |ui| {
                 group(ui, &source.0, &source.1);
@@ -45,6 +44,12 @@ pub(super) fn show(
                     connector(ui);
                 }
                 actions.extend(drag(ui, state, &rects));
+                ui.vertical_centered(|ui| {
+                    if ui.button("+").on_hover_text("Add effect · A").clicked() {
+                        actions.push(Action::Browse(chain.len()));
+                    }
+                });
+                connector(ui);
                 match target {
                     Target::Track(_) => {
                         sink(ui, "Mixer", true);
@@ -58,6 +63,15 @@ pub(super) fn show(
                     }
                 }
             });
+        #[cfg(test)]
+        ctx.data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new("effect-chain-scroll"),
+                (scroll.content_size, scroll.inner_rect, scroll.state.offset),
+            );
+        });
+        #[cfg(not(test))]
+        let _ = scroll;
         if let Some(error) = &error {
             ui.colored_label(Color32::LIGHT_RED, error);
         }
@@ -132,7 +146,7 @@ fn sink(ui: &mut egui::Ui, label: &str, lit: bool) -> egui::Response {
     response
 }
 
-/// One effect: the body selects, double-click replaces and dragging reorders.
+/// One effect: clicking the body browses replacements and dragging reorders.
 fn node(
     ui: &mut egui::Ui,
     state: &mut super::State,
@@ -152,7 +166,7 @@ fn node(
     if body.clicked() || body.drag_started() {
         state.selected = slot;
     }
-    if body.double_clicked() {
+    if body.clicked() {
         actions.push(Action::Browse(slot));
     }
     if body.drag_started() {
@@ -202,34 +216,10 @@ fn node(
     (rect, actions)
 }
 
-/// A power symbol; lit while the effect is bypassed.
+/// Highlighted while the effect is bypassed.
 fn bypass_button(ui: &mut egui::Ui, bypassed: bool) -> egui::Response {
-    let size = ui.spacing().interact_size.y;
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::click());
-    let visuals = ui.style().interact_selectable(&response, bypassed);
-    let painter = ui.painter();
-    painter.rect_filled(rect, 3.0, visuals.weak_bg_fill);
-    let center = rect.center();
-    let radius = size * 0.28;
-    let stroke = egui::Stroke::new(1.5_f32, visuals.fg_stroke.color);
-    // The gap at the top leaves room for the stem.
-    let arc: Vec<_> = (0..=24)
-        .map(|i| {
-            let angle = -std::f32::consts::FRAC_PI_2
-                + 0.6
-                + (std::f32::consts::TAU - 1.2) * i as f32 / 24.0;
-            center + radius * egui::vec2(angle.cos(), angle.sin())
-        })
-        .collect();
-    painter.add(egui::Shape::line(arc, stroke));
-    painter.line_segment(
-        [
-            center - egui::vec2(0.0, radius * 1.25),
-            center - egui::vec2(0.0, radius * 0.2),
-        ],
-        stroke,
-    );
-    response.on_hover_text("Bypass")
+    ui.add(egui::Button::new("Bypass").selected(bypassed))
+        .on_hover_text("Bypass · B")
 }
 
 /// Reorders on release; while dragging, a line marks where the effect lands.

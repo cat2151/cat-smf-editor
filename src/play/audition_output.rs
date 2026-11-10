@@ -140,6 +140,7 @@ pub(super) struct Voice {
     renders: Arc<Mutex<Vec<Render>>>,
     diagnostics: Arc<crate::play::audio_diagnostics::Counters>,
     monitor: crate::play::audio_diagnostics::Monitor,
+    resting: Arc<super::mix::Resting>,
 }
 impl Voice {
     /// Active and dormant plugins are reused per track, reloading state when needed.
@@ -196,12 +197,20 @@ impl Voice {
         }));
         let failed = Arc::new(AtomicBool::new(false));
         let diagnostics = Arc::new(crate::play::audio_diagnostics::Counters::new(natives.len()));
+        let mut mixer = super::mix::Mixer::new(
+            rate,
+            usize::from(config.channels),
+            renders.lock().unwrap().len(),
+            master_pointer,
+        );
+        mixer.diagnostics = Some(diagnostics.clone());
+        let resting = mixer.resting.clone();
         let stream = match supported.sample_format() {
             cpal::SampleFormat::F32 => build::<f32>(
                 &device,
                 &config,
                 renders.clone(),
-                master_pointer,
+                mixer,
                 mailbox.clone(),
                 failed.clone(),
                 diagnostics.clone(),
@@ -210,7 +219,7 @@ impl Voice {
                 &device,
                 &config,
                 renders.clone(),
-                master_pointer,
+                mixer,
                 mailbox.clone(),
                 failed.clone(),
                 diagnostics.clone(),
@@ -219,7 +228,7 @@ impl Voice {
                 &device,
                 &config,
                 renders.clone(),
-                master_pointer,
+                mixer,
                 mailbox.clone(),
                 failed.clone(),
                 diagnostics.clone(),
@@ -240,6 +249,7 @@ impl Voice {
             renders,
             diagnostics,
             monitor: Default::default(),
+            resting,
         })
     }
 
@@ -295,6 +305,11 @@ impl Voice {
                 self.failed.load(Ordering::Relaxed),
             );
         }
+    }
+    /// Whether the stream skips its plugins on the latest command; false while it is locked.
+    pub fn resting(&self) -> bool {
+        let generation = self.mailbox.try_lock().ok().map(|c| c.generation);
+        generation.is_some_and(|generation| self.resting.on(generation))
     }
     pub fn clear_cached(&mut self) {
         self.cached = Reusable::default();
@@ -352,24 +367,30 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
     renders: Arc<Mutex<Vec<Render>>>,
-    master: Option<cat_smf_editor::host::ProcessorRef>,
+    mut mixer: super::mix::Mixer,
     mailbox: Arc<Mutex<Command>>,
     failed: Arc<AtomicBool>,
     diagnostics: Arc<crate::play::audio_diagnostics::Counters>,
 ) -> Result<cpal::Stream, String> {
     let channels = usize::from(config.channels);
     let rate = config.sample_rate.0;
-    let tracks = renders.lock().unwrap().len();
-    let mut mixer = super::mix::Mixer::new(rate, channels, tracks, master);
-    mixer.diagnostics = Some(diagnostics.clone());
     let mut command = mailbox.lock().unwrap().clone();
     let tap = crate::play::analysis::Tap::register(rate);
     let callback_failed = failed.clone();
     let device_diagnostics = diagnostics.clone();
+    let mut dropouts = crate::play::audio_diagnostics::Dropouts::new(rate);
+    // cpal's own raise of its callback thread does not take effect, so the first callback does it.
+    let mut boosted = false;
     device
         .build_output_stream(
             config,
             move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                let entered = std::time::Instant::now();
+                if !boosted {
+                    mixer.boost();
+                    boosted = true;
+                }
+                dropouts.begin(data.len() / channels, entered, &diagnostics);
                 // The UI also excludes rendering while delivering native metadata
                 // notifications and refreshing their instance-local bindings.
                 let Some(mut pointers) =
@@ -377,6 +398,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 else {
                     diagnostics.lock_miss();
                     data.fill(T::EQUILIBRIUM);
+                    dropouts.end(entered);
                     return;
                 };
                 if let Ok(latest) = mailbox.try_lock() {
@@ -404,6 +426,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     offset += mixed.len();
                     command.progress.store(mixer.elapsed, Ordering::Relaxed);
                 }
+                dropouts.end(entered);
             },
             move |_| {
                 device_diagnostics.failure(2);

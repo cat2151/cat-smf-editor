@@ -123,6 +123,10 @@ impl Keys {
             .as_ref()
             .is_some_and(|o| !o.silent() || now.saturating_sub(o.last) < gap)
     }
+    /// Some phrase is not taken yet, open or ended.
+    pub fn pending(&self) -> bool {
+        self.open.is_some() || !self.closed.is_empty()
+    }
     /// Phrases ended by another container's key, or by `gap` milliseconds of silence up to `now`.
     pub fn take(&mut self, now: u64, gap: u64) -> Vec<Phrase> {
         if self.open.is_some() && !self.playing(now, gap) {

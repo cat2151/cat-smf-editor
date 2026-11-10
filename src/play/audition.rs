@@ -427,3 +427,7 @@ mod pump;
 #[cfg(test)]
 #[path = "audition_probe.rs"]
 mod probe;
+
+#[cfg(test)]
+#[path = "audition_realtime_probe.rs"]
+mod realtime_probe;

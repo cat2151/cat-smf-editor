@@ -114,6 +114,10 @@ pub(super) fn show(
                 {
                     *action = Some(Op::Scope);
                 }
+                ui.separator();
+                if ui.button("Effects").on_hover_text("X").clicked() {
+                    *action = Some(Op::Effects);
+                }
             });
             match &measure {
                 Ok(measure) => {

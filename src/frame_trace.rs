@@ -27,6 +27,8 @@ struct Trace<W> {
 /// root window's paint and swap, then any wait for a repaint. `previous_cpu_us` is
 /// eframe's time for the previous frame: update and root paint, without the root swap.
 /// A `discarded` pass is a layout retry: egui runs another update before painting root.
+/// `causes` are the `file:line` of each repaint request made during the previous pass, for
+/// root and for each immediate viewport the update showed; either repaints root.
 #[derive(Default, Serialize)]
 struct Frame {
     t_us: u64,
@@ -36,6 +38,7 @@ struct Frame {
     thread_cpu_us: u64,
     discarded: bool,
     tick: Option<u64>,
+    causes: Vec<String>,
     spans: Vec<(&'static str, u64)>,
 }
 
@@ -64,10 +67,19 @@ impl<W: Write> Trace<W> {
         };
     }
 
-    fn end(&mut self, now: Instant, discarded: bool, tick: Option<u64>) -> std::io::Result<()> {
+    fn end(
+        &mut self,
+        now: Instant,
+        discarded: bool,
+        tick: Option<u64>,
+        causes: Vec<String>,
+    ) -> std::io::Result<()> {
         self.frame.update_us = micros(now - self.start) - self.frame.t_us;
         self.frame.discarded = discarded;
         self.frame.tick = tick;
+        self.frame.causes.extend(causes);
+        self.frame.causes.sort();
+        self.frame.causes.dedup();
         self.previous_end = Some(now);
         serde_json::to_writer(&mut self.out, &self.frame)?;
         self.out.write_all(b"\n")?;
@@ -101,12 +113,32 @@ pub(crate) fn begin(frame: &eframe::Frame) {
 pub(crate) fn end(ctx: &egui::Context, tick: impl FnOnce() -> Option<u64>) {
     TRACE.with_borrow_mut(|slot| {
         if let Some(trace) = slot
-            && let Err(error) = trace.end(Instant::now(), ctx.will_discard(), tick())
+            && let Err(error) = trace.end(Instant::now(), ctx.will_discard(), tick(), causes(ctx))
         {
             crate::store::error_log::write("frame-trace", &error.to_string());
             *slot = None;
         }
     });
+}
+
+/// Adds the repaint requests of the immediate viewport `ctx` is showing.
+pub(crate) fn viewport(ctx: &egui::Context) {
+    TRACE.with_borrow_mut(|trace| {
+        if let Some(trace) = trace {
+            trace.frame.causes.extend(causes(ctx));
+        }
+    });
+}
+
+fn causes(ctx: &egui::Context) -> Vec<String> {
+    let mut causes: Vec<String> = ctx
+        .repaint_causes()
+        .iter()
+        .map(|cause| format!("{}:{}", cause.file, cause.line))
+        .collect();
+    causes.sort();
+    causes.dedup();
+    causes
 }
 
 /// Times its scope into the current frame. `a/b` names a part of `a`.
@@ -183,11 +215,16 @@ mod tests {
         trace.begin(start + Duration::from_millis(2), Some(0.003), 40);
         trace.frame.spans.push(("song", 500));
         trace
-            .end(start + Duration::from_millis(5), false, Some(960))
+            .end(
+                start + Duration::from_millis(5),
+                false,
+                Some(960),
+                vec!["src/view/analysis.rs:158".into()],
+            )
             .unwrap();
         trace.begin(start + Duration::from_millis(9), None, 41);
         trace
-            .end(start + Duration::from_millis(10), true, None)
+            .end(start + Duration::from_millis(10), true, None, Vec::new())
             .unwrap();
 
         let lines = String::from_utf8(trace.out).unwrap();
@@ -202,6 +239,10 @@ mod tests {
         assert_eq!(lines[0]["discarded"], false);
         assert_eq!(lines[0]["tick"], 960);
         assert_eq!(lines[0]["spans"], serde_json::json!([["song", 500]]));
+        assert_eq!(
+            lines[0]["causes"],
+            serde_json::json!(["src/view/analysis.rs:158"])
+        );
         assert_eq!(lines[1]["gap_us"], 4000);
         assert_eq!(lines[1]["discarded"], true);
         assert_eq!(lines[1]["tick"], serde_json::Value::Null);

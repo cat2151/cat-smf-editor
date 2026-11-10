@@ -24,6 +24,7 @@ pub struct State {
     editing: Option<Editing>,
     reveal: bool,
     automation: Option<u64>,
+    return_to: Option<egui::ViewportId>,
 }
 
 struct Editing {
@@ -68,6 +69,27 @@ pub fn open(app: &mut App) {
 
 pub fn shortcuts(app: &mut App, ctx: &egui::Context) {
     crate::view::commands::route(app, ctx);
+}
+
+pub(crate) fn open_from_sequencer(app: &mut App) {
+    let viewport = super::dock::locate::viewport_of(app, super::dock::ViewKind::StepSequencer);
+    let grid = std::mem::take(&mut app.drum_editor);
+    open(app);
+    app.drum_editor = grid;
+    app.layer_editor.return_to = Some(viewport);
+}
+
+fn hand_back(app: &mut App, ctx: &egui::Context) {
+    if app.layer_editor.open {
+        return;
+    }
+    if let Some(viewport) = app.layer_editor.return_to.take() {
+        let view = super::dock::ViewKind::StepSequencer;
+        if super::dock::focus::placed(app, view) {
+            super::dock::focus::set(app, view);
+        }
+        super::presentation::focus_after_restoration(ctx, viewport);
+    }
 }
 
 #[cfg(test)]
@@ -189,6 +211,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         crate::view::commands::route(app, ctx);
     }
     if !app.layer_editor.open {
+        hand_back(app, ctx);
         return;
     }
     let Some(mut patch) = app
@@ -235,6 +258,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     if let Some(id) = choose {
         crate::player::selection::open_layer(app, id);
     }
+    hand_back(app, ctx);
     crate::view::comma_menu::swallow(ctx);
 }
 

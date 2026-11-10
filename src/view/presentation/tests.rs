@@ -159,7 +159,9 @@ fn later_child_modal_hides_earlier_native_windows_and_restores_on_close() {
     let analysis = ViewportId::from_hash_of("analysis-test");
     let host = ViewportId::from_hash_of("dialog-host-test");
     let keyboard = ViewportId::from_hash_of("keyboard-test");
-    for blocked in [true, true, false, false, false] {
+    // Visible goes out on the first frame of each state only: hiding, then restoring.
+    let expected = [Some(false), None, Some(true), None, None];
+    for (blocked, expected) in [true, true, false, false, false].into_iter().zip(expected) {
         let out = c.run(Default::default(), |c| {
             Native::Analysis.show(&mut a, c, analysis, Default::default(), |_, _, _| {});
             Native::Workspace.show(&mut a, c, host, Default::default(), |_, c, _| {
@@ -172,13 +174,16 @@ fn later_child_modal_hides_earlier_native_windows_and_restores_on_close() {
             Native::Keyboard.show(&mut a, c, keyboard, Default::default(), |_, _, _| {});
             finish(&a, c);
         });
-        if blocked {
-            for id in [analysis, keyboard] {
-                assert_eq!(
-                    out.viewport_output[&id].commands.last(),
-                    Some(&egui::ViewportCommand::Visible(false))
-                );
-            }
+        for id in [analysis, keyboard] {
+            let visible = out.viewport_output[&id]
+                .commands
+                .iter()
+                .filter_map(|c| match c {
+                    egui::ViewportCommand::Visible(v) => Some(*v),
+                    _ => None,
+                })
+                .next_back();
+            assert_eq!(visible, expected, "blocked {blocked}");
         }
     }
     assert!(Native::Analysis.visible(&a, &c, analysis));

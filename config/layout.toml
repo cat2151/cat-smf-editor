@@ -93,12 +93,23 @@
 
 #
 # 開発中の配置
+[root]
+row = [
+  { view = "event_list", width = 2 },
+  { width = 3, column = [
+      { view = "track_overview" },
+      { view = "score" },
+      { view = "piano_roll" },
+      { view = "parameter_curve", height = 0.5 },
+  ] },
+]
+
 [[window]]
 column = [
-  { view = "song", height = 1 },
+  { view = "song", height = 2 },
   { view = "step_sequencer" },
   { view = "keyboard" },
-  { view = "piano" },
+  { view = "piano", height = 0.5 },
   { view = "mixer" },
   { view = "analysis" },
 ]

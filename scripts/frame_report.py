@@ -1,8 +1,11 @@
 """Summarizes a CAT_SMF_FRAME_TRACE file: python scripts/frame_report.py <file>
 
 Frames with a playing position and frames without one are reported separately.
+"repaint requested by" counts, per second, the frames whose previous pass asked egui for
+a repaint from that `file:line`, including requests with a delay.
 """
 import json
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -79,6 +82,16 @@ def report(title, frames):
             print(
                 f"{name:28}{took / len(painted) / 1000:10.2f}{took / whole * 100:7.1f}%"
             )
+
+    causes = defaultdict(int)
+    for frame in painted:
+        for cause in frame.get("causes", []):
+            # A dependency's cause reads `egui-0.31.1\src\context.rs:3595`.
+            causes[re.sub(r".*[\\/]registry[\\/]src[\\/][^\\/]+[\\/]", "", cause)] += 1
+    if causes:
+        print(f"\n{'repaint requested by':48}{'/s':>8}")
+        for cause, count in sorted(causes.items(), key=lambda item: -item[1]):
+            print(f"{cause:48}{count / seconds:8.1f}")
 
 
 def main():

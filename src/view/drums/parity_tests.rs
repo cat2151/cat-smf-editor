@@ -12,8 +12,7 @@ fn common_commands(app: &App) -> BTreeMap<String, (Vec<(Key, egui::Modifiers)>, 
         .filter_map(|command| {
             let id = match command.id.as_str() {
                 // The kit has a single instrument and a variable note list.
-                "effect.open" | "kit.note-picker" | "kit.add-rows" | "kit.query"
-                | "kit.context" => return None,
+                "kit.note-picker" | "kit.add-rows" | "kit.query" | "kit.context" => return None,
                 "kit.field-next" => "drum.step-next".into(),
                 "kit.field-prev" => "drum.step-prev".into(),
                 "kit.activate" => "drum.activate".into(),
@@ -25,6 +24,8 @@ fn common_commands(app: &App) -> BTreeMap<String, (Vec<(Key, egui::Modifiers)>, 
                 // and the song's harmony narrows them.
                 "melody.extend" | "melody.shorten" | "melody.octave-down" | "melody.octave-up"
                 | "melody.filter" => return None,
+                // Sound layers are currently exposed only by the melody grid.
+                "layer.open" => return None,
                 id if id.starts_with("melody.") => id.replacen("melody.", "drum.", 1),
                 id => id.to_owned(),
             };

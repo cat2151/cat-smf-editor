@@ -29,6 +29,7 @@ pub(super) fn recording(ui: &mut egui::Ui) {
                         ("← → / Ctrl+P", "Container"),
                         ("Ctrl+Shift+N", "New container"),
                         ("Ctrl+T", "音色選択"),
+                        ("Ctrl+X", "Effects"),
                         ("Ctrl+V", "Velocity"),
                         ("Ctrl+W", "Modulation"),
                     ],

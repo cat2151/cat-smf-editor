@@ -291,6 +291,7 @@ pub(super) fn window_key(a: &mut App, s: &mut Session, key: Key, modifiers: Modi
         Key::Period if ctrl => s.piano_open ^= !s.piano_placed,
         Key::E if ctrl => super::phrase::toggle(a, s),
         Key::T if ctrl => s.clicked = Some(window::Button::Browse),
+        Key::X if ctrl => s.clicked = Some(window::Button::Effects),
         Key::J if ctrl => super::capture::toggle(a, s),
         Key::Enter if ctrl => s.clicked = Some(window::Button::ToSong),
         _ => return setup::shortcut(a, s, key, modifiers),

@@ -369,10 +369,6 @@ pub fn show(a: &mut App, ctx: &egui::Context) {
                 .with_visible(requested),
             |a, ctx, class| {
                 let _span = crate::frame_trace::span(ui);
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(visible));
-                if !visible {
-                    return;
-                }
                 if a.patterns.workspace.selection(p).focus {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                     a.patterns.workspace.selection_mut(p).focus = false;
