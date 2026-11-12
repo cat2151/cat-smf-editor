@@ -355,6 +355,7 @@ impl Link {
                     })) => Event::Panes(context, panes, query),
                     Ok(Some(ToEditor::KitClosed { target })) => Event::KitClosed(target),
                     Ok(Some(ToEditor::Cursor { context, patch })) => Event::Cursor(context, patch),
+                    Ok(Some(ToEditor::BrowserClosed { .. })) => continue,
                     Ok(None) => Event::Closed(None),
                     Err(error) => Event::Closed(Some(error.to_string())),
                 };
