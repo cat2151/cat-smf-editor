@@ -32,11 +32,9 @@ commit一覧は閉じた `details` に入れる。配布buildのadapterで解決
 既定の `target/shim` のconfigure/buildは `build.rs` から参照するplayerの共有driverだけが担当する。
 adapterは二度目のconfigureを追加せず、実行後に環境変数の元の値を復元する。
 既存cacheでは共有driverのstampと既存generator/platformを使用する。
-共有hostはUAPMDを読む前に[stb revision補修](../../cat-plugin-player/patches/uapmd/stb-revision-pin/README.md)を読み、
-rtlogが使うstbを`2c980bb59875b0d32144a71867fbdebb2f77cd20`へ固定する。
-取得先overrideや既存cacheのSHA・変更・rootヘッダを取得前に検査し、不一致なら保全・復旧の診断を出して停止する。
+stbの版は共有hostで固定せず、UAPMDの `source/remidy/CMakeLists.txt` が宣言するrevisionに従う。
 既知のclean cacheでは共有driverのstampで必要な再configureを判断し、既存CPM_SOURCE_CACHEを再利用する。
-この固定はplayer/editor共通で、依存checkoutの直接編集や別target-dirは行わない。
+このbuild手順はplayer/editor共通で、依存checkoutの直接編集や別target-dirは行わない。
 UAPMD付属patchの二重適用を避けるため、単にReleaseビルドを試す目的で既存cacheを再configureしない。
 配布buildはplayerと同じ静的CRT方針とする。workflowのbuild job全体に
 `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS=-C target-feature=+crt-static` を設定し、testでも同じ方式を使う。
@@ -115,7 +113,7 @@ Actions YAMLはactionlintで検証する。CRT検査の回帰はplayer側の
 editorのCRT検査をplayerの検査に代用しない。ローカルの動的CRT版の成功を配布の静的版の成功として扱わない。
 GitHub runnerの新規checkoutでの完走は別途必要で、既存ローカルcacheでの成功とは区別する。
 共有playerの修正を先にGitHubへ反映し、素材設定を含むeditorを反映してから、明示許可された
-両repoの`publish=false`を新規runnerで実行する。run ID、app/依存/stb SHAとbuild/CRT/test/ZIPを確認する。
+両repoの`publish=false`を新規runnerで実行する。run ID、app/依存SHAとbuild/CRT/test/ZIPを確認する。
 ZIPの起動・既存SMFの読込と試聴は人間が確認する。実際のRelease公開成功、ZIPとnotesのrevisionは
 別の確認であり、非公開runの成功を公開成功として扱わない。commit/push・Actions起動・公開は別途明示許可を要する。
 

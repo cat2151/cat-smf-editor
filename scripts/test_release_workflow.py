@@ -105,7 +105,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 config = json.loads((ROOT / '.github/release.json').read_text(encoding='utf-8'))
                 files = '、'.join(Path(file).name for file in config['package_files'])
                 common = editor_notes.split('<details>')[0].replace('another-app', 'cat-plugin-player')
-                common = common.replace('exe と ' + files + '。', 'exe と LICENSE。')
+                common = common.replace('exe と ' + files + '。', 'exe と LICENSE と Migemo のライセンス。')
                 self.assertEqual(common, player_notes.split('<details>')[0])
                 uapmd_lines = lambda notes: [line for line in notes.splitlines()
                                              if 'uapmd' in line and not line.startswith('<!--')]
