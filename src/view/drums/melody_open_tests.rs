@@ -1,6 +1,7 @@
 //! Which entries open an ordinary container's pattern on the step grid.
 use super::melody_tests::{frame, ordinary_pattern, plain, shift};
 use super::*;
+mod local;
 #[test]
 fn a_container_opened_on_the_grid_reopens_it_for_every_pattern_and_after_a_restart() {
     let mut a = ordinary_pattern();
@@ -82,8 +83,8 @@ column = [{ view = "song" }, { view = "step_sequencer" }]
     })
     .unwrap();
     crate::view::patterns::library::edit(&mut a, first).unwrap();
-    // The palette's Step sequencer command.
-    open(&mut a);
+    // A placed grid needs no prior palette command or remembered container preference.
+    assert!(a.patterns.navigation.steps.is_empty());
     assert!(is_open(&a) && melody::active(&a), "{:?}", a.load_error);
     // The press gives the Song pane the keys; the release clicks the cell.
     focus::set(&mut a, ViewKind::Song);
@@ -96,4 +97,44 @@ column = [{ view = "song" }, { view = "step_sequencer" }]
     let edited = crate::view::patterns::mode::editing(&a, a.track).map(|c| c.pattern);
     assert_eq!(edited, Some(second));
     assert!(is_open(&a) && melody::active(&a));
+}
+
+#[test]
+fn a_placed_grid_draws_notes_when_layout_arrives_after_session_restore() {
+    use cat_smf_editor::score::step_notes::Cell;
+    let mut a = ordinary_pattern();
+    let track = a.track;
+    a.edit_music(|m| cat_smf_editor::edit::mml::insert(m, track, 0, 0, "c").map(|_| ()))
+        .unwrap();
+    let session = a.session().unwrap();
+    assert!(session.step_containers.is_empty());
+    let music = a.loaded.as_ref().unwrap().music.clone();
+    for _ in 0..2 {
+        let mut restored = crate::view::tests::app(music.clone());
+        restored.restore_position(&session);
+        assert!(!is_open(&restored));
+        restored.layout.spec = crate::store::layout::parse(
+            "[root]\nrow = [{ view = \"event_list\" }, { view = \"step_sequencer\" }]",
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        for _ in 0..2 {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| pane(&mut restored, ui));
+            });
+        }
+        assert!(is_open(&restored) && melody::active(&restored));
+        assert!(ctx
+            .data(|d| d.get_temp::<egui::Rect>(egui::Id::new("melody-clip")))
+            .is_some());
+        let measure = playback::measure(&restored).unwrap();
+        let notes = cat_smf_editor::score::step_notes::notes(
+            &restored.loaded.as_ref().unwrap().visible().tracks[restored.track],
+        );
+        assert_ne!(
+            melody::cells(&restored, &notes, &measure, 60)[0],
+            Cell::Empty
+        );
+        assert!(restored.session().unwrap().step_containers.is_empty());
+    }
 }

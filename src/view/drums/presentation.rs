@@ -151,6 +151,7 @@ pub(crate) fn dismiss(app: &mut App) {
     } else {
         close(app);
     }
+    app.drum_editor.dismissed = true;
 }
 
 /// Rebinding/undo can remove a pattern or shorten it while an input is pending.

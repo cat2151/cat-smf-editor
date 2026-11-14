@@ -63,6 +63,8 @@ pub struct State {
     pub(crate) kit: kit::State,
     melody: melody::State,
     target: Option<presentation::Target>,
+    /// Explicit Escape keeps a placed pane closed until the next navigation/open action.
+    dismissed: bool,
     pub(super) confirm_create: bool,
     row: usize,
     field: usize,
@@ -283,7 +285,18 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 
 /// Draws the grid as a pane; the window holding the pane already routed its keys.
 pub(crate) fn pane(app: &mut App, ui: &mut egui::Ui) {
-    if !is_open(app) || !docked(app, ui.ctx()) {
+    if !docked(app, ui.ctx()) {
+        return;
+    }
+    // Layout is loaded after session restoration. A placed grid presents the selected body
+    // even when this container has never been opened in a floating sequencer.
+    if !is_open(app)
+        && !app.drum_editor.dismissed
+        && crate::view::patterns::mode::editing(app, app.track).is_some()
+    {
+        display(app);
+    }
+    if !is_open(app) {
         return;
     }
     let ctx = ui.ctx().clone();

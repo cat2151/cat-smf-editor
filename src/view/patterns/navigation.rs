@@ -45,9 +45,10 @@ pub fn restore(a: &mut App, snapshot: Snapshot) {
     crate::view::drums::reconcile(a);
 }
 
-/// A Drum or Drum kit container, or an ordinary one last edited on the step grid.
+/// A placed grid shows every container. Floating melody grids require an explicit choice.
 fn grid(a: &App, container: u64) -> bool {
-    a.patterns.navigation.steps.contains(&container)
+    crate::view::dock::focus::placed(a, crate::view::dock::ViewKind::StepSequencer)
+        || a.patterns.navigation.steps.contains(&container)
         || a.loaded
             .as_ref()
             .is_some_and(|l| l.patches.get(a.track).is_some_and(|p| p.sequencer()))
