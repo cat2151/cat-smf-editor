@@ -34,6 +34,9 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             .repeating(),
         );
         if a.loaded.is_some() {
+            out.push(Command::plain(s, "file.save-uapmdz", &[], |a, _| {
+                files::uapmd_export::dialog(a)
+            }));
             out.push(
                 Command::new(s, "file.save", &[(Key::S, Modifiers::CTRL)], |a, _| {
                     a.allow_departure(files::Action::Save);

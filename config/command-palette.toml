@@ -62,6 +62,12 @@ tooltip = "repl-plugin-playerのprojects/untitled.uapmdzを読み込み、演奏
 search = "uapmd project load import プロジェクト 読み込み"
 
 [[command]]
+ids = ["file.save-uapmdz"]
+name = "Save to uapmdz project file"
+tooltip = "演奏内容をUAPMD projectとして保存します。"
+search = "uapmd project save export プロジェクト 保存"
+
+[[command]]
 ids = ["app.help"]
 name = "ヘルプ"
 tooltip = "操作キーの一覧を開きます。"

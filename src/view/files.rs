@@ -9,6 +9,7 @@ mod invalid_smf;
 mod missing_last;
 mod open;
 pub(crate) mod performance;
+pub(crate) mod uapmd_export;
 pub(crate) use backup_tip::close_notice as close_backup_notice;
 pub(super) use backup_tip::notice_dialog as backup_notice_dialog;
 pub(super) use invalid_smf::show as invalid_smf_dialog;
