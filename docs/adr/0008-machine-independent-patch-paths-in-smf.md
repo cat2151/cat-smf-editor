@@ -18,6 +18,7 @@ SMFは最終的に公開する成果物であり、手元にだけ置くcache・
 ### SMFに書くもの
 
 - pluginはformat・ID・name・vendorで識別する。`bundle_path`はSMFに書かない。
+- [0023: UAPMD project取り込み](0023-uapmd-project-import.md)の保存stateは内容hashで参照し、assetの保存場所をSMFに書かない。別環境での復元には、そのassetも移す必要がある。
 - patch・presetのpathは、そのpluginのpatch／preset rootからの相対pathで書く。Dexedの論理path（cartridge + program）と元cartridgeのpathも、どちらも相対pathにする。
 - SMF内のpath区切りは常に`/`とする。OSのpathとSMFの相対pathの相互変換は1つの関数に集約し、書出しと読込の両方でそれを通す。
 - SMFの相対pathは、空・絶対path・drive指定・`..`・`\`を含むものを読込エラーにする。
@@ -46,6 +47,6 @@ SMFは最終的に公開する成果物であり、手元にだけ置くcache・
 
 ## 結果
 
-- 同じSMFを、別のuser・別のOS・置き場を移した後の手元で、root cacheさえ揃えば復元できる。
+- catalog／effectの参照は、別のuser・別のOS・置き場を移した後の手元でも、root cacheが揃えば同じSMFから復元できる。
 - 作者の既存SMFは絶対pathを含むため、実装時にバックアップを取ってから一度だけ書き換える。旧形式の読込経路は残さない。
 - state cacheのkeyは「SMF形式から解決し直した参照」になるので、旧形式で記憶したstate cacheは一度だけ作り直しになる。

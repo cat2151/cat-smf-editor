@@ -2,6 +2,7 @@ pub mod app_meta;
 #[path = "../../cat-plugin-player/shared/drum_kit.rs"]
 pub mod drum_kit;
 pub mod edit;
+pub mod imported_state;
 #[path = "../../cat-plugin-player/shared/instrument_layers.rs"]
 pub mod instrument_layers;
 #[path = "../../cat-plugin-player/shared/master_references.rs"]
@@ -16,6 +17,7 @@ pub mod startup_trace;
 pub mod storage_paths;
 #[path = "../../cat-plugin-player/shared/surge_data_home.rs"]
 pub mod surge_data_home;
+pub mod uapmd_project;
 pub mod voicevox;
 
 #[path = "../../cat-plugin-player/shared/smf.rs"]

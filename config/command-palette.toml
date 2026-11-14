@@ -56,6 +56,12 @@ ArrangementInput = "Arrangement"
 Recording = "Virtual MIDI keyboard"
 
 [[command]]
+ids = ["file.load-uapmdz"]
+name = "Load uapmdz project"
+tooltip = "repl-plugin-playerのprojects/untitled.uapmdzを読み込み、演奏します。"
+search = "uapmd project load import プロジェクト 読み込み"
+
+[[command]]
 ids = ["app.help"]
 name = "ヘルプ"
 tooltip = "操作キーの一覧を開きます。"

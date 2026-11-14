@@ -85,6 +85,10 @@ fn fingerprint(reference: &PatchReference) -> Result<String, String> {
     let mut bytes = GENERATOR_VERSION.to_le_bytes().to_vec();
     stamp(Path::new(&reference.plugin.bundle_path), &mut bytes)?;
     let source = match &reference.source {
+        Source::Imported { sha256 } => {
+            bytes.extend(crate::imported_state::read(sha256)?);
+            return Ok(hash(&bytes));
+        }
         Source::Catalog { file, .. } => file,
         Source::Effect { path, .. } => path,
     };

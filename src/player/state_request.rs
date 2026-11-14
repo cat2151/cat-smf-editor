@@ -26,6 +26,9 @@ pub fn headless(explicit: Option<PathBuf>, flag: &str) -> Result<Command, String
 }
 
 pub fn generate(reference: &PatchReference, explicit: Option<PathBuf>) -> Result<Vec<u8>, String> {
+    if let cat_smf_editor::patch_reference::Source::Imported { sha256 } = &reference.source {
+        return cat_smf_editor::imported_state::read(sha256);
+    }
     let _span = cat_smf_editor::startup_trace::span("state_generate");
     let mut child = headless(explicit, "--restore-state")?
         .spawn()

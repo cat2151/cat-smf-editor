@@ -12,6 +12,8 @@ use std::path::PathBuf;
 mod overlay;
 #[cfg(test)]
 pub(crate) mod tests;
+#[cfg(test)]
+mod uapmd_tests;
 
 #[derive(Default)]
 pub struct State {
@@ -122,12 +124,26 @@ impl Job {
                 app.load_error = None;
                 app.invalid_smf_name = None;
                 let mut document = Document::new(app.saved.directory.clone());
-                let music = document.load(&self.path).map_err(|error| {
-                    if matches!(error, crate::store::saved::LoadError::InvalidSmf(_)) {
-                        app.invalid_smf_name = Some(self.name.clone());
-                    }
-                    error.to_string()
-                })?;
+                let music = if self
+                    .path
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("uapmdz"))
+                {
+                    let imported = cat_smf_editor::uapmd_project::read(&self.path)?;
+                    let mut roots = app
+                        .patch_roots
+                        .lookup(app.player_selection.executable.clone());
+                    let music = imported.into_music(&mut roots)?;
+                    document = Document::untitled(app.saved.directory.clone(), &music)?;
+                    music
+                } else {
+                    document.load(&self.path).map_err(|error| {
+                        if matches!(error, crate::store::saved::LoadError::InvalidSmf(_)) {
+                            app.invalid_smf_name = Some(self.name.clone());
+                        }
+                        error.to_string()
+                    })?
+                };
                 self.rows = music
                     .tracks
                     .iter()

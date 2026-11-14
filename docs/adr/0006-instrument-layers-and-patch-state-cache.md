@@ -65,11 +65,12 @@ effectにも一時pluginを使う生成経路があり、Surge XT Effectsは既�
 ### playerとcacheによる復元
 
 - state生成はplayerの既存処理へ集約する。editorへplugin別変換・読込・例外処理を複製しない。
+- project内にしかない保存stateは再生成可能なcacheと区別し、[0023: UAPMD project取り込み](0023-uapmd-project-import.md)の永続asset参照から復元する。plugin固有のstate本体は変換しない。
 - browserからeditorへpatch参照も渡す。選択時に生成済みのstateを渡す既存経路は活用してよい。
 - editorは必要なpatchのstateをメモリで保持し、アプリ終了時にそのsessionで使用したstateを`%LOCALAPPDATA%/cat-smf-editor/cache/patch-states-v1/`へcacheする。
   現在開いている曲・最後のpatchだけに限定しない。
 - SMF復元ではcacheを先に引き、揃っていればplayerを起動せず、カタログ走査やstate再生成も行わない。
-  cacheにない、破損している、または無効になったpatchだけplayerへstate生成を依頼する。
+  catalog／effect由来でcacheにない、破損している、または無効になったpatchだけplayerへstate生成を依頼する。
 - cacheはpatch単位。同じpatchの複数layer・trackでstateデータを共有できるが、演奏用インスタンスは共有しない。
   octave・volume dBはstate生成の入力ではなく、cache keyへ混ぜない。
 - cacheは元patchとplugin bundleのファイル長・更新日時（bundleがdirectoryならその配下の情報も）を記録し、state本体のchecksumも検証する。

@@ -15,6 +15,13 @@ pub(super) use invalid_smf::show as invalid_smf_dialog;
 pub(crate) use missing_last::create_new_song;
 pub(super) use missing_last::show as missing_last_dialog;
 pub use open::open_dialog;
+
+pub(crate) fn uapmd_project_path() -> Result<PathBuf, String> {
+    std::env::var_os("LOCALAPPDATA")
+        .filter(|root| !root.is_empty())
+        .map(|root| PathBuf::from(root).join("repl-plugin-player/projects/untitled.uapmdz"))
+        .ok_or_else(|| "LOCALAPPDATA is unavailable".into())
+}
 #[cfg(test)]
 #[path = "files/local_migration_test.rs"]
 mod local_migration_test;

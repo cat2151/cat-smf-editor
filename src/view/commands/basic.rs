@@ -21,6 +21,12 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             &[(Key::N, Modifiers::CTRL)],
             |a, c| a.new_smf(c),
         ));
+        out.push(Command::plain(s, "file.load-uapmdz", &[], |a, _| {
+            match super::super::files::uapmd_project_path() {
+                Ok(path) => a.open_mid_and_play(path),
+                Err(error) => a.load_error = Some(error),
+            }
+        }));
         out.push(
             Command::new(s, "recent.open", &[(Key::P, Modifiers::CTRL)], |a, _| {
                 super::super::recent::commands::open(a)
