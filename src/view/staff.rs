@@ -103,7 +103,7 @@ pub(crate) fn show(app: &mut App, ui: &mut egui::Ui) {
     };
     let track = app.track;
     let cursor = crate::play::playback::location(app).0;
-    let playing = crate::play::transport::tick_for(app, track);
+    let playing = crate::play::transport::display_tick_for(app, track);
     let mut following = Follow::new(ui.ctx(), app.playback.follow, playing);
     let sources = crate::play::playback::performance(app);
     let lyrics = crate::view::note_lyrics::read(&loaded.music, track, &sources[track]);

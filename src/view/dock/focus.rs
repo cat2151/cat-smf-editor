@@ -55,11 +55,9 @@ fn set_open(a: &mut App, view: ViewKind, open: bool) {
                 a.parameter_editor.close();
             }
         }
-        // Opening reads the cursor's measure; leaving it closes it as Esc does.
+        // The pane stays visible; this flag only activates its keyboard cell.
         ViewKind::TrackOverview => {
-            if !open {
-                a.track_overview.open = false;
-            }
+            a.track_overview.open = open;
         }
         ViewKind::EventList
         | ViewKind::Score
@@ -114,7 +112,7 @@ pub(super) fn shown(a: &App, view: ViewKind) -> bool {
         ViewKind::Keyboard | ViewKind::Piano => a.patterns.recording.is_open(),
         ViewKind::StepSequencer => crate::view::drums::is_open(a),
         ViewKind::ParameterCurve => a.parameter_editor.open,
-        ViewKind::TrackOverview => a.track_overview.open,
+        ViewKind::TrackOverview => a.loaded.is_some(),
         ViewKind::EventList
         | ViewKind::Score
         | ViewKind::PianoRoll

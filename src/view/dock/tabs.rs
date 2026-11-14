@@ -64,7 +64,7 @@ pub(crate) fn shown(a: &App, views: &[ViewKind]) -> ViewKind {
 
 /// A tab that holds the focus exactly while it is open shows the first tab once it closed.
 fn fallback(a: &App, views: &[ViewKind], view: ViewKind) -> ViewKind {
-    if focus::OPENED.contains(&view) && !focus::open(a, view) {
+    if view != ViewKind::TrackOverview && focus::OPENED.contains(&view) && !focus::open(a, view) {
         views[0]
     } else {
         view
@@ -99,9 +99,6 @@ pub(crate) fn select(a: &mut App, views: &[ViewKind], view: ViewKind) {
         return;
     }
     focus::set(a, view);
-    if view == ViewKind::TrackOverview && !a.track_overview.open {
-        crate::view::track_overview::open(a);
-    }
 }
 
 /// A tab the keys can move to: one that holds the focus once shown.

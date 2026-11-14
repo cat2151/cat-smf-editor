@@ -47,7 +47,7 @@ pub(super) fn show(app: &mut App, ui: &mut egui::Ui) -> Option<Outcome> {
         .map(|&track| roll(loaded, &sounding, &[track], track, tick))
         .collect();
     drop(sounding);
-    let playing = crate::play::transport::tick_for(app, app.track);
+    let playing = crate::play::transport::display_tick_for(app, app.track);
     let mut following = Follow::new(&ctx, app.playback.follow, playing);
     let minimap = minimap::Data::read(loaded, app.track);
     minimap.extend_timeline(loaded, app.track, &mut overview);

@@ -15,76 +15,7 @@ pub(crate) enum Native {
     Dock,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Policy {
-    Workspace,
-    FocusedWorkspace,
-    Operation,
-}
-
-impl Screen {
-    /// Exhaustive on purpose: adding an input owner requires a presentation decision.
-    fn presentation(self) -> Policy {
-        match self {
-            Self::Main
-            | Self::Score
-            | Self::Timeline
-            | Self::Mixer
-            | Self::Drums
-            | Self::Scene
-            | Self::Song
-            | Self::Recording
-            | Self::Analysis
-            | Self::Help
-            | Self::Selection => Policy::Workspace,
-            Self::Overview => Policy::FocusedWorkspace,
-            Self::Global
-            | Self::EditStyle
-            | Self::TrackRename
-            | Self::Settings
-            | Self::Program
-            | Self::Edit
-            | Self::Go
-            | Self::Tracks
-            | Self::Split
-            | Self::Play
-            | Self::Layers
-            | Self::DrumInput
-            | Self::DrumCreate
-            | Self::LayerInput
-            | Self::Effects
-            | Self::SelectionMenu
-            | Self::ChordTiming
-            | Self::Mml
-            | Self::Note
-            | Self::Lyrics
-            | Self::Trill
-            | Self::Recent
-            | Self::Confirm
-            | Self::Backup
-            | Self::Invalid
-            | Self::Missing
-            | Self::Waiting
-            | Self::Browser
-            | Self::Voicevox
-            | Self::Singer
-            | Self::MacroEditor
-            | Self::ParameterPicker
-            | Self::ParameterInput
-            | Self::Patterns
-            | Self::ArrangementInput => Policy::Operation,
-        }
-    }
-    pub(crate) fn allows_companions(self) -> bool {
-        self.presentation() == Policy::Workspace
-    }
-    fn floating_order(self) -> egui::Order {
-        match self.presentation() {
-            Policy::Workspace | Policy::FocusedWorkspace => egui::Order::Middle,
-            Policy::Operation => egui::Order::Foreground,
-        }
-    }
-}
+mod policy;
 
 fn priority(a: &App) -> Option<egui::ViewportId> {
     if let Some(id) = a.palette.viewport() {
@@ -119,12 +50,7 @@ fn priority(a: &App) -> Option<egui::ViewportId> {
             a,
             crate::view::dock::ViewKind::PianoRoll,
         )),
-        // The overview keeps the window holding it, as the main window holds its floating one.
-        Screen::Overview => Some(crate::view::dock::locate::viewport_of(
-            a,
-            crate::view::dock::ViewKind::TrackOverview,
-        )),
-        owner => (!owner.allows_companions()).then_some(egui::ViewportId::ROOT),
+        owner => (!owner.allows_companions_for(a)).then_some(egui::ViewportId::ROOT),
     }
 }
 
@@ -274,6 +200,7 @@ pub(crate) use windows::{focus_after_restoration, input_for, send_to};
 #[derive(Clone, Default)]
 struct Layers {
     owner: Option<Screen>,
+    companions: bool,
     registered: Vec<(Screen, egui::LayerId)>,
 }
 fn key(ctx: &egui::Context) -> egui::Id {
@@ -302,6 +229,7 @@ pub(crate) fn layers(a: &App, ctx: &egui::Context) {
             key,
             Layers {
                 owner: Some(owner),
+                companions: owner.allows_companions_for(a),
                 ..Default::default()
             },
         )
@@ -320,11 +248,15 @@ fn accepts(owner: Screen, screen: Screen) -> bool {
 pub(crate) fn refresh(a: &App, ctx: &egui::Context) {
     let key = key(ctx);
     let owner = commands::owner(a, ctx);
-    ctx.data_mut(|d| d.get_temp_mut_or_default::<Layers>(key).owner = Some(owner));
+    ctx.data_mut(|d| {
+        let layers = d.get_temp_mut_or_default::<Layers>(key);
+        layers.owner = Some(owner);
+        layers.companions = owner.allows_companions_for(a);
+    });
 }
 
 pub(crate) fn background_enabled(a: &App) -> bool {
-    commands::root_owner(a).allows_companions()
+    commands::root_owner(a).allows_companions_for(a)
 }
 
 /// The placed view whose own input, or the overview itself, is open: its pane stays usable
@@ -354,7 +286,7 @@ fn register(ctx: &egui::Context, screen: Screen, id: egui::Id) -> (egui::Order, 
         let layers = d.get_temp_mut_or_default::<Layers>(key);
         let inline_owner = layers
             .owner
-            .filter(|&owner| !owner.allows_companions() && accepts(owner, screen));
+            .filter(|&owner| !layers.companions && accepts(owner, screen));
         let effective = inline_owner.unwrap_or(screen);
         let order = effective.floating_order();
         layers
@@ -362,7 +294,7 @@ fn register(ctx: &egui::Context, screen: Screen, id: egui::Id) -> (egui::Order, 
             .push((effective, egui::LayerId::new(order, id)));
         (
             order,
-            layers.owner.is_none_or(|owner| accepts(owner, screen)),
+            layers.companions || layers.owner.is_none_or(|owner| accepts(owner, screen)),
         )
     })
 }
@@ -420,7 +352,7 @@ pub(crate) fn finish(a: &App, ctx: &egui::Context) {
         return;
     }
     let owner = commands::owner(a, ctx);
-    if owner.allows_companions() {
+    if owner.allows_companions_for(a) {
         return;
     }
     let key = key(ctx);

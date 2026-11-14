@@ -94,7 +94,7 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
     if crate::view::patterns::workspace::focused_query(ctx).is_some() {
         return Screen::ArrangementInput;
     }
-    if view == Some(ViewKind::Keyboard) && root_owner(a).allows_companions() {
+    if view == Some(ViewKind::Keyboard) && root_owner(a).allows_companions_for(a) {
         return Screen::Recording;
     }
     match locate::host_at(a, ctx) {
@@ -102,7 +102,7 @@ pub fn owner(a: &App, ctx: &egui::Context) -> Screen {
         Some(Host::Dock(_)) => {
             let root = root_owner(a);
             match view {
-                Some(view) if root.allows_companions() => focus::screen(view),
+                Some(view) if root.allows_companions_for(a) => focus::screen(view),
                 _ => root,
             }
         }

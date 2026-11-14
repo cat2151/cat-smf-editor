@@ -13,18 +13,19 @@ enum Action {
 }
 
 pub(crate) fn show(app: &mut App, ctx: &egui::Context) {
+    if docked(app, ctx) {
+        return;
+    }
     if !app.track_overview.open {
         suspend(app);
         return;
     }
-    if !docked(app, ctx) {
-        draw(app, ctx, None);
-    }
+    draw(app, ctx, None);
 }
 
 /// Draws the overview as a pane; the window holding the pane already routed its keys.
 pub(crate) fn pane(app: &mut App, ui: &mut egui::Ui) {
-    if !app.track_overview.open || !docked(app, ui.ctx()) {
+    if !docked(app, ui.ctx()) {
         return;
     }
     let ctx = ui.ctx().clone();

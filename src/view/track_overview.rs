@@ -15,6 +15,7 @@ pub(crate) use window::{pane, show, suspend};
 
 #[derive(Default)]
 pub struct State {
+    /// Opens the floating view, or activates the keyboard cell of a permanently visible pane.
     pub open: bool,
     /// Keyboard cell: displayed row and the tick where its measure begins.
     cell: (usize, u64),

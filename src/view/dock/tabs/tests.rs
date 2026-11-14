@@ -104,6 +104,13 @@ fn the_track_overview_tab_opens_the_overview() {
         shown(&a, &group_of(&a, ViewKind::Score)),
         ViewKind::TrackOverview
     );
+    key(&mut a, &c, ROOT, Key::Escape, Modifiers::NONE);
+    assert_eq!(focus::focused(&a), ViewKind::EventList);
+    frame(&mut a, &c, ROOT, vec![]);
+    assert_eq!(
+        shown(&a, &group_of(&a, ViewKind::Score)),
+        ViewKind::TrackOverview
+    );
 }
 
 #[test]

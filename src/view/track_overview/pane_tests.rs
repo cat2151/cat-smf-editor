@@ -1,4 +1,4 @@
-//! The overview placed in a pane draws there instead of floating, and acts as the floating one does.
+//! Placed overviews stay visible while keyboard focus moves between workspaces.
 use super::*;
 use crate::view::commands::owner;
 use crate::view::dock::{focus, window, ViewKind};
@@ -139,37 +139,110 @@ fn each_placed_overview_draws_in_its_pane_and_floats_no_window() {
 }
 
 #[test]
-fn the_closed_overview_leaves_its_pane_empty_and_takes_no_focus() {
-    let mut a = placed(Kind::Tracks, Place::Dock);
-    a.track_overview.open = false;
-    let c = context();
-    assert!(!drawn(&mut a, &c, Kind::Tracks));
-    // The key reaches the mixer below, passing over the empty pane.
-    press(&mut a, &c, dock(), Key::F6);
-    assert_eq!(focus::focused(&a), ViewKind::Mixer);
-    // A click on the event list hands the focus back before the view opens from there.
-    focus::set(&mut a, ViewKind::EventList);
-    open(&mut a);
-    assert!(drawn(&mut a, &c, Kind::Tracks));
-    assert_eq!(focus::focused(&a), ViewKind::TrackOverview);
-    // Esc closes the overview, and the keys go back to the event list.
-    press(&mut a, &c, dock(), Key::Escape);
-    assert!(!a.track_overview.open);
-    assert_eq!(focus::focused(&a), ViewKind::EventList);
-    assert!(!drawn(&mut a, &c, Kind::Tracks));
+fn the_inactive_overview_draws_without_taking_focus_and_esc_leaves_it_visible() {
+    for kind in KINDS {
+        for place in [Place::Dock, Place::Root] {
+            let mut a = placed(kind, place);
+            a.track_overview = Default::default();
+            let c = context();
+            assert!(drawn(&mut a, &c, kind));
+            assert_eq!(focus::focused(&a), ViewKind::EventList);
+            assert_eq!(owner(&a, &c), Screen::Main);
+            if place == Place::Dock {
+                press(&mut a, &c, dock(), Key::L);
+            } else {
+                press(&mut a, &c, ROOT, Key::F6);
+            }
+            assert_eq!(focus::focused(&a), ViewKind::TrackOverview);
+            press(&mut a, &c, host(place), Key::L);
+            assert!(a.track_overview.cell.1 > 0);
+            press(&mut a, &c, host(place), Key::Escape);
+            assert!(!a.track_overview.open);
+            assert_eq!(focus::focused(&a), ViewKind::EventList);
+            assert!(drawn(&mut a, &c, kind));
+        }
+    }
 }
 
 #[test]
-fn moving_to_another_pane_closes_the_overview() {
-    let mut a = placed(Kind::Tracks, Place::Dock);
+fn moving_to_another_pane_keeps_the_overview_visible_and_reachable() {
+    for kind in KINDS {
+        let mut a = placed(kind, Place::Dock);
+        let c = context();
+        frame(&mut a, &c, ROOT, vec![]);
+        assert!(crate::view::presentation::background_enabled(&a));
+        assert!(crate::view::presentation::companions_visible(&a, &c));
+        press(&mut a, &c, dock(), Key::L);
+        let cell = a.track_overview.cell;
+        press(&mut a, &c, dock(), Key::F6);
+        assert!(!a.track_overview.open);
+        assert_eq!(focus::focused(&a), ViewKind::Mixer);
+        assert!(drawn(&mut a, &c, kind));
+        press(&mut a, &c, dock(), Key::F6);
+        assert_eq!(focus::focused(&a), ViewKind::TrackOverview);
+        assert_eq!(a.track_overview.cell, cell);
+    }
+}
+
+#[test]
+fn song_and_scene_remain_operable_beside_the_overview() {
+    use crate::view::patterns::workspace_tests::command;
+    let mut a = placed(Kind::Song, Place::Root);
+    a.layout.spec = crate::store::layout::parse(
+        r#"[root]
+        row = [{ view = "event_list" }, { view = "track_overview" }, { view = "song" }, { view = "scene" }]"#,
+    ).unwrap();
     let c = context();
     frame(&mut a, &c, ROOT, vec![]);
-    press(&mut a, &c, dock(), Key::F6);
-    assert!(!a.track_overview.open);
-    assert_eq!(focus::focused(&a), ViewKind::Mixer);
-    // The emptied pane is passed over.
-    press(&mut a, &c, dock(), Key::F6);
-    assert_eq!(focus::focused(&a), ViewKind::Mixer);
+    for view in [ViewKind::Song, ViewKind::Scene] {
+        focus::set(&mut a, ViewKind::TrackOverview);
+        press(&mut a, &c, ROOT, Key::F6);
+        if view == ViewKind::Scene {
+            press(&mut a, &c, ROOT, Key::F6);
+        }
+        assert_eq!(focus::focused(&a), view);
+        assert!(drawn(&mut a, &c, Kind::Song));
+    }
+    focus::set(&mut a, ViewKind::EventList);
+    command(&mut a, &c, ROOT, "pattern.create");
+    assert!(a.patterns.confirming_creation() || a.mml_input.open);
+    assert!(drawn(&mut a, &c, Kind::Song));
+}
+
+#[test]
+fn clicking_another_workspace_leaves_the_overview_visible() {
+    use crate::view::patterns::workspace::Pane;
+    for p in [Pane::Song, Pane::Scene] {
+        let mut a = placed(Kind::Song, Place::Root);
+        a.layout.spec = crate::store::layout::parse(
+            r#"[root]
+            column = [{ view = "track_overview" }, { view = "song" }, { view = "scene" }]"#,
+        )
+        .unwrap();
+        let c = context();
+        frame(&mut a, &c, ROOT, vec![]);
+        let id = egui::Id::new((p.title(), "cell", 0usize, 1u64));
+        let at = c.data(|d| d.get_temp::<egui::Rect>(id)).unwrap().center();
+        for pressed in [true, false] {
+            frame(
+                &mut a,
+                &c,
+                ROOT,
+                vec![
+                    egui::Event::PointerMoved(at),
+                    egui::Event::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert_eq!(focus::focused(&a), p.view());
+        assert!(!a.track_overview.open);
+        assert!(drawn(&mut a, &c, Kind::Song));
+    }
 }
 
 #[test]

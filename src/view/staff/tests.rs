@@ -379,4 +379,5 @@ fn minimap_click_centers_the_clicked_tick_and_frames_the_shown_ticks() {
 }
 
 mod pattern_edit;
+mod song_playback;
 mod vertical_zoom;

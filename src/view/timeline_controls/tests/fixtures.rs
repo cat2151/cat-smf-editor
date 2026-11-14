@@ -121,7 +121,9 @@ impl Fixture {
                 a.config.piano_roll_maximized = true;
                 a.patterns.workspace.song_cell.measure = 1;
                 view::track_overview::open(&mut a);
-                (a, egui::Context::default(), None)
+                // Song companions now stay visible beside a placed overview. Render them in
+                // native viewports, as the app does, rather than over its pane as embedded windows.
+                (a, view::patterns::workspace_tests::context(), None)
             }
             Screen::Song | Screen::Scene => {
                 let (mut a, c, _, second, scene) =
