@@ -326,8 +326,8 @@ pub fn route(app: &mut App, ctx: &egui::Context) {
     let events = ctx.input(|i| i.events.clone());
     for event in events {
         let mut defs = contextual_definitions(app, ctx, screen);
-        // Global のキーは Event list と五線譜でだけ効き、他の editor へ漏らさない。
-        if matches!(screen, Screen::Main | Screen::Score) {
+        // Global のキーはどの pane でも効き、入力欄・メニュー・dialog へは漏らさない。
+        if matches!(screen, Screen::Main | Screen::Score) || pane_idle(app, screen) {
             defs.extend(contextual_definitions(app, ctx, Screen::Global));
         }
         let command = match event {
@@ -416,6 +416,12 @@ pub(crate) fn route_stop(app: &mut App, ctx: &egui::Context) {
         (c.run)(app, ctx);
         ctx.input_mut(|i|i.events.retain(|e|!matches!(e,egui::Event::Key{key:Key::Space,modifiers,..} if matches(*modifiers,Modifiers::SHIFT))));
     }
+}
+
+/// The keys belong to a pane: neither window holds an input, a menu or a dialog.
+fn pane_idle(app: &App, screen: Screen) -> bool {
+    use crate::view::dock::focus;
+    !screen.transient() && ownership::root_owner(app) == focus::screen(focus::focused(app))
 }
 
 fn contextual_definitions(app: &App, ctx: &egui::Context, screen: Screen) -> Vec<Command> {

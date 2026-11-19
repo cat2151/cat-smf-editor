@@ -297,9 +297,7 @@ fn input_windows_offer_only_themselves_and_are_not_left_from_a_pane() {
     assert!(!a.layer_editor.open);
 }
 
-/// A focused Song pane holds no input, so a palette command of the event list still runs.
-#[test]
-fn palette_leaves_a_focused_song_pane() {
+fn song_focused() -> App {
     use crate::view::dock::{focus, ViewKind};
     let mut a = crate::view::tests::app(cat_smf_editor::edit::tracks::new_song());
     crate::view::patterns::library::add_container_with(&mut a, None).unwrap();
@@ -317,6 +315,13 @@ height_percent = 100
     )
     .unwrap();
     focus::set(&mut a, ViewKind::Song);
+    a
+}
+
+/// A focused Song pane holds no input, so a palette command of the event list still runs.
+#[test]
+fn palette_leaves_a_focused_song_pane() {
+    let mut a = song_focused();
     let c = egui::Context::default();
     assert_eq!(owner(&a, &c), Screen::Song);
     assert!(
@@ -326,4 +331,20 @@ height_percent = 100
     );
     assert!(crate::view::drums::is_open(&a));
     assert_eq!(a.load_error, None);
+}
+
+/// Global keys work from a focused Song pane, but not while a menu holds the keys.
+#[test]
+fn global_keys_work_from_a_focused_song_pane() {
+    let mut a = song_focused();
+    let c = egui::Context::default();
+    press(&mut a, &c, Key::O, Modifiers::CTRL);
+    assert!(a.file_open_requested);
+    press(&mut a, &c, Key::P, Modifiers::CTRL);
+    assert!(a.recent.open);
+
+    let mut a = song_focused();
+    a.comma_menu.open = true;
+    press(&mut a, &c, Key::O, Modifiers::CTRL);
+    assert!(!a.file_open_requested);
 }
