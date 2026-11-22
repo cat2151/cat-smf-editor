@@ -73,6 +73,63 @@ fn press(app: &mut crate::app::App, ctx: &egui::Context, pos: egui::Pos2) {
 }
 
 #[test]
+fn effect_rows_show_priority_names_before_truncated_preset_details() {
+    use cat_smf_editor::patch_reference::{PatchReference, Source};
+
+    let mut app = app();
+    let mut delay = crate::view::effects::tests::effect("org.surge-synth-team.surge-xt-fx");
+    delay.plugin.name = "Surge XT Effects".into();
+    let display = "Surge XT Effects: Delay/Ping-Pong 1-16";
+    delay.preset_name = Some(display.into());
+    delay.reference = Some(PatchReference {
+        plugin: delay.plugin.clone(),
+        source: Source::Effect {
+            path: "X:/fx_presets/Delay/Ping-Pong 1-16.srgfx".into(),
+            value: "Delay/Ping-Pong 1-16.srgfx".into(),
+        },
+        display: display.into(),
+    });
+    let mut tone = crate::view::effects::tests::effect("com.tone3000.plugin");
+    tone.plugin.name = "TONE3000".into();
+    let tone_preset = "Bogner Fullstack — Modern High Gain";
+    tone.preset_name = Some(tone_preset.into());
+
+    let mut master_tone = tone.clone();
+    master_tone.preset_name = Some(format!("TONE3000: {tone_preset}"));
+    app.audition
+        .set_master(cat_smf_editor::master_effects::Settings {
+            effects: vec![delay.clone(), master_tone],
+            ..Default::default()
+        });
+    app.loaded.as_mut().unwrap().patches[0].effects = vec![delay, tone];
+    let ctx = egui::Context::default();
+    draw(&mut app, &ctx, vec![]);
+    let output = draw(&mut app, &ctx, vec![]);
+    for (label, visible_prefix) in [
+        (
+            "1 Delay · Ping-Pong 1-16 · Surge XT Effects".to_owned(),
+            "1 Delay · Ping",
+        ),
+        (format!("2 TONE3000 · {tone_preset}"), "2 TONE3000 · Bog"),
+    ] {
+        let shown: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text) if text.galley.text() == label => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(shown.len(), 2, "{label}: master and track");
+        assert!(!shown[0].galley.elided, "{label}: master");
+        let track = &shown[1].galley;
+        assert!(track.elided, "{label}: track");
+        let visible = track.rows[0].text();
+        assert!(visible.starts_with(visible_prefix), "{visible}");
+    }
+}
+
+#[test]
 fn unequal_effect_chains_share_a_scale_and_clicks_match_its_labels() {
     for counts in [[0, 0], [0, 3], [2, 1]] {
         let mut app = app();

@@ -1,5 +1,5 @@
 //! The mixer's faders and effect rows, drawn into a floating window or a pane.
-use super::{effect_name, gain_to_db, EFFECT_COLOR};
+use super::{effect_name, gain_to_db, mixer_effect_name, EFFECT_COLOR};
 use crate::app::App;
 use eframe::egui;
 
@@ -131,7 +131,7 @@ fn effect_labels(
 ) -> Option<usize> {
     let mut clicked = None;
     for (slot, effect) in effects.iter().enumerate() {
-        let name = effect_name(effect);
+        let name = mixer_effect_name(effect);
         let color = if effect.bypass {
             EFFECT_COLOR.gamma_multiply(0.35)
         } else {
@@ -146,7 +146,7 @@ fn effect_labels(
                 ui.add_sized([COLUMN_WIDTH, ROW_HEIGHT], label)
             })
             .inner
-            .on_hover_text(name)
+            .on_hover_text(effect_name(effect))
             .clicked()
         {
             clicked = Some(slot);
@@ -174,7 +174,7 @@ fn master_row(
         clicked = Some(effects.len().saturating_sub(1));
     }
     for (slot, effect) in effects.iter().enumerate() {
-        let name = effect_name(effect);
+        let name = mixer_effect_name(effect);
         let color = if effect.bypass {
             EFFECT_COLOR.gamma_multiply(0.35)
         } else {
@@ -190,7 +190,7 @@ fn master_row(
                 )
             })
             .inner
-            .on_hover_text(name);
+            .on_hover_text(effect_name(effect));
         if replace.clicked() {
             clicked = Some(slot);
         }

@@ -2,7 +2,9 @@ use crate::{
     app::App,
     play::track_volume::{MAX_DB, MIN_DB, STEP_DB},
 };
+use cat_smf_editor::{chain_settings::PluginState, patch_reference::Source};
 use eframe::egui;
+use std::borrow::Cow;
 
 mod body;
 mod fader;
@@ -11,8 +13,52 @@ pub(crate) use body::Outcome;
 /// Chained effects stand apart from the gray instrument and track labels.
 pub const EFFECT_COLOR: egui::Color32 = egui::Color32::from_rgb(120, 190, 255);
 
-pub fn effect_name(effect: &cat_smf_editor::chain_settings::PluginState) -> &str {
+pub fn effect_name(effect: &PluginState) -> &str {
     effect.preset_name.as_deref().unwrap_or(&effect.plugin.name)
+}
+
+fn mixer_effect_name(effect: &PluginState) -> Cow<'_, str> {
+    let name = effect_name(effect);
+    match (effect.plugin.format.as_str(), effect.plugin.id.as_str()) {
+        ("CLAP", "com.tone3000.plugin") => {
+            let preset = name.strip_prefix("TONE3000:").unwrap_or(name).trim();
+            if preset.is_empty() || preset == "TONE3000" || preset == effect.plugin.name {
+                "TONE3000".into()
+            } else {
+                format!("TONE3000 · {preset}").into()
+            }
+        }
+        ("CLAP", "org.surge-synth-team.surge-xt-fx") => {
+            let preset = name
+                .strip_prefix("Surge XT Effects:")
+                .or_else(|| name.strip_prefix("Surge XT:"))
+                .map_or(name, str::trim);
+            let selector = match effect.reference.as_ref().map(|reference| &reference.source) {
+                Some(Source::Effect { value, .. }) => value,
+                _ => preset,
+            };
+            let Some((category, file)) = selector
+                .split_once(['/', '\\'])
+                .filter(|(category, _)| !category.is_empty())
+            else {
+                return preset.into();
+            };
+            let detail = if preset.is_empty() || preset == effect.plugin.name {
+                file.strip_suffix(".srgfx").unwrap_or(file)
+            } else {
+                preset
+                    .strip_prefix(category)
+                    .and_then(|rest| rest.strip_prefix(['/', '\\']))
+                    .unwrap_or(preset)
+            };
+            if detail.is_empty() || detail == category {
+                format!("{category} · {}", effect.plugin.name).into()
+            } else {
+                format!("{category} · {detail} · {}", effect.plugin.name).into()
+            }
+        }
+        _ => name.into(),
+    }
 }
 
 /// The chain of the master, or of the mixer track (the current track outside the
