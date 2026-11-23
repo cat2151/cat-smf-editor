@@ -53,6 +53,13 @@ fn labels(output: &egui::FullOutput, label: &str) -> Vec<egui::Pos2> {
         .collect()
 }
 
+fn hover(app: &mut crate::app::App, ctx: &egui::Context, pos: egui::Pos2) -> egui::FullOutput {
+    ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+    draw(app, ctx, vec![egui::Event::PointerGone]);
+    draw(app, ctx, vec![egui::Event::PointerMoved(pos)]);
+    draw(app, ctx, vec![])
+}
+
 fn press(app: &mut crate::app::App, ctx: &egui::Context, pos: egui::Pos2) {
     for pressed in [true, false] {
         draw(
@@ -105,12 +112,17 @@ fn effect_rows_show_priority_names_before_truncated_preset_details() {
     let ctx = egui::Context::default();
     draw(&mut app, &ctx, vec![]);
     let output = draw(&mut app, &ctx, vec![]);
-    for (label, visible_prefix) in [
+    for (label, visible_prefix, original) in [
         (
             "1 Delay · Ping-Pong 1-16 · Surge XT Effects".to_owned(),
             "1 Delay · Ping",
+            display,
         ),
-        (format!("2 TONE3000 · {tone_preset}"), "2 TONE3000 · Bog"),
+        (
+            format!("2 TONE3000 · {tone_preset}"),
+            "2 TONE3000 · Bog",
+            tone_preset,
+        ),
     ] {
         let shown: Vec<_> = output
             .shapes
@@ -126,6 +138,49 @@ fn effect_rows_show_priority_names_before_truncated_preset_details() {
         assert!(track.elided, "{label}: track");
         let visible = track.rows[0].text();
         assert!(visible.starts_with(visible_prefix), "{visible}");
+        let pos = labels(&output, &label)[1];
+        let hovered = hover(&mut app, &ctx, pos);
+        assert_eq!(labels(&hovered, original).len(), 1, "{original}");
+        assert_eq!(
+            labels(&hovered, &label).len(),
+            2,
+            "{label}: master and track only"
+        );
+    }
+}
+
+#[test]
+fn instrument_hover_shows_the_full_name_once() {
+    const PLUGIN: &str = "Concert Piano Instrument Plugin";
+    const PRESET: &str = "Instrument Factory Presets / Bright Concert Grand";
+    for (preset, name, elided, tooltip) in [
+        (Some("Piano"), "Piano", false, format!("{PLUGIN}\nPiano")),
+        (Some(PRESET), PRESET, true, format!("{PLUGIN}\n{PRESET}")),
+        (None, PLUGIN, true, PLUGIN.into()),
+        (Some(PLUGIN), PLUGIN, true, PLUGIN.into()),
+    ] {
+        let mut app = app();
+        let mut instrument = crate::view::effects::tests::effect("instrument");
+        instrument.plugin.name = PLUGIN.into();
+        instrument.preset_name = preset.map(str::to_owned);
+        app.loaded.as_mut().unwrap().patches[0].layers[0].instrument = Some(instrument);
+        let ctx = egui::Context::default();
+        let output = draw(&mut app, &ctx, vec![]);
+        let pos = labels(&output, name)[0];
+        let hovered = hover(&mut app, &ctx, pos);
+        let occurrences: Vec<_> = hovered
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text)
+                    if [name, tooltip.as_str()].contains(&text.galley.text()) =>
+                {
+                    Some((text.galley.text(), text.galley.elided))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(occurrences, [(name, elided), (tooltip.as_str(), false)]);
     }
 }
 

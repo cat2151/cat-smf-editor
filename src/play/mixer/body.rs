@@ -1,7 +1,9 @@
 //! The mixer's faders and effect rows, drawn into a floating window or a pane.
 use super::{effect_name, gain_to_db, mixer_effect_name, EFFECT_COLOR};
 use crate::app::App;
+use cat_smf_editor::score::layer_track::Patch;
 use eframe::egui;
+use std::borrow::Cow;
 
 const COLUMN_WIDTH: f32 = 140.0;
 const ROW_HEIGHT: f32 = 20.0;
@@ -79,12 +81,9 @@ pub(super) fn show(app: &mut App, ui: &mut egui::Ui) -> Outcome {
                                 app.playback.mixer_master = false;
                                 app.playback.mixer_track = track;
                             }
-                            ui.add_sized(
-                                [COLUMN_WIDTH, ROW_HEIGHT],
-                                egui::Label::new(loaded.patches[track].label()).truncate(),
-                            )
-                            .on_hover_text(loaded.patches[track].label());
-                            let effects = &loaded.patches[track].effects;
+                            let patch = &loaded.patches[track];
+                            name_label(ui, patch.label().into(), None, &instrument_tooltip(patch));
+                            let effects = &patch.effects;
                             if let Some(slot) = effect_labels(ui, effects) {
                                 *chain = Some((crate::view::effects::Target::Track(track), slot));
                             }
@@ -124,6 +123,23 @@ pub(super) fn show(app: &mut App, ui: &mut egui::Ui) -> Outcome {
     outcome
 }
 
+fn instrument_tooltip(patch: &Patch) -> Cow<'_, str> {
+    let label = patch.label();
+    let Some(instrument) = patch
+        .layers
+        .first()
+        .and_then(|layer| layer.instrument.as_ref())
+    else {
+        return label.into();
+    };
+    let plugin = instrument.plugin.name.as_str();
+    match label {
+        "" => plugin.into(),
+        _ if plugin.is_empty() || plugin == label => label.into(),
+        _ => format!("{plugin}\n{label}").into(),
+    }
+}
+
 /// One label per chained effect; returns the clicked slot.
 fn effect_labels(
     ui: &mut egui::Ui,
@@ -137,22 +153,64 @@ fn effect_labels(
         } else {
             EFFECT_COLOR
         };
-        let label =
-            egui::Label::new(egui::RichText::new(format!("{} {name}", slot + 1)).color(color))
-                .truncate()
-                .sense(egui::Sense::click());
+        let label = egui::RichText::new(format!("{} {name}", slot + 1)).color(color);
         if ui
             .push_id(("effect", slot), |ui| {
-                ui.add_sized([COLUMN_WIDTH, ROW_HEIGHT], label)
+                name_label(
+                    ui,
+                    label.into(),
+                    Some(egui::Sense::click()),
+                    effect_name(effect),
+                )
             })
             .inner
-            .on_hover_text(effect_name(effect))
             .clicked()
         {
             clicked = Some(slot);
         }
     }
     clicked
+}
+
+fn name_label(
+    ui: &mut egui::Ui,
+    text: egui::WidgetText,
+    sense: Option<egui::Sense>,
+    original: &str,
+) -> egui::Response {
+    ui.add_sized([COLUMN_WIDTH, ROW_HEIGHT], |ui: &mut egui::Ui| {
+        let mut label = egui::Label::new(text).truncate();
+        if let Some(sense) = sense {
+            label = label.sense(sense);
+        }
+        // Use the label layout without its automatic tooltip for elided text.
+        let (pos, galley, response) = label.layout_in_ui(ui);
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, ui.is_enabled(), galley.text())
+        });
+        if ui.is_rect_visible(response.rect) {
+            let color = if sense.is_some() {
+                ui.style().interact(&response).text_color()
+            } else {
+                ui.visuals().text_color()
+            };
+            let underline = if response.has_focus() || response.highlighted() {
+                egui::Stroke::new(1.0_f32, color)
+            } else {
+                egui::Stroke::NONE
+            };
+            if ui.style().interaction.selectable_labels {
+                egui::text_selection::LabelSelectionState::label_text_selection(
+                    ui, &response, pos, galley, color, underline,
+                );
+            } else {
+                ui.painter().add(
+                    egui::epaint::TextShape::new(pos, galley, color).with_underline(underline),
+                );
+            }
+        }
+        response.on_hover_text(original)
+    })
 }
 
 /// The master row: the chain button carries the mixer cursor; an effect opens
