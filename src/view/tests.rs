@@ -25,6 +25,7 @@ pub(crate) fn app(music: Music) -> App {
         command_input: Default::default(),
         external_editor: Default::default(),
         palette: Default::default(),
+        song_challenge: Default::default(),
         patterns: Default::default(),
         selection_history: Default::default(),
         undo: Default::default(),

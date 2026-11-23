@@ -44,7 +44,7 @@ pub struct State {
 
 /// Called before modal suspension, including native companion viewports.
 pub(crate) fn input(a: &mut App, ctx: &egui::Context) {
-    if view_at(a, ctx) == Some(ViewKind::Help) {
+    if a.song_challenge.modal_open() || view_at(a, ctx) == Some(ViewKind::Help) {
         return;
     }
     // In the palette F1 belongs to the selected command's explanation.

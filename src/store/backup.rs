@@ -49,7 +49,7 @@ fn save_at(directory: &Path, source: &Path, bytes: &[u8], stamp: &str) -> io::Re
     }
 }
 
-fn timestamp() -> String {
+pub(crate) fn timestamp() -> String {
     // SYSTEMTIME is eight WORDs: year, month, weekday, day, hour, minute, second, ms.
     let mut local = [0u16; 8];
     // SAFETY: GetLocalTime writes exactly one SYSTEMTIME into this aligned buffer.

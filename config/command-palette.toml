@@ -510,6 +510,12 @@ tooltip = "編集中のSMFを保存します。"
 search = "save"
 
 [[command]]
+ids = ["file.start-song-challenge"]
+name = "start 15-Minute Song Challenge"
+tooltip = "新規SMFを開き、制限時間が来たら保存します。"
+search = "challenge time limit 制限時間 作曲 チャレンジ"
+
+[[command]]
 ids = ["first-pattern.back"]
 name = "Cancel"
 

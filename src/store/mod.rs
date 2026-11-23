@@ -1,6 +1,7 @@
 //! MID・session・設定・config・error log・起動引数の永続化と読み込み。
 pub(crate) mod auto_save;
 mod backup;
+pub(crate) use backup::timestamp;
 pub(crate) mod cli;
 pub(crate) mod config;
 pub(crate) mod error_log;

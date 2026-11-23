@@ -84,6 +84,7 @@ impl App {
             volumes,
         } = sound;
         self.song_id = self.song_id.wrapping_add(1);
+        self.song_challenge = Default::default();
         self.undo.clear();
         self.lifecycle = Default::default();
         self.edit_start = Default::default();

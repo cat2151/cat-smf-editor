@@ -6,6 +6,7 @@ use eframe::egui;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Task {
     New,
+    SongChallenge,
     AddTrack,
     MmlInput,
     MmlMeasure,
@@ -49,6 +50,11 @@ pub fn run(app: &mut App, ctx: &egui::Context) {
     app.busy.task = None;
     match task {
         Task::New => app.new_smf_unchecked(),
+        Task::SongChallenge => {
+            if let Err(error) = app.new_challenge_song() {
+                app.load_error = Some(error);
+            }
+        }
         Task::AddTrack => {
             if let Err(error) = app.add_track() {
                 app.load_error = Some(error);
@@ -64,6 +70,9 @@ pub fn run(app: &mut App, ctx: &egui::Context) {
 /// Also covers the shutdown after a close is approved. Painted on a plain layer:
 /// an `Area` spends its first pass invisible and then fades in.
 pub fn show(app: &App, ctx: &egui::Context) {
+    if app.song_challenge.modal_open() {
+        return;
+    }
     let playback =
         app.busy.mml_playback && (pending(app) || crate::play::transport::preparing(app));
     if !pending(app) && !playback && !app.config.navigation.close_approved {

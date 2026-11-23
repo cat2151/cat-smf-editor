@@ -36,6 +36,7 @@ pub(crate) mod recent;
 pub(crate) mod recording;
 mod score_panes;
 pub(crate) mod selection_history;
+pub(crate) mod song_challenge;
 pub(crate) mod staff;
 pub(crate) mod tempo_curve;
 #[cfg(test)]
@@ -78,6 +79,7 @@ pub(crate) fn track_color(track: usize) -> Color32 {
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
+    song_challenge::advance(app, ctx);
     if ctx.viewport_id() == egui::ViewportId::ROOT
         && ctx.output(|o| o.num_completed_passes == 0)
         && let Err(error) = app
@@ -96,12 +98,19 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         app.lifecycle.interrupted();
         return;
     }
-    opening::advance(app, ctx);
+    if !app.song_challenge.modal_open() {
+        opening::advance(app, ctx);
+    }
     crate::play::sung::prerender::poll(app, ctx);
     crate::store::layout::update(app, ctx);
     voicevox::singer::poll(app, ctx);
-    let opening_input = opening::suspend_input(app, ctx);
-    patterns::workspace::suspend_background(app, ctx);
+    let opening_input = if app.song_challenge.modal_open() {
+        None
+    } else {
+        let input = opening::suspend_input(app, ctx);
+        patterns::workspace::suspend_background(app, ctx);
+        input
+    };
     let palette_input = modal::begin(app, ctx);
     if crate::player::setup::show(app, ctx) {
         app.lifecycle.interrupted();
@@ -113,7 +122,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         help::show(app, ctx);
         return;
     }
-    busy::run(app, ctx);
+    if !app.song_challenge.modal_open() {
+        busy::run(app, ctx);
+    }
     crate::play::transport::stop_shortcut(app, ctx);
     if !opening::pending(app)
         && (crate::view::modal::is_open(app)
@@ -155,8 +166,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     app.frame_completed(ctx, event_list_drawn);
     edit_style::show(app, ctx, style_input);
     modal::end(app, ctx, palette_input);
-    opening::show(app, ctx, opening_input);
-    voicevox::progress::show(app, ctx);
+    if !app.song_challenge.modal_open() {
+        opening::show(app, ctx, opening_input);
+        voicevox::progress::show(app, ctx);
+    }
     help::observe(app, ctx);
     help::show(app, ctx);
     presentation::finish(app, ctx);

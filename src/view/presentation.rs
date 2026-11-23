@@ -18,6 +18,9 @@ pub(crate) enum Native {
 mod policy;
 
 fn priority(a: &App) -> Option<egui::ViewportId> {
+    if a.song_challenge.modal_open() {
+        return Some(egui::ViewportId::ROOT);
+    }
     if let Some(id) = a.palette.viewport() {
         return Some(id);
     }
@@ -256,7 +259,7 @@ pub(crate) fn refresh(a: &App, ctx: &egui::Context) {
 }
 
 pub(crate) fn background_enabled(a: &App) -> bool {
-    commands::root_owner(a).allows_companions_for(a)
+    !a.song_challenge.modal_open() && commands::root_owner(a).allows_companions_for(a)
 }
 
 /// The placed view whose own input, or the overview itself, is open: its pane stays usable

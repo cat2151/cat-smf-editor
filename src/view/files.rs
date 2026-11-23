@@ -34,6 +34,7 @@ pub enum Action {
     Save,
     EnableAutoSave,
     New,
+    SongChallenge,
     Load(PathBuf),
     LoadWithProgress(PathBuf),
     LoadAndPlay(PathBuf),
@@ -135,6 +136,9 @@ impl App {
         match action {
             Action::Save | Action::EnableAutoSave => {}
             Action::New => super::busy::request(self, ctx, super::busy::Task::New),
+            Action::SongChallenge => {
+                super::busy::request(self, ctx, super::busy::Task::SongChallenge)
+            }
             Action::Load(path) => self.load_mid_unchecked(path),
             Action::LoadWithProgress(path) => super::opening::request(self, path, false),
             Action::LoadAndPlay(path) => self.load_and_play(path),
@@ -184,7 +188,10 @@ pub fn confirmation(app: &mut App, ctx: &egui::Context) {
     }
     let closing = matches!(app.config.navigation.departure, Some(Action::Close));
     let saving = matches!(app.config.navigation.departure, Some(Action::Save));
-    let creating = matches!(app.config.navigation.departure, Some(Action::New));
+    let creating = matches!(
+        app.config.navigation.departure,
+        Some(Action::New | Action::SongChallenge)
+    );
     let enabling = matches!(
         app.config.navigation.departure,
         Some(Action::EnableAutoSave)

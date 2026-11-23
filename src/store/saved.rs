@@ -134,13 +134,26 @@ impl Document {
             )
             .map_err(|e| e.to_string())?;
         } else {
-            use std::io::Write;
-            let mut file = tempfile::NamedTempFile::new_in(path.parent().unwrap_or(Path::new(".")))
-                .map_err(|e| e.to_string())?;
-            file.write_all(&self.bytes).map_err(|e| e.to_string())?;
-            file.as_file().sync_all().map_err(|e| e.to_string())?;
-            file.persist_noclobber(path).map_err(|e| e.to_string())?;
+            return self
+                .save_new(path)
+                .map(|()| false)
+                .map_err(|e| e.to_string());
         }
+        self.mark_saved_as(path);
+        Ok(replaced)
+    }
+
+    pub(crate) fn save_new(&mut self, path: &Path) -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new_in(path.parent().unwrap_or(Path::new(".")))?;
+        file.write_all(&self.bytes)?;
+        file.as_file().sync_all()?;
+        file.persist_noclobber(path).map_err(|error| error.error)?;
+        self.mark_saved_as(path);
+        Ok(())
+    }
+
+    fn mark_saved_as(&mut self, path: &Path) {
         self.key = Some(path.to_owned());
         self.untitled = false;
         self.expected = self.bytes.clone();
@@ -149,7 +162,6 @@ impl Document {
         self.dirty_since = None;
         self.auto_save_stopped = false;
         self.error = None;
-        Ok(replaced)
     }
 
     pub fn dirty(&self) -> bool {
@@ -228,6 +240,12 @@ impl crate::app::App {
         use eframe::egui::ViewportCommand;
         // Every window has drawn, so an Alt+F4 that another window stepped aside for quits here.
         let alt_f4 = crate::view::alt_f4::take();
+        if self.song_challenge.modal_open() || crate::view::song_challenge::closed_this_frame(ctx) {
+            if ctx.input(|i| i.viewport().close_requested()) {
+                ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+            }
+            return;
+        }
         if !ctx.input(|i| i.viewport().close_requested()) {
             if alt_f4 {
                 self.request_close(ctx);
@@ -256,6 +274,9 @@ impl crate::app::App {
     }
 
     pub(crate) fn request_close(&mut self, ctx: &eframe::egui::Context) {
+        if self.song_challenge.modal_open() || crate::view::song_challenge::closed_this_frame(ctx) {
+            return;
+        }
         if self.allow_departure(crate::view::files::Action::Close) {
             // Both native close and the palette use the save/confirmation path.
             self.config.navigation.close_approved = true;

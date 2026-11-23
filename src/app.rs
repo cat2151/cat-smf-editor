@@ -3,6 +3,7 @@ mod edit_start;
 mod lifecycle;
 mod loading;
 mod parameter_automation;
+mod song_challenge;
 pub(crate) mod sound;
 mod startup;
 pub(crate) mod undo;
@@ -18,6 +19,7 @@ pub struct App {
     pub command_input: crate::view::command_input::State,
     pub external_editor: crate::store::external_editor::Editor,
     pub palette: crate::view::palette::State,
+    pub song_challenge: crate::view::song_challenge::State,
     pub patterns: crate::view::patterns::State,
     pub undo: undo::History,
     pub file_open_requested: bool,
@@ -130,6 +132,7 @@ impl App {
             command_input: Default::default(),
             external_editor: Default::default(),
             palette: Default::default(),
+            song_challenge: Default::default(),
             patterns: Default::default(),
             selection_history: Default::default(),
             undo: Default::default(),
@@ -351,7 +354,10 @@ impl eframe::App for App {
             crate::view::recent::prefetch(self, ctx);
         }
         crate::view::show(self, ctx);
-        if !self.player_selection.setup.is_active() && !self.patterns.workspace.input_open() {
+        if !self.player_selection.setup.is_active()
+            && !self.patterns.workspace.input_open()
+            && !self.song_challenge.modal_open()
+        {
             crate::view::files::open_dialog(self, ctx, frame);
             crate::view::voicevox::pick_dialog(self, ctx, frame);
         }

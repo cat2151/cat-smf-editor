@@ -21,6 +21,16 @@ pub(super) fn collect(a: &App, s: Screen, out: &mut Vec<Command>) {
             &[(Key::N, Modifiers::CTRL)],
             |a, c| a.new_smf(c),
         ));
+        out.push(Command::plain(
+            s,
+            "file.start-song-challenge",
+            &[],
+            |a, c| {
+                if a.allow_departure(files::Action::SongChallenge) {
+                    busy::request(a, c, busy::Task::SongChallenge);
+                }
+            },
+        ));
         out.push(Command::plain(s, "file.load-uapmdz", &[], |a, _| {
             match super::super::files::uapmd_project_path() {
                 Ok(path) => a.open_mid_and_play(path),
