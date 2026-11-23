@@ -1,10 +1,6 @@
 //! Load the default kit off the UI thread, committing only a complete container.
 use super::*;
-use cat_smf_editor::{
-    drum_kit::Kit,
-    patch_reference::PatchReference,
-    score::{instrument::ResolvedLayer, state_cache::Cache},
-};
+use cat_smf_editor::score::state_cache::Cache;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 pub(in crate::view::recording) struct KitCreation {
@@ -24,32 +20,8 @@ pub(in crate::view::recording) fn start(a: &App, s: &mut Session) {
         result: rx,
     });
     std::thread::spawn(move || {
-        let result = (|| {
-            let output =
-                crate::player::state_request::headless(player.clone(), "--default-drum-kit")?
-                    .output()
-                    .map_err(|e| e.to_string())?;
-            if !output.status.success() {
-                return Err(String::from_utf8_lossy(&output.stderr).into_owned());
-            }
-            let (reference, kit): (PatchReference, Kit) =
-                serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())?;
-            reference.validate()?;
-            kit.validate()?;
-            let instrument = cache.resolve(&reference, |r| {
-                crate::player::state_request::generate(r, player)
-            })?;
-            let patch = Patch {
-                kit: Some(kit),
-                layers: vec![ResolvedLayer {
-                    settings: Default::default(),
-                    instrument: Some(instrument),
-                }],
-                ..Default::default()
-            };
-            patch.validate()?;
-            Ok((patch, cache))
-        })();
+        let result =
+            crate::player::default_kit::load(&mut cache, player).map(|patch| (patch, cache));
         let _ = tx.send(result);
     });
 }

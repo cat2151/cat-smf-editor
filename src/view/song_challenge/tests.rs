@@ -1,6 +1,10 @@
 use super::*;
 use crate::view::palette::tests as palette;
-use cat_smf_editor::{edit::tracks, smf_io};
+use cat_smf_editor::{
+    edit::tracks,
+    score::{note_view::note_on, pattern::Catalog, scene::arrangement},
+    smf_io,
+};
 use egui::{Event, Modifiers};
 
 fn key(key: Key, pressed: bool) -> Event {
@@ -48,6 +52,8 @@ fn labels<'a>(
 fn palette_to_timeout_saves_edits_and_requires_a_fresh_enter_after_the_lock() {
     let directory = tempfile::tempdir().unwrap();
     let mut app = crate::view::tests::app(tracks::new_song());
+    let kick = 24;
+    let _kit = crate::player::default_kit::fixture::provide(&mut app.state_cache, kick);
     app.loaded = None;
     app.saved.directory = Some(directory.path().to_owned());
     let ctx = egui::Context::default();
@@ -68,7 +74,37 @@ fn palette_to_timeout_saves_edits_and_requires_a_fresh_enter_after_the_lock() {
         path.parent(),
         Some(directory.path().join("song-challenges").as_path())
     );
-    let blank = std::fs::read(&path).unwrap();
+    let starter = std::fs::read(&path).unwrap();
+    let music = &app.loaded.as_ref().unwrap().music;
+    assert_eq!(starter, smf_io::encode(music).unwrap());
+    assert!(crate::view::patterns::mode::workspace_open(&app));
+    let catalog = Catalog::read(music).unwrap();
+    assert_eq!(catalog.sources.len(), 4);
+    assert_eq!(
+        music.tracks[1..]
+            .iter()
+            .map(|t| t.name().unwrap())
+            .collect::<Vec<_>>(),
+        ["Drum kit", "Bass", "Chord", "Lead"]
+    );
+    assert_eq!(catalog.patterns.len(), 1);
+    let (&id, pattern) = catalog.patterns.iter().next().unwrap();
+    assert_eq!(pattern.track, 1);
+    let patch = &app.loaded.as_ref().unwrap().patches[1];
+    assert_eq!(patch.kit.as_ref().unwrap().notes[0].note, kick);
+    assert_eq!(patch.label(), "default-kit.sfz");
+    let notes: Vec<_> = music
+        .tracks
+        .iter()
+        .flat_map(|track| &track.events)
+        .filter(|e| note_on(e))
+        .map(|e| (e.tick, e.data[0]))
+        .collect();
+    assert_eq!(notes, [(0, kick)]);
+    assert_eq!(
+        arrangement::occurrences(music, None).unwrap(),
+        (vec![(id, 0)], 1920)
+    );
 
     assert!(ctx.memory(|memory| memory.has_focus(egui::Id::new("song-challenge-minutes"))));
     frame(&mut app, &ctx, vec![Event::Text("0".into())]);
@@ -86,10 +122,15 @@ fn palette_to_timeout_saves_edits_and_requires_a_fresh_enter_after_the_lock() {
     );
     frame(&mut app, &ctx, vec![Event::Text("1".into())]);
     palette::press(&mut app, &ctx, Key::Enter);
-    let State::Running { start, limit } = &mut app.song_challenge else {
+    let State::Running { start, limit, .. } = &mut app.song_challenge else {
         panic!("timer did not start")
     };
     assert_eq!(*limit, Duration::from_secs(60));
+    assert_eq!(app.playback.repeat, Some((0, 1920)));
+    assert_eq!(
+        app.playback.repeat_mode,
+        Some(crate::play::playback::Mode::Arrangement(None))
+    );
     *start = Instant::now() - Duration::from_millis(1500);
     let output = frame(&mut app, &ctx, vec![]);
     let outlined: Vec<_> = labels(&output, "あと0分59秒").collect();
@@ -101,9 +142,9 @@ fn palette_to_timeout_saves_edits_and_requires_a_fresh_enter_after_the_lock() {
         .all(|text| text.override_text_color == Some(Color32::BLACK)));
     let bottom_right = white.pos + white.galley.size();
     assert!((bottom_right - egui::pos2(1184.0, 784.0)).length() <= 1.0);
-    app.edit_music(|music| tracks::rename(&mut music.tracks[0], "Challenge edit"))
+    app.edit_tracks(|music| tracks::rename(&mut music.tracks[2], "Challenge edit"))
         .unwrap();
-    assert_eq!(std::fs::read(&path).unwrap(), blank);
+    assert_eq!(std::fs::read(&path).unwrap(), starter);
 
     let State::Running { start, .. } = &mut app.song_challenge else {
         unreachable!()

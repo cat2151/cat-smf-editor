@@ -7,6 +7,22 @@ use crate::{
     score::{drums::Measure, musical_time::MusicalTime, note_view::note_on},
 };
 
+pub const GM_KICK: u8 = 36;
+
+pub fn kick_pitch(kit: &Kit) -> Option<u8> {
+    let named = |note: &&Note| {
+        let name = note.name.to_ascii_lowercase();
+        name.contains("kick") || name.contains("bass drum")
+    };
+    kit.notes
+        .iter()
+        .filter(named)
+        .min_by_key(|note| note.note != GM_KICK)
+        .or_else(|| kit.notes.iter().find(|note| note.note == GM_KICK))
+        .or_else(|| kit.notes.iter().find(|note| note.note == 35))
+        .map(|note| note.note)
+}
+
 pub fn read(track: &Track) -> Result<Option<Kit>, String> {
     Ok(crate::instrument_layers::parse(track)?.kit)
 }

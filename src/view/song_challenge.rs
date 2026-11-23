@@ -2,6 +2,10 @@ use crate::app::App;
 use eframe::egui::{self, Color32, Key};
 use std::time::{Duration, Instant};
 
+mod browsers;
+#[cfg(windows)]
+pub(crate) use browsers::{awaiting as awaiting_browser, closed as browser_closed};
+
 #[derive(Default)]
 pub(crate) enum State {
     #[default]
@@ -10,6 +14,7 @@ pub(crate) enum State {
     Running {
         start: Instant,
         limit: Duration,
+        browsers: browsers::Queue,
     },
     Finished {
         shown: Option<Instant>,
@@ -18,14 +23,16 @@ pub(crate) enum State {
 }
 
 pub(crate) struct DurationInput {
+    containers: [usize; 4],
     minutes: String,
     focus: bool,
     invalid: bool,
 }
 
 impl State {
-    pub(crate) fn ask_duration(&mut self) {
+    pub(crate) fn ask_duration(&mut self, containers: [usize; 4]) {
         *self = Self::Duration(DurationInput {
+            containers,
             minutes: "15".into(),
             focus: true,
             invalid: false,
@@ -38,7 +45,7 @@ impl State {
 }
 
 pub(super) fn advance(app: &mut App, ctx: &egui::Context) {
-    let State::Running { start, limit } = app.song_challenge else {
+    let State::Running { start, limit, .. } = app.song_challenge else {
         return;
     };
     let remaining = limit.saturating_sub(start.elapsed());
@@ -104,10 +111,24 @@ pub(super) fn dialog(app: &mut App, ctx: &egui::Context) {
     };
     if let Some(next) = next {
         app.song_challenge = next;
+        if matches!(app.song_challenge, State::Running { .. }) {
+            start_song(app, ctx);
+        }
         let frame = super::modal::frame_token(ctx);
         ctx.data_mut(|data| data.insert_temp(egui::Id::new(CLOSED), frame));
         ctx.request_repaint();
     }
+}
+
+fn start_song(app: &mut App, ctx: &egui::Context) {
+    use cat_smf_editor::score::scene::arrangement::measure_tick;
+
+    let music = &app.loaded.as_ref().unwrap().music;
+    match measure_tick(music, None, 2) {
+        Ok(end) => crate::play::transport::repeat::start_song(app, (0, end)),
+        Err(error) => app.load_error = Some(error),
+    }
+    browsers::open_next(app, ctx);
 }
 
 fn duration(minutes: &str) -> Option<Duration> {
@@ -163,6 +184,7 @@ fn duration_dialog(ctx: &egui::Context, input: &mut DurationInput) -> Option<Sta
             return Some(State::Running {
                 start: Instant::now(),
                 limit,
+                browsers: browsers::Queue::new(input.containers),
             });
         }
         input.invalid = true;
