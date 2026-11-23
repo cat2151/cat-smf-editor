@@ -150,7 +150,7 @@ fn named_cursor_is_sent_to_a_new_player_after_editor_restart() {
         panic!("open")
     };
     assert_eq!(restored, context);
-    assert_eq!(cursor, Some(patch));
+    assert_eq!(cursor.as_deref(), Some(&patch));
     drop(app);
     drop(out);
     drop(input);

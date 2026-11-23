@@ -87,23 +87,50 @@ fn palette_to_timeout_saves_edits_and_requires_a_fresh_enter_after_the_lock() {
             .collect::<Vec<_>>(),
         ["Drum kit", "Bass", "Chord", "Lead"]
     );
-    assert_eq!(catalog.patterns.len(), 1);
-    let (&id, pattern) = catalog.patterns.iter().next().unwrap();
-    assert_eq!(pattern.track, 1);
+    assert_eq!(catalog.patterns.len(), 4);
+    let collection = cat_smf_editor::score::scene::read(music).unwrap();
+    assert_eq!(collection.song_lanes.len(), 4);
+    assert_eq!(collection.song.len(), 4);
+    let mut occurrences = Vec::new();
+    for (index, &lane) in collection.song_lanes.iter().enumerate() {
+        let placement = collection
+            .song
+            .iter()
+            .find(|part| part.lane == lane)
+            .unwrap();
+        let arrangement::PatternOrScene::Pattern(id) = placement.part else {
+            panic!("starter placement must be a pattern");
+        };
+        assert_eq!(placement.measure, index as u64 + 1);
+        assert_eq!(catalog.patterns[&id].track, index + 1);
+        assert_eq!(catalog.patterns[&id].length().unwrap(), 1920);
+        occurrences.push((id, 1920 * index as u64));
+    }
     let patch = &app.loaded.as_ref().unwrap().patches[1];
     assert_eq!(patch.kit.as_ref().unwrap().notes[0].note, kick);
     assert_eq!(patch.label(), "default-kit.sfz");
     let notes: Vec<_> = music
         .tracks
         .iter()
-        .flat_map(|track| &track.events)
-        .filter(|e| note_on(e))
-        .map(|e| (e.tick, e.data[0]))
+        .map(|track| {
+            track
+                .events
+                .iter()
+                .filter(|e| note_on(e))
+                .map(|e| {
+                    assert_eq!(e.tick, 0);
+                    e.data[0]
+                })
+                .collect::<Vec<_>>()
+        })
         .collect();
-    assert_eq!(notes, [(0, kick)]);
+    assert_eq!(
+        notes,
+        [vec![], vec![kick], vec![60], vec![60, 64, 67], vec![60]]
+    );
     assert_eq!(
         arrangement::occurrences(music, None).unwrap(),
-        (vec![(id, 0)], 1920)
+        (occurrences, 7680)
     );
 
     assert!(ctx.memory(|memory| memory.has_focus(egui::Id::new("song-challenge-minutes"))));
@@ -126,11 +153,7 @@ fn palette_to_timeout_saves_edits_and_requires_a_fresh_enter_after_the_lock() {
         panic!("timer did not start")
     };
     assert_eq!(*limit, Duration::from_secs(60));
-    assert_eq!(app.playback.repeat, Some((0, 1920)));
-    assert_eq!(
-        app.playback.repeat_mode,
-        Some(crate::play::playback::Mode::Arrangement(None))
-    );
+    assert_eq!(app.playback.repeat, None);
     *start = Instant::now() - Duration::from_millis(1500);
     let output = frame(&mut app, &ctx, vec![]);
     let outlined: Vec<_> = labels(&output, "あと0分59秒").collect();

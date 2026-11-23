@@ -3,8 +3,9 @@ use eframe::egui::{self, Color32, Key};
 use std::time::{Duration, Instant};
 
 mod browsers;
+pub(super) use browsers::presentation_restored;
 #[cfg(windows)]
-pub(crate) use browsers::{awaiting as awaiting_browser, closed as browser_closed};
+pub(crate) use browsers::{awaiting as awaiting_browser, closed as browser_closed, disconnected};
 
 #[derive(Default)]
 pub(crate) enum State {
@@ -23,14 +24,14 @@ pub(crate) enum State {
 }
 
 pub(crate) struct DurationInput {
-    containers: [usize; 4],
+    containers: [(usize, u64); 4],
     minutes: String,
     focus: bool,
     invalid: bool,
 }
 
 impl State {
-    pub(crate) fn ask_duration(&mut self, containers: [usize; 4]) {
+    pub(crate) fn ask_duration(&mut self, containers: [(usize, u64); 4]) {
         *self = Self::Duration(DurationInput {
             containers,
             minutes: "15".into(),
@@ -50,6 +51,7 @@ pub(super) fn advance(app: &mut App, ctx: &egui::Context) {
     };
     let remaining = limit.saturating_sub(start.elapsed());
     if remaining.is_zero() {
+        browsers::end_preview(app);
         let error = app.remember_loaded().and_then(|_| app.saved.save()).err();
         if let Some(error) = &error {
             app.saved.auto_save_failed(error.clone());
@@ -57,6 +59,7 @@ pub(super) fn advance(app: &mut App, ctx: &egui::Context) {
         app.song_challenge = State::Finished { shown: None, error };
         return;
     }
+    browsers::open_first(app, ctx);
     let fraction = remaining.subsec_nanos();
     let seconds = remaining.as_secs() + u64::from(fraction != 0);
     countdown(ctx, &format!("あと{}分{}秒", seconds / 60, seconds % 60));
@@ -111,24 +114,10 @@ pub(super) fn dialog(app: &mut App, ctx: &egui::Context) {
     };
     if let Some(next) = next {
         app.song_challenge = next;
-        if matches!(app.song_challenge, State::Running { .. }) {
-            start_song(app, ctx);
-        }
         let frame = super::modal::frame_token(ctx);
         ctx.data_mut(|data| data.insert_temp(egui::Id::new(CLOSED), frame));
         ctx.request_repaint();
     }
-}
-
-fn start_song(app: &mut App, ctx: &egui::Context) {
-    use cat_smf_editor::score::scene::arrangement::measure_tick;
-
-    let music = &app.loaded.as_ref().unwrap().music;
-    match measure_tick(music, None, 2) {
-        Ok(end) => crate::play::transport::repeat::start_song(app, (0, end)),
-        Err(error) => app.load_error = Some(error),
-    }
-    browsers::open_next(app, ctx);
 }
 
 fn duration(minutes: &str) -> Option<Duration> {

@@ -81,20 +81,46 @@ pub fn clear(app: &mut App) {
 
 /// A Song range uses its arrangement even while a candidate pattern is open.
 pub(crate) fn start_song(app: &mut App, range: (u64, u64)) {
-    let mode = Mode::Arrangement(None);
+    start_in(app, range, Mode::Arrangement(None));
+}
+
+/// Loop a single pattern at its own measure 1, independent of its Song placement.
+pub(crate) fn start_pattern(app: &mut App, id: u64) -> Result<(), String> {
+    use cat_smf_editor::{message, score::pattern::Catalog};
+
+    let music = &app.loaded.as_ref().ok_or(message::NO_SMF_LOADED)?.music;
+    let catalog = Catalog::read(music)?;
+    let pattern = catalog.patterns.get(&id).ok_or(message::MISSING_PATTERN)?;
+    let end = pattern
+        .meters
+        .first()
+        .ok_or(message::MISSING_PATTERN_METER)?
+        .ticks;
+    if start_in(app, (0, end), Mode::Pattern(id)) {
+        Ok(())
+    } else {
+        Err("patternを試聴できません".into())
+    }
+}
+
+fn start_in(app: &mut App, range: (u64, u64), mode: Mode) -> bool {
     let Some(prepared) = prepare_in(app, range, mode) else {
-        return;
+        return false;
     };
     app.audition.stop();
     app.playback.active = None;
     app.playback.pending = Some(prepared);
     app.playback.repeat = Some(range);
     app.playback.repeat_mode = Some(mode);
+    true
 }
 
 fn prepare_in(app: &App, (a, b): (u64, u64), mode: Mode) -> Option<Prepared> {
     if a >= b {
         return None;
+    }
+    if matches!(mode, Mode::Pattern(_)) {
+        return super::timeline::prepare(app, a, b, &[], mode, 0);
     }
     let all = super::prepare(app, mode)?;
     let tempo = all.active.tempos.first()?;

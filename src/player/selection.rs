@@ -107,6 +107,21 @@ pub fn open_slot(app: &mut App, browser: Browser, slot: usize) {
 }
 
 pub(crate) fn open_mode(app: &mut App, browser: Browser, bulk: bool, slot: Option<usize>) {
+    open_request(app, browser, bulk, slot, None);
+}
+
+pub(crate) fn open_random_role(app: &mut App, role: cmrt_patches::PatchRole) {
+    app.player_selection.layer = None;
+    open_request(app, Browser::Patch, false, None, Some(role));
+}
+
+fn open_request(
+    app: &mut App,
+    browser: Browser,
+    bulk: bool,
+    slot: Option<usize>,
+    random_patch_role: Option<cmrt_patches::PatchRole>,
+) {
     app.player_selection.no_notes_error = false;
     let Some(loaded) = &app.loaded else {
         return;
@@ -141,11 +156,12 @@ pub(crate) fn open_mode(app: &mut App, browser: Browser, bulk: bool, slot: Optio
             track,
             slot,
             bulk,
+            random_patch_role,
         },
     );
     #[cfg(not(windows))]
     let result: Result<(), String> = {
-        let _ = (track, slot);
+        let _ = (track, slot, random_patch_role);
         Err("常駐playerにはWindowsが必要です".into())
     };
     match result {
@@ -331,6 +347,8 @@ fn follow_name(
 #[path = "selection_ui.rs"]
 mod ui;
 pub use ui::show;
+#[cfg(windows)]
+pub(crate) use ui::show_loading;
 
 #[cfg(test)]
 mod tests;

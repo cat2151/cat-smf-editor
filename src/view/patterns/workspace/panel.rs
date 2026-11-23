@@ -221,7 +221,12 @@ fn body(a: &mut App, ui: &mut egui::Ui, p: Pane) {
                     ui,
                     music,
                     &mut a.patterns.workspace.timeline,
-                    a.playback.repeat,
+                    a.playback.repeat.filter(|_| {
+                        !matches!(
+                            a.playback.repeat_mode,
+                            Some(crate::play::playback::Mode::Pattern(_))
+                        )
+                    }),
                 );
             }
             let mut area = area;

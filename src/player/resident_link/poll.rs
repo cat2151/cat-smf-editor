@@ -42,13 +42,13 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
                     break Some(Some(format!("playerに応答できませんでした: {error}")));
                 }
             }
-            Event::BrowserClosed(target) => {
+            Event::BrowserClosed { target, confirmed } => {
                 if target == link.target.open {
                     link.loading.observe(true);
                     if matches!(target, Open::Kit { .. }) {
                         app.player_selection.kit_open = false;
                     }
-                    browser_closed = Some(target);
+                    browser_closed = Some((target, confirmed));
                 }
             }
             Event::Panes(context, panes, query) => {
@@ -64,14 +64,15 @@ pub fn poll(app: &mut App, ctx: &egui::Context) {
                 ctx.request_repaint_after(std::time::Duration::from_millis(100));
             }
             app.player_selection.resident = Some(link);
-            if let Some(target) = browser_closed
-                && !crate::view::song_challenge::browser_closed(app, ctx, target)
+            if let Some((target, confirmed)) = browser_closed
+                && !crate::view::song_challenge::browser_closed(app, ctx, target, confirmed)
                 && matches!(target, Open::Kit { .. })
             {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
         }
         Some(error) => {
+            crate::view::song_challenge::disconnected(app, link.target.open);
             app.player_selection.kit_open = false;
             log(format_args!("link closed: {error:?}"));
             app.player_selection.open = true;

@@ -59,6 +59,7 @@ pub struct Request {
     pub track: usize,
     pub slot: Option<usize>,
     pub bulk: bool,
+    pub random_patch_role: Option<cmrt_patches::PatchRole>,
 }
 
 pub struct Link {
@@ -72,6 +73,7 @@ pub struct Link {
     panes: [String; 2],
     query: String,
     cursor: Option<PatchIdentity>,
+    random_patch_role: Option<String>,
     last_frame: Option<Instant>,
     activity: super::browser_activity::Activity,
     loading: super::browser_loading::Loading,
@@ -80,7 +82,7 @@ pub struct Link {
 enum Event {
     Connected(Sender),
     Selected(Selected),
-    BrowserClosed(Open),
+    BrowserClosed { target: Open, confirmed: bool },
     Cursor(String, Option<PatchIdentity>),
     Panes(String, [String; 2], String),
     Closed(Option<String>),
@@ -143,6 +145,7 @@ pub fn request(app: &mut App, request: Request) -> Result<(), String> {
         .patch_cursors
         .get(&pane_context(&target))
         .cloned();
+    let random_patch_role = request.random_patch_role.map(|role| role.key().into());
     log(format_args!("request {target:?}"));
     app.audition.browser_used();
     if let Some(link) = &mut app.player_selection.resident {
@@ -150,6 +153,7 @@ pub fn request(app: &mut App, request: Request) -> Result<(), String> {
         link.panes = panes;
         link.query = query;
         link.cursor = cursor;
+        link.random_patch_role = random_patch_role;
         return link.show();
     }
     let executable = resolve(
@@ -165,6 +169,7 @@ pub fn request(app: &mut App, request: Request) -> Result<(), String> {
         panes,
         query,
         cursor,
+        random_patch_role,
     )?);
     Ok(())
 }
@@ -235,6 +240,7 @@ impl Link {
         panes: [String; 2],
         query: String,
         cursor: Option<PatchIdentity>,
+        random_patch_role: Option<String>,
     ) -> Result<Self, String> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let name = format!(
@@ -287,7 +293,14 @@ impl Link {
                     })) => Event::Panes(context, panes, query),
                     Ok(Some(
                         ToEditor::KitClosed { target } | ToEditor::BrowserClosed { target },
-                    )) => Event::BrowserClosed(target),
+                    )) => Event::BrowserClosed {
+                        target,
+                        confirmed: false,
+                    },
+                    Ok(Some(ToEditor::BrowserConfirmed { target })) => Event::BrowserClosed {
+                        target,
+                        confirmed: true,
+                    },
                     Ok(Some(ToEditor::Cursor { context, patch })) => Event::Cursor(context, patch),
                     Ok(None) => Event::Closed(None),
                     Err(error) => Event::Closed(Some(error.to_string())),
@@ -310,6 +323,7 @@ impl Link {
             panes,
             query,
             cursor,
+            random_patch_role,
             last_frame: None,
             activity: Default::default(),
             loading,
@@ -326,7 +340,8 @@ impl Link {
                     context: pane_context(&self.target),
                     panes: self.panes.clone(),
                     query: self.query.clone(),
-                    cursor: self.cursor.clone(),
+                    cursor: self.cursor.clone().map(Box::new),
+                    random_patch_role: self.random_patch_role.clone(),
                 })
                 .map_err(|e| format!("cat-plugin-playerにつながりません: {e}")),
             None => Ok(()),

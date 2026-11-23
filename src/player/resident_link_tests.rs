@@ -121,7 +121,8 @@ fn the_player_starts_once_and_later_requests_only_show_a_browser() {
             context: pane_context(&app.player_selection.resident.as_ref().unwrap().target),
             panes: Default::default(),
             cursor: None,
-            query: String::new()
+            query: String::new(),
+            random_patch_role: None,
         })
     );
     let first_open = t.elapsed();
@@ -190,7 +191,8 @@ fn the_player_starts_once_and_later_requests_only_show_a_browser() {
             context: pane_context(&app.player_selection.resident.as_ref().unwrap().target),
             panes: Default::default(),
             cursor: None,
-            query: String::new()
+            query: String::new(),
+            random_patch_role: None,
         })
     );
     let second_open = t.elapsed();

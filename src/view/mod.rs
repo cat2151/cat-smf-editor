@@ -172,7 +172,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
     help::observe(app, ctx);
     help::show(app, ctx);
-    presentation::finish(app, ctx);
+    if presentation::finish(app, ctx) {
+        song_challenge::presentation_restored(app, ctx);
+    }
 }
 
 fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
@@ -379,15 +381,7 @@ fn show_contents(app: &mut App, ctx: &egui::Context) -> bool {
     crate::cursor::split::show(app, ctx);
     crate::view::trill_edit::show(app, ctx);
     #[cfg(windows)]
-    if crate::player::resident_link::loading(app) {
-        crate::view::presentation::modal(ctx, egui::Id::new("browser-loading")).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label("now loading...");
-            });
-        });
-        ctx.request_repaint_after(std::time::Duration::from_millis(100));
-    }
+    crate::player::selection::show_loading(app, ctx);
     if app.playback.pending.is_some() {
         ctx.request_repaint();
     }

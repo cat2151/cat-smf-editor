@@ -195,6 +195,11 @@ pub(crate) fn modal(ctx: &egui::Context, id: egui::Id) -> egui::Modal {
     egui::Modal::new(id)
 }
 
+/// Blocks input in this viewport while leaving native window visibility and focus alone.
+pub(crate) fn viewport_modal(id: egui::Id) -> egui::Modal {
+    egui::Modal::new(id)
+}
+
 mod popups;
 pub(crate) mod windows;
 pub(crate) use popups::{context_menu, menu_button, popup_below_widget};
@@ -320,7 +325,8 @@ pub(crate) fn window<'a>(
         .enabled(enabled)
 }
 
-pub(crate) fn finish(a: &App, ctx: &egui::Context) {
+/// Returns whether the native windows have left modal presentation.
+pub(crate) fn finish(a: &App, ctx: &egui::Context) -> bool {
     // A later child may open a dialog after an earlier companion was drawn.
     // Apply the final decision to every registered native window before presenting.
     let pass = ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT);
@@ -352,11 +358,11 @@ pub(crate) fn finish(a: &App, ctx: &egui::Context) {
     if super::modal::is_open(a)
         || ctx.memory(|m| m.top_modal_layer().is_some() || m.any_popup_open())
     {
-        return;
+        return target.is_none();
     }
     let owner = commands::owner(a, ctx);
     if owner.allows_companions_for(a) {
-        return;
+        return target.is_none();
     }
     let key = key(ctx);
     if let Some(layers) = ctx.data(|d| d.get_temp::<Layers>(key)) {
@@ -366,6 +372,7 @@ pub(crate) fn finish(a: &App, ctx: &egui::Context) {
             }
         }
     }
+    target.is_none()
 }
 
 #[cfg(test)]

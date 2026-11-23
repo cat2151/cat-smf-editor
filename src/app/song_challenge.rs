@@ -38,7 +38,7 @@ impl App {
     }
 }
 
-fn starter_song(app: &mut App) -> Result<(Music, [usize; 4]), String> {
+fn starter_song(app: &mut App) -> Result<(Music, [(usize, u64); 4]), String> {
     let patch = crate::player::default_kit::load(
         &mut app.state_cache,
         app.player_selection.executable.clone(),
@@ -55,33 +55,42 @@ fn starter_song(app: &mut App) -> Result<(Music, [usize; 4]), String> {
         .events
         .retain(|e| !note_on(e) && !note_off(e));
     edit::refresh_deltas(&mut music.tracks[0])?;
-    let mut containers = [0; 4];
-    for (track, name) in containers
-        .iter_mut()
-        .zip(["Drum kit", "Bass", "Chord", "Lead"])
+    let mut containers = [(0, 0); 4];
+    for (index, (name, input)) in [
+        ("Drum kit", None),
+        ("Bass", Some("c1")),
+        ("Chord", Some("I")),
+        ("Lead", Some("c1")),
+    ]
+    .into_iter()
+    .enumerate()
     {
-        *track = operations::create_source(&mut music)?;
-        tracks::rename(&mut music.tracks[*track], name)?;
+        let track = operations::create_source(&mut music)?;
+        tracks::rename(&mut music.tracks[track], name)?;
+        let pattern = operations::create(&mut music, track, None)?;
+        if let Some(input) = input {
+            edit::mml::insert(&mut music, track, 0, 0, input)?;
+        } else {
+            instrument::write(
+                &mut music.tracks[track],
+                &patch,
+                &mut app
+                    .patch_roots
+                    .lookup(app.player_selection.executable.clone()),
+            )?;
+            drum_kit::toggle(&mut music, track, kick, 1, 0)?;
+        }
+        let lane = arrangement::add_lane(&mut music, None)?;
+        arrangement::place(
+            &mut music,
+            None,
+            lane,
+            index as u64 + 1,
+            Some(PatternOrScene::Pattern(pattern)),
+        )?;
+        containers[index] = (track, pattern);
     }
-    let drum = containers[0];
-    instrument::write(
-        &mut music.tracks[drum],
-        &patch,
-        &mut app
-            .patch_roots
-            .lookup(app.player_selection.executable.clone()),
-    )?;
-    let pattern = operations::create(&mut music, drum, None)?;
-    drum_kit::toggle(&mut music, drum, kick, 1, 0)?;
     edit::regenerate(&mut music)?;
-    let lane = arrangement::add_lane(&mut music, None)?;
-    arrangement::place(
-        &mut music,
-        None,
-        lane,
-        1,
-        Some(PatternOrScene::Pattern(pattern)),
-    )?;
     Ok((music, containers))
 }
 
@@ -143,7 +152,13 @@ mod tests {
         assert_eq!(&reopened.loaded.as_ref().unwrap().patches[1], patch);
 
         let _library = cat_smf_editor::native_library::load_at(directory.path()).unwrap();
-        let prepared = crate::play::arrangement::prepare(&reopened, None).unwrap();
+        let catalog = cat_smf_editor::score::pattern::Catalog::read(&loaded.music).unwrap();
+        let drum = catalog
+            .patterns
+            .values()
+            .find(|pattern| pattern.track == 1)
+            .unwrap();
+        let prepared = crate::view::patterns::preview::prepare(&reopened, drum.id).unwrap();
         let parts = prepared.parts;
         let instruments =
             crate::play::audition::offline::Instruments::open(48_000, &parts, &Default::default())
