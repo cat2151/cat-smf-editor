@@ -35,27 +35,33 @@ pub(super) fn contents(bytes: Vec<u8>, name: &str) -> Vec<u8> {
     result
 }
 
-#[test]
-fn prepared_events_layers_state_and_document_survive_export() {
-    let _library = unsafe { libloading::Library::new(env!("UAPMD_SHIM_DLL")).unwrap() };
-    let mut app = crate::view::palette::tests::app();
-    let plugin = cat_smf_editor::host::PluginKey {
-        format: "CLAP".into(),
-        id: "test.synth".into(),
-        name: "Test".into(),
-        vendor: String::new(),
-        bundle_path: "X:/plugins/test.clap".into(),
-    };
+pub(super) fn set_test_instruments(app: &mut App) -> cat_smf_editor::chain_settings::PluginState {
     let state = cat_smf_editor::chain_settings::PluginState {
-        plugin,
+        plugin: cat_smf_editor::host::PluginKey {
+            format: "CLAP".into(),
+            id: "test.synth".into(),
+            name: "Test".into(),
+            vendor: String::new(),
+            bundle_path: "X:/plugins/test.clap".into(),
+        },
         state: vec![1, 2, 3],
         reference: None,
         preset_name: None,
         bypass: false,
     };
     for patch in &mut app.loaded.as_mut().unwrap().patches {
-        patch.layers[0].instrument = Some(state.clone());
+        for layer in &mut patch.layers {
+            layer.instrument = Some(state.clone());
+        }
     }
+    state
+}
+
+#[test]
+fn prepared_events_layers_state_and_document_survive_export() {
+    let _library = unsafe { libloading::Library::new(env!("UAPMD_SHIM_DLL")).unwrap() };
+    let mut app = crate::view::palette::tests::app();
+    let state = set_test_instruments(&mut app);
     let loaded = app.loaded.as_mut().unwrap();
     let mut layer = loaded.patches[1].layers[0].clone();
     layer.settings.id = 2;
@@ -104,7 +110,8 @@ fn prepared_events_layers_state_and_document_survive_export() {
 #[test]
 fn song_export_uses_arrangement_instead_of_stored_pattern_coordinates() {
     let _library = unsafe { libloading::Library::new(env!("UAPMD_SHIM_DLL")).unwrap() };
-    let (app, _, _, _, _) = crate::view::patterns::workspace_tests::verification_song();
+    let (mut app, _, _, _, _) = crate::view::patterns::workspace_tests::verification_song();
+    set_test_instruments(&mut app);
     let prepared = crate::play::arrangement::prepare(&app, None).unwrap();
     let archive = bytes(&app).unwrap();
     let expected: usize = prepared
@@ -165,7 +172,8 @@ fn tempo_changes_and_channel_controls_keep_source_ticks() {
         division: 480,
         tracks: vec![master.clone(), notes.clone()],
     };
-    let app = crate::view::tests::app(music);
+    let mut app = crate::view::tests::app(music);
+    set_test_instruments(&mut app);
     let archive = bytes(&app).unwrap();
     let restored_master =
         cat_smf_editor::ffi::parse(&contents(archive.clone(), "clips/master.mid")).unwrap();

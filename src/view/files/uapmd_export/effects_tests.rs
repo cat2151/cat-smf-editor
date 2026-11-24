@@ -10,6 +10,7 @@ fn json(archive: &[u8], name: &str) -> Value {
 fn layers_merge_before_track_effects_and_master_keeps_its_own_chain() {
     let _library = unsafe { libloading::Library::new(env!("UAPMD_SHIM_DLL")).unwrap() };
     let mut app = crate::view::palette::tests::app();
+    super::tests::set_test_instruments(&mut app);
     let loaded = app.loaded.as_mut().unwrap();
     let patch = &mut loaded.patches[1];
     let mut second = patch.layers[0].clone();
