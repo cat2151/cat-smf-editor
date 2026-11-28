@@ -31,8 +31,9 @@ fn main() -> eframe::Result<()> {
 }
 
 fn run() -> eframe::Result<()> {
-    let (player, mid) = match store::cli::parse(std::env::args_os().skip(1)) {
-        Ok(store::cli::Arguments::Run { player, mid }) => (player, mid),
+    let (player, mid, render) = match store::cli::parse(std::env::args_os().skip(1)) {
+        Ok(store::cli::Arguments::Run { player, mid }) => (player, mid, None),
+        Ok(store::cli::Arguments::Render(render)) => (None, None, Some(render)),
         Ok(store::cli::Arguments::Help) => {
             println!("{}", store::cli::USAGE);
             return Ok(());
@@ -56,6 +57,13 @@ fn run() -> eframe::Result<()> {
         let _span = cat_smf_editor::startup_trace::span("native_library");
         cat_smf_editor::native_library::load_at(&cache).map_err(eframe::Error::AppCreation)?
     };
+    if let Some(render) = render {
+        if let Err(error) = play::render_wav::run(render) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     let app = app::App::bootstrap(player, mid);
     let _settings_span = cat_smf_editor::startup_trace::span("window_settings");
     let settings = crate::store::config::directory()

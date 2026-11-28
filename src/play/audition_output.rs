@@ -26,6 +26,8 @@ pub(super) struct Builder {
     natives: Vec<Native>,
     renders: Vec<Render>,
     patches: Vec<(usize, Patch)>,
+    /// Settles of the plugins opened for this stream, by index into `renders`.
+    settles: Vec<(usize, super::super::audition_native::settle::Settle)>,
 }
 
 impl Builder {
@@ -48,18 +50,23 @@ impl Builder {
             natives: Vec::new(),
             renders: Vec::new(),
             patches: Vec::new(),
+            settles: Vec::new(),
         })
     }
 
     pub fn track(&mut self, track: usize, patch: &Patch) -> Result<(), String> {
         let _span = cat_smf_editor::startup_trace::span("audio_track_plugins");
-        let (native, render) = take_or_open(
+        let (native, render, opened) = take_or_open(
             &mut self.reusable,
             track,
             patch,
             self.supported.sample_rate().0,
         )
         .map_err(|e| message::track_error(track + 1, e))?;
+        // SAFETY: the settle runs in `Voice::stream` before the stream starts.
+        if let Some(settle) = opened.then(|| unsafe { native.settle() }).flatten() {
+            self.settles.push((self.renders.len(), settle));
+        }
         self.natives.push(native);
         self.renders.push(render);
         self.patches.push((track, patch.clone()));
@@ -184,11 +191,16 @@ impl Voice {
             reusable,
             master,
             natives,
-            renders,
+            mut renders,
             patches,
+            settles,
         } = builder;
         let config = supported.config();
         let rate = config.sample_rate.0;
+        // The tracks opened since the previous play have had time to load meanwhile.
+        for (index, settle) in settles {
+            settle.run(&mut renders[index], rate, &AtomicBool::new(false));
+        }
         let master_pointer = master.as_ref().map(|m| unsafe { m.audio_ref() });
         let renders = Arc::new(Mutex::new(renders));
         let mailbox = Arc::new(Mutex::new(Command {
@@ -343,15 +355,15 @@ mod drums;
 #[path = "automation/refresh_tests.rs"]
 mod refresh_tests;
 
-/// Reuses an identical plugin, else reloads the same plugins of this track, else opens anew.
+/// Reuses an identical plugin (false), else reloads this track's plugins or opens anew (true).
 fn take_or_open(
     reusable: &mut Reusable,
     track: usize,
     patch: &Patch,
     rate: u32,
-) -> Result<(Native, Render), String> {
+) -> Result<(Native, Render, bool), String> {
     let reloaded = match reusable.take(track, patch) {
-        Some(((native, render), false)) => return Ok((native, render)),
+        Some(((native, render), false)) => return Ok((native, render, false)),
         Some(((native, _), true)) => native.reload(rate, patch).ok(),
         None => None,
     };
@@ -360,7 +372,7 @@ fn take_or_open(
         None => Native::open(rate, patch)?,
     };
     let render = unsafe { native.render() };
-    Ok((native, render))
+    Ok((native, render, true))
 }
 
 fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(

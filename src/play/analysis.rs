@@ -242,4 +242,6 @@ fn run(shared: &Shared) {
 }
 
 #[cfg(test)]
+pub(crate) mod recorder;
+#[cfg(test)]
 mod tests;

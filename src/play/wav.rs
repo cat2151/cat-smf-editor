@@ -1,4 +1,4 @@
-//! Stereo 32-bit float WAV files and their one-shot playback.
+//! Stereo 32-bit float WAV files and their one-shot playback; 16-bit PCM for export.
 use cat_smf_editor::message;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::{io::Write, path::Path};
@@ -7,25 +7,47 @@ const CHANNELS: u16 = 2;
 
 /// Replaces `path` atomically, so a reader never sees a partial file.
 pub fn write(path: &Path, rate: u32, samples: &[f32]) -> Result<(), String> {
-    let directory = path.parent().ok_or("WAVのpathにフォルダがありません")?;
-    std::fs::create_dir_all(directory).map_err(|e| format!("{}: {e}", directory.display()))?;
-    let data = (samples.len() * 4) as u32;
-    let mut bytes = Vec::with_capacity(44 + data as usize);
+    let data = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+    persist(path, encode(3, 32, rate, data))
+}
+
+/// Same as [`write`] in 16-bit integer PCM; samples beyond ±1 clip.
+pub fn write_pcm16(path: &Path, rate: u32, samples: &[f32]) -> Result<(), String> {
+    let data = samples
+        .iter()
+        .flat_map(|s| ((s.clamp(-1.0, 1.0) * 32767.0).round() as i16).to_le_bytes())
+        .collect();
+    persist(path, encode(1, 16, rate, data))
+}
+
+fn encode(format: u16, bits: u16, rate: u32, data: Vec<u8>) -> Vec<u8> {
+    let block = CHANNELS * bits / 8;
+    let size = data.len() as u32;
+    let mut bytes = Vec::with_capacity(44 + data.len());
     bytes.extend_from_slice(b"RIFF");
-    bytes.extend_from_slice(&(36 + data).to_le_bytes());
+    bytes.extend_from_slice(&(36 + size).to_le_bytes());
     bytes.extend_from_slice(b"WAVEfmt ");
     bytes.extend_from_slice(&16u32.to_le_bytes());
-    bytes.extend_from_slice(&3u16.to_le_bytes());
+    bytes.extend_from_slice(&format.to_le_bytes());
     bytes.extend_from_slice(&CHANNELS.to_le_bytes());
     bytes.extend_from_slice(&rate.to_le_bytes());
-    bytes.extend_from_slice(&(rate * u32::from(CHANNELS) * 4).to_le_bytes());
-    bytes.extend_from_slice(&(CHANNELS * 4).to_le_bytes());
-    bytes.extend_from_slice(&32u16.to_le_bytes());
+    bytes.extend_from_slice(&(rate * u32::from(block)).to_le_bytes());
+    bytes.extend_from_slice(&block.to_le_bytes());
+    bytes.extend_from_slice(&bits.to_le_bytes());
     bytes.extend_from_slice(b"data");
-    bytes.extend_from_slice(&data.to_le_bytes());
-    for sample in samples {
-        bytes.extend_from_slice(&sample.to_le_bytes());
-    }
+    bytes.extend_from_slice(&size.to_le_bytes());
+    bytes.extend_from_slice(&data);
+    bytes
+}
+
+fn persist(path: &Path, bytes: Vec<u8>) -> Result<(), String> {
+    let directory = path.parent().ok_or("WAVのpathにフォルダがありません")?;
+    let directory = if directory.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        directory
+    };
+    std::fs::create_dir_all(directory).map_err(|e| format!("{}: {e}", directory.display()))?;
     let mut file = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;
     file.persist(path).map_err(|e| e.to_string())?;
@@ -154,6 +176,21 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap().len(), 44 + 16);
         std::fs::write(&path, b"RIFF....WAVE").unwrap();
         assert!(read(&path).is_err());
+    }
+    #[test]
+    fn pcm16_header_and_clipped_samples() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("a.wav");
+        write_pcm16(&path, 48000, &[0.5, -1.0, 2.0, 0.0]).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(bytes.len(), 44 + 8);
+        assert_eq!(&bytes[20..24], &[1, 0, 2, 0]);
+        assert_eq!(&bytes[28..36], &[0x00, 0xEE, 0x02, 0x00, 4, 0, 16, 0]);
+        let samples: Vec<i16> = bytes[44..]
+            .chunks(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .collect();
+        assert_eq!(samples, [16384, -32767, 32767, 0]);
     }
     #[test]
     fn resampling_interpolates_and_ends_silent() {

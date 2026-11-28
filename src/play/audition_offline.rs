@@ -1,11 +1,18 @@
 //! Faster-than-realtime rendering into memory, through the playback mixer, without a device.
 use super::{mix::Mixer, Command, Part};
-use crate::play::{audio_sequence::Sequence, audition_native::Native, layer_render::Render};
+use crate::play::{
+    audio_sequence::Sequence,
+    audition_native::{settle::Settle, Native},
+    layer_render::Render,
+};
 use cat_smf_editor::message;
 use cat_smf_editor::{chain::Chain, master_effects, score::instrument::Patch};
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 
 pub const CHANNELS: usize = 2;
+#[cfg(test)]
+#[path = "audition_offline_load_probe.rs"]
+pub(crate) mod load_probe;
 #[cfg(test)]
 #[path = "audition_offline_native_probe.rs"]
 pub(crate) mod native_probe;
@@ -21,6 +28,8 @@ pub struct Instruments {
 /// The audio-thread half of [`Instruments`], movable to a worker thread.
 pub struct Job {
     renders: Vec<Render>,
+    /// Indices into `renders`, settled before the first block.
+    settles: Vec<(usize, Settle)>,
     master: Option<cat_smf_editor::host::ProcessorRef>,
     command: Command,
     rate: u32,
@@ -149,6 +158,12 @@ impl Instruments {
                     render
                 })
                 .collect(),
+            settles: self
+                .natives
+                .iter()
+                .enumerate()
+                .filter_map(|(i, n)| unsafe { n.settle() }.map(|s| (i, s)))
+                .collect(),
             master: self.master.as_ref().map(|m| unsafe { m.audio_ref() }),
             command: Command {
                 generation: 1,
@@ -180,6 +195,7 @@ pub(crate) fn without_plugins(
             .iter()
             .map(|_| Render::new(Vec::new(), None))
             .collect(),
+        settles: Vec::new(),
         master: None,
         command: Command {
             generation: 1,
@@ -205,6 +221,11 @@ pub(crate) fn without_plugins(
 impl Job {
     /// Interleaved stereo; None once `cancel` is set.
     pub fn run(mut self, cancel: &AtomicBool) -> Option<Result<Vec<f32>, String>> {
+        for (index, settle) in std::mem::take(&mut self.settles) {
+            if !settle.run(&mut self.renders[index], self.rate, cancel) {
+                return None;
+            }
+        }
         let failed = AtomicBool::new(false);
         let mut mixer = Mixer::new(self.rate, CHANNELS, self.renders.len(), self.master);
         let mut out = Vec::with_capacity(self.frames as usize * CHANNELS);

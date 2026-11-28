@@ -331,3 +331,6 @@ fn open_effects(rate: u32, patch: &Patch) -> Result<Chain, String> {
 #[cfg(test)]
 #[path = "layer_native_tests.rs"]
 mod tests;
+
+#[path = "audition_native_settle.rs"]
+pub mod settle;

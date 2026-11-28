@@ -13,6 +13,7 @@ mod layer_render;
 pub(crate) mod mascot;
 pub(crate) mod mixer;
 pub(crate) mod playback;
+pub(crate) mod render_wav;
 pub(crate) mod selection_playback;
 mod sequence_seek;
 pub(crate) mod sung;
